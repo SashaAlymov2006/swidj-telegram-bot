@@ -114,3 +114,10 @@ languages, untrusted titles and mobile layout. It does not prove Telegram
 WebView compatibility on every phone; a real HTTPS Telegram session is still
 needed before a public launch. There are no social feed, payments, public sharing,
 cloud storage promises, or paid recognition integrations in this release.
+
+
+## App player and studio upgrade (2026-10-24)
+
+The chat bot code and native command menu are unchanged. The app now provides an explicit play-next queue (up to 100 entries), reordering/removal, listening history for Previous, and per-account browser storage for the queue and last listening position. Resume is a user action, never automatic playback. Device-local files cannot be restored after closing the app; saved files can. Browser storage belongs to the app origin, so a rotated temporary tunnel address starts a new local session.
+
+Studio includes Original/Warm/Night drive/Bright recipes, bass and high-shelf clarity controls, original/effects comparison, trim start/end in seconds, smooth fade-in/out and Save mix to library. WAV rendering is local; Save explicitly uploads the resulting file in authenticated mode. Demo keeps the result only in memory. Existing limits remain: source and exported mix up to 3 minutes, uploads up to 20 MiB. Speed changes pitch. Trim and fades are applied to Preview/export/saved mixes; live full-track listening applies tone/speed only.

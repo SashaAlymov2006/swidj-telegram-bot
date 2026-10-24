@@ -22,50 +22,62 @@ export function wavBlob(buffer) {
   return new Blob([data], {type: 'audio/wav'});
 }
 
-export function chain(context, source, destination, bass) {
+export function chain(context, source, destination, bass, treble = 0) {
   const headroom = context.createGain();
-  headroom.gain.value = 10 ** (-Math.max(0, bass) / 20);
+  headroom.gain.value = 10 ** (-(Math.max(0, bass)+Math.max(0, treble)) / 20);
   const filter = context.createBiquadFilter(); filter.type = 'lowshelf'; filter.frequency.value = 100; filter.gain.value = bass;
+  const high = context.createBiquadFilter(); high.type = 'highshelf'; high.frequency.value = 3000; high.gain.value = treble;
   const compressor = context.createDynamicsCompressor();
   compressor.threshold.value = -2; compressor.knee.value = 0; compressor.ratio.value = 20;
   compressor.attack.value = .002; compressor.release.value = .1;
-  source.connect(headroom).connect(filter).connect(compressor).connect(destination);
-  return {headroom, filter};
+  source.connect(headroom).connect(filter).connect(high).connect(compressor).connect(destination);
+  return {headroom, filter, high};
 }
 
 export class AudioEngine {
-  constructor(element) { this.element = element; this.bass = 0; this.speed = 1; }
+  constructor(element) { this.element = element; this.bass = 0; this.speed = 1; this.treble=0; this.bypass=false; this.trimStart=0; this.trimEnd=0; this.fade=0; }
   async unlock() {
     if (!this.context) {
       this.context = new AudioContext();
-      this.nodes = chain(this.context, this.context.createMediaElementSource(this.element), this.context.destination, this.bass);
+      this.nodes = chain(this.context, this.context.createMediaElementSource(this.element), this.context.destination, this.bypass?0:this.bass, this.bypass?0:this.treble);
     }
     await this.context.resume();
   }
-  setBass(value) {
-    this.bass = value;
-    if (this.nodes) {
-      this.nodes.headroom.gain.setTargetAtTime(10 ** (-Math.max(0, value) / 20), this.context.currentTime, .03);
-      this.nodes.filter.gain.setTargetAtTime(value, this.context.currentTime, .03);
-    }
+  applyTone() {
+    if(!this.nodes)return;
+    const bass=this.bypass?0:this.bass,treble=this.bypass?0:this.treble;
+    this.nodes.headroom.gain.setTargetAtTime(10**(-(Math.max(0,bass)+Math.max(0,treble))/20),this.context.currentTime,.03);
+    this.nodes.filter.gain.setTargetAtTime(bass,this.context.currentTime,.03);
+    this.nodes.high.gain.setTargetAtTime(treble,this.context.currentTime,.03);
   }
+  setBass(value){this.bass=value;this.applyTone();}
+  setTreble(value){this.treble=value;this.applyTone();}
+  setBypass(value){this.bypass=value;this.applyTone();this.setSpeed(this.speed);}
   setSpeed(value) {
-    this.speed = value; this.element.playbackRate = value;
+    this.speed = value; this.element.playbackRate = this.bypass?1:value;
     // Match offline export: changing speed also changes pitch.
     this.element.preservesPitch = false;
   }
   async render(blob, preview = false, sourceDuration = this.element.duration) {
-    const bass = this.bass, speed = this.speed;
+    const bass = this.bypass?0:this.bass, treble=this.bypass?0:this.treble, speed = this.bypass?1:this.speed;
     if (!Number.isFinite(sourceDuration) || sourceDuration > 180) throw new Error('long');
+    const trimStart=this.trimStart,trimEnd=this.trimEnd,fadeSeconds=this.fade;
     await this.unlock();
     const input = await this.context.decodeAudioData(await blob.arrayBuffer());
     // Bound mobile memory. Long/full MP3 processing remains available in the bot.
-    if (input.duration > 180 || (!preview && input.duration / speed > 180)) throw new Error('long');
-    const duration = Math.min(input.duration / speed, preview ? 15 : 180);
+    if (input.duration > 180) throw new Error('long');
+    const start=Math.min(Math.max(0,trimStart),input.duration);
+    const end=trimEnd>0?Math.min(trimEnd,input.duration):input.duration;
+    if(end<=start)throw new Error('invalidTrim');
+    if(!preview&&(end-start)/speed>180)throw new Error('long');
+    const duration = Math.min((end-start) / speed, preview ? 15 : 180);
     const rate = 44100;
     const offline = new OfflineAudioContext(Math.min(input.numberOfChannels, 2), Math.ceil(duration * rate), rate);
     const source = offline.createBufferSource(); source.buffer = input; source.playbackRate.value = speed;
-    chain(offline, source, offline.destination, bass); source.start();
+    const envelope=offline.createGain();envelope.connect(offline.destination);
+    const fade=Math.min(fadeSeconds,duration/2);
+    if(fade>0){envelope.gain.setValueAtTime(0,0);envelope.gain.linearRampToValueAtTime(1,fade);envelope.gain.setValueAtTime(1,duration-fade);envelope.gain.linearRampToValueAtTime(0,duration);}
+    chain(offline, source, envelope, bass, treble); source.start(0,start,Math.min(end-start,duration*speed));
     return wavBlob(await offline.startRendering());
   }
 }

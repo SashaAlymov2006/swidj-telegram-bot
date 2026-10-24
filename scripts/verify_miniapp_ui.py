@@ -36,7 +36,32 @@ async def run():
         assert await page.evaluate('document.querySelector("audio").paused')
         await page.locator('#full-play').click()
         await page.locator('#dialog .dialog-head button').click()
+        # Queue order, removal and persisted resume are independent of chat.
+        await page.locator('#desktop-nav [data-go=library]').click()
+        await page.locator('.track-row [data-action=menu]').nth(1).click()
+        await page.locator('[data-action=queue-next]').click()
+        await page.locator('#open-queue').click()
+        assert await page.locator('.queue-row').count()==1
+        await page.locator('#dialog .dialog-head button').click()
+        await page.locator('#next').click()
+        await page.wait_for_function("() => document.querySelector('#now-title').textContent==='Sunset circuit'")
+        await page.locator('#open-queue').click()
+        assert await page.locator('.queue-row').count()==0
+        await page.locator('#dialog .dialog-head button').click()
+        await page.evaluate('document.querySelector("audio").currentTime=7')
+        await page.wait_for_timeout(3300)
+        await page.locator('#desktop-nav [data-go=home]').click()
+        await page.reload()
+        await page.locator('#resume-track').click()
+        await page.wait_for_function("() => document.querySelector('#now-title').textContent==='Sunset circuit'")
+        assert await page.evaluate('document.querySelector("audio").currentTime>=6')
         await page.locator('#desktop-nav [data-go=studio]').click()
+        await page.locator('[data-recipe=warm]').click()
+        assert await page.locator('#bass-value').inner_text()=='+3 dB'
+        await page.locator('#treble').fill('4')
+        await page.locator('#compare-fx').click()
+        assert await page.locator('#compare-fx').get_attribute('aria-pressed')=='true'
+        await page.locator('#compare-fx').click()
         await page.locator('[data-bass="6"]').click()
         await page.locator('#speed').fill('1.1')
         await page.locator('#preview-mix').click()
@@ -48,6 +73,18 @@ async def run():
         await download.save_as(str(output/'browser-export.wav'))
         data = (output/'browser-export.wav').read_bytes()
         assert data[:4] == b'RIFF' and len(data) > 100000
+        await page.locator('[data-edit=trimStart]').fill('2')
+        await page.locator('[data-edit=trimEnd]').fill('8')
+        await page.locator('[data-edit=fade]').fill('1')
+        async with page.expect_download() as trimmed:
+            await page.locator('#export-mix').click()
+        await (await trimmed.value).save_as(str(output/'trimmed-mix.wav'))
+        import wave
+        with wave.open(str(output/'trimmed-mix.wav')) as wav:
+            assert 5.3 < wav.getnframes()/wav.getframerate() < 5.6
+        await page.locator('#save-mix').click()
+        await page.wait_for_function("() => document.querySelector('#now-title').textContent.includes('SwiDJ mix')")
+        assert await page.evaluate('document.querySelector("audio").duration<6')
         await page.locator('#desktop-nav [data-go=library]').click()
         await page.locator('#new-playlist').click()
         await page.locator('#playlist-name').fill('Night drive')

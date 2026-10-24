@@ -15,3 +15,7 @@
 
 .studio-source #save-local-file{margin-top:10px}@media(max-width:720px){.studio-source #save-local-file{grid-column:2;margin-top:0}}
 .track-row>button:first-child{width:44px;height:44px;padding:0;flex-shrink:0}
+
+.queue-row{display:flex;gap:6px;align-items:center;padding:12px 0;border-bottom:1px solid #ffffff15}.queue-row>span{flex:1;min-width:0}.queue-row strong,.queue-row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.queue-row small{opacity:.6}.resume-card{display:flex;align-items:center;gap:16px;text-align:left;width:100%;padding:18px;margin-bottom:20px;border:1px solid #bca4ff55;border-radius:18px;background:linear-gradient(110deg,#bca4ff20,#b9ee6a10);color:inherit}.resume-card svg{width:24px}.resume-card strong,.resume-card small{display:block}.recipe-grid{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 22px}.studio-recipes{padding-bottom:22px;margin-bottom:24px;border-bottom:1px solid #ffffff20}.studio-recipes>.btn{margin-top:12px;width:100%}.queue-row .icon-btn{flex-shrink:0}
+
+.trim-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}.trim-grid label{font-size:12px;min-width:0}.studio-number{display:block;width:100%;box-sizing:border-box;background:#ffffff09;border:1px solid #ffffff25;border-radius:10px;color:inherit;padding:10px;margin-top:8px}.trim-grid label:last-child{grid-column:1/-1}
