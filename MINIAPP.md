@@ -35,11 +35,17 @@ python miniapp_server.py --demo
 - Local playback is available for owned saved audio and the current downloaded
   track. Other saved catalog entries offer the chat download flow.
 - Browser Studio opens a local file (up to 20 MiB), plays adjustable bass and
-  speed, previews up to 15 seconds, and exports WAV up to 3 minutes. Speed also
+  speed, previews up to 15 seconds, and exports WAV. Source audio and the full
+  exported mix must each be up to 3 minutes to bound browser memory. Speed also
   changes pitch. Files are not uploaded. The bot retains full-track MP3 tools.
-- Playlist creation, adding tracks, favorites, and confirmed library removal.
+- Playlist creation, renaming, adding/removing tracks, confirmed playlist
+  deletion, favorites, and confirmed library removal. Deleting a playlist or
+  membership keeps its tracks in the library. Playlist playback follows its order.
   Removal updates memberships, not physical audio files. No automatic permanent
   file purge was added.
+- A full player opens from the bottom artwork/title. Library state refreshes
+  when the app regains visibility. Failed database commits preserve live state;
+  stale/concurrent browser renders cannot overwrite a newly selected track.
 
 ## Connect inside Telegram later
 

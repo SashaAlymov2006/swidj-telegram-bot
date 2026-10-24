@@ -5,6 +5,7 @@ Production identity is exclusively verified Telegram initData, never client IDs.
 """
 import argparse
 import asyncio
+from copy import deepcopy
 from functools import lru_cache
 import hashlib
 import hmac
@@ -168,24 +169,45 @@ class BotLibrary:
 
     async def change(self, uid, payload):
         from library_ui import clean_name, MAX_TRACKS
-        folders = await self.folders(uid)
+        folders = deepcopy(await self.folders(uid))
+        favorites = deepcopy(self.favorites.get(uid, []))
         action = payload.get('action')
         if action == 'language':
             if payload.get('language') not in ('ru', 'en'):
                 raise web.HTTPBadRequest()
-            self.data(uid)['language'] = payload['language']
             # Merge rather than replacing the bot's durable session.
             sessions = await asyncio.to_thread(self.store.load_named, 'sessions')
             session = dict(sessions.get(uid, {}), language=payload['language'])
             await asyncio.to_thread(self.store.save_named, 'sessions', uid, session)
+            self.data(uid)['language'] = payload['language']
+            return await self.snapshot(uid)
         elif action == 'create':
             name = clean_name(str(payload.get('name', '')))
             if not name or len(folders) >= 20:
                 raise web.HTTPBadRequest()
             folders[secrets.token_hex(4)] = {'name': name, 'songs': []}
+        elif action in ('rename', 'delete_playlist', 'playlist_remove'):
+            key = str(payload.get('playlist', ''))
+            folder = folders.get(key)
+            if folder is None:
+                raise web.HTTPNotFound()
+            if action == 'rename':
+                name = clean_name(str(payload.get('name', '')))
+                if not name:
+                    raise web.HTTPBadRequest()
+                folder['name'] = name
+            else:
+                removed = folder['songs'] if action == 'delete_playlist' else [
+                    s for s in folder['songs'] if str(s['id']) == str(payload.get('track', ''))]
+                # Removing a playlist/membership keeps the recordings in the library.
+                known = {s['id'] for s in favorites}
+                favorites.extend(dict(s) for s in removed if s['id'] not in known)
+                if action == 'delete_playlist':
+                    del folders[key]
+                else:
+                    folder['songs'] = [s for s in folder['songs'] if str(s['id']) != str(payload.get('track', ''))]
         elif action in ('favorite', 'playlist', 'remove'):
             song = await self.find(uid, str(payload.get('track', '')))
-            favorites = self.favorites.setdefault(uid, [])
             if action == 'favorite':
                 present = any(s['id'] == song['id'] for s in favorites)
                 if payload.get('value') is True and not present:
@@ -193,7 +215,7 @@ class BotLibrary:
                         raise web.HTTPConflict()
                     favorites.append(dict(song))
                 elif payload.get('value') is False:
-                    self.favorites[uid] = [s for s in favorites if s['id'] != song['id']]
+                    favorites = [s for s in favorites if s['id'] != song['id']]
             elif action == 'playlist':
                 folder = folders.get(str(payload.get('playlist')))
                 if folder is None:
@@ -203,12 +225,14 @@ class BotLibrary:
                 if not any(s['id'] == song['id'] for s in folder['songs']):
                     folder['songs'].append(dict(song))
             else:
-                self.favorites[uid] = [s for s in favorites if s['id'] != song['id']]
+                favorites = [s for s in favorites if s['id'] != song['id']]
                 for folder in folders.values():
                     folder['songs'] = [s for s in folder['songs'] if s['id'] != song['id']]
         else:
             raise web.HTTPBadRequest()
-        await asyncio.to_thread(self.store.save_library, uid, self.favorites.get(uid, []), folders)
+        await asyncio.to_thread(self.store.save_library, uid, favorites, folders)
+        self.favorites[uid] = favorites
+        self.data(uid)['music_collections'] = folders
         return await self.snapshot(uid)
 
     async def send(self, uid, identifier):

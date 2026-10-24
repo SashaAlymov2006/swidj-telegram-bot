@@ -6,3 +6,5 @@
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .art-button{display:block;width:100%;padding:0;background:none;text-align:inherit;border-radius:17px}.plain{padding:0;border:0;background:none;color:inherit;text-align:left}.count{font-size:12px;color:var(--muted);font-weight:400;margin-left:7px}.reset-btn{display:block;margin:17px auto 0}.studio-source .art{cursor:default}.studio-source label{cursor:pointer}
+
+.playlist-tools{display:flex;align-items:center;gap:12px}.full-player{text-align:center}.full-player-art{max-width:260px;margin:0 auto 22px}.full-player-art .card-play{display:none}.full-player h3{font-size:20px;line-height:1.3}.full-player>p{font-size:12px;color:var(--muted);margin:7px 0 22px}.full-player>input{width:100%}.full-times{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin:8px 0}.full-controls{display:flex;align-items:center;justify-content:center;gap:27px;margin:20px 0}.full-controls .play-main{width:48px;height:48px}.full-player .btn{width:100%;margin-top:7px}

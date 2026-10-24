@@ -54,16 +54,18 @@ export class AudioEngine {
     // Match offline export: changing speed also changes pitch.
     this.element.preservesPitch = false;
   }
-  async render(blob, preview = false) {
+  async render(blob, preview = false, sourceDuration = this.element.duration) {
+    const bass = this.bass, speed = this.speed;
+    if (!Number.isFinite(sourceDuration) || sourceDuration > 180) throw new Error('long');
     await this.unlock();
     const input = await this.context.decodeAudioData(await blob.arrayBuffer());
     // Bound mobile memory. Long/full MP3 processing remains available in the bot.
-    if (input.duration > 180 && !preview) throw new Error('long');
-    const duration = Math.min(input.duration / this.speed, preview ? 15 : 180);
+    if (input.duration > 180 || (!preview && input.duration / speed > 180)) throw new Error('long');
+    const duration = Math.min(input.duration / speed, preview ? 15 : 180);
     const rate = 44100;
     const offline = new OfflineAudioContext(Math.min(input.numberOfChannels, 2), Math.ceil(duration * rate), rate);
-    const source = offline.createBufferSource(); source.buffer = input; source.playbackRate.value = this.speed;
-    chain(offline, source, offline.destination, this.bass); source.start();
+    const source = offline.createBufferSource(); source.buffer = input; source.playbackRate.value = speed;
+    chain(offline, source, offline.destination, bass); source.start();
     return wavBlob(await offline.startRendering());
   }
 }

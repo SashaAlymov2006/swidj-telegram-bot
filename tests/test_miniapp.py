@@ -134,3 +134,29 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.favorites[77][0]['id'],1)
         self.assertIn("default-src 'self'",response.headers['Content-Security-Policy'])
         self.assertNotIn(TOKEN,await response.text())
+
+    async def test_playlist_rename_remove_and_delete_keep_recordings(self):
+        self.bridge.data(77)['music_collections']={'night':{'name':'Night','songs':[dict(self.song)]}}
+        self.favorites[77]=[]
+        response=await self.client.post('/api/library',headers=self.headers,json={'action':'rename','playlist':'night','name':'New name'})
+        self.assertEqual((await response.json())['playlists'][0]['name'],'New name')
+        response=await self.client.post('/api/library',headers=self.headers,json={'action':'playlist_remove','playlist':'night','track':'1'})
+        payload=await response.json()
+        self.assertEqual(payload['playlists'][0]['tracks'],[])
+        self.assertEqual(payload['tracks'][0]['id'],'1')
+        await self.client.post('/api/library',headers=self.headers,json={'action':'playlist','playlist':'night','track':'1'})
+        response=await self.client.post('/api/library',headers=self.headers,json={'action':'delete_playlist','playlist':'night'})
+        payload=await response.json()
+        self.assertEqual(payload['playlists'],[])
+        self.assertEqual(payload['tracks'][0]['id'],'1')
+        self.assertEqual(self.store.load()[1][77][0]['id'],1)
+        self.assertEqual((await self.client.post('/api/library',headers=self.headers,json={'action':'delete_playlist','playlist':'someone-else'})).status,404)
+
+    async def test_failed_commit_preserves_live_library(self):
+        self.bridge.data(77)['music_collections']={'night':{'name':'Night','songs':[dict(self.song)]}}
+        with patch.object(self.store,'save_library',side_effect=OSError('private filesystem detail')):
+            response=await self.client.post('/api/library',headers=self.headers,json={'action':'remove','track':'1'})
+        self.assertEqual(response.status,500)
+        self.assertNotIn('filesystem',await response.text())
+        self.assertEqual(self.favorites[77][0]['id'],1)
+        self.assertEqual(self.bridge.data(77)['music_collections']['night']['songs'][0]['id'],1)
