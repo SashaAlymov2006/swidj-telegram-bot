@@ -203,7 +203,7 @@ class BotLibrary:
         return {'tracks': [public_song(s) for s in result]}
 
     def job_payload(self, job):
-        return {'job': job.token, 'status': job.state,
+        return {'job': job.token, 'status': job.state, 'error': job.error,
                 'track': public_song(job.song, job.state == 'ready')}
 
     async def prepare(self, uid, identifier):

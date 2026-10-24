@@ -64,6 +64,37 @@ class AppStudioTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bridge.application.user_data[77],{})
         self.bridge.application.bot.send_message.assert_not_called()
 
+    async def test_multiple_effects_are_combined_and_change_the_actual_sound(self):
+        import math,struct
+        buffer=io.BytesIO()
+        with wave.open(buffer,'wb') as audio:
+            audio.setparams((1,2,16000,0,'NONE','not compressed'))
+            audio.writeframes(b''.join(struct.pack('<h',int(7000*math.sin(2*math.pi*440*i/16000)+5000*math.sin(2*math.pi*6000*i/16000))) for i in range(32000)))
+        outputs=[]
+        for effects in [[],['reverb','lofi','compressor']]:
+            response=await self.client.post('/api/studio',headers=self.headers,data=form(buffer.getvalue(),{'format':'wav','effects':effects}))
+            self.assertEqual(response.status,200)
+            with wave.open(io.BytesIO(await response.read())) as audio:
+                import numpy as np
+                data=np.frombuffer(audio.readframes(audio.getnframes()),dtype='<i2')[::2].astype(float)
+                spectrum=abs(np.fft.rfft(data[:44100]))
+                outputs.append(spectrum[6000]/max(spectrum[440],1))
+        self.assertLess(outputs[1],outputs[0]*.1)
+        for effects in [['echo']*9,['private-expression'],{'echo':True}]:
+            response=await self.client.post('/api/studio',headers=self.headers,data=form(settings={'effects':effects}))
+            self.assertEqual(response.status,400)
+
+    async def test_every_effect_and_an_eight_effect_chain_render(self):
+        from miniapp_studio import EFFECTS,probe
+        chains=[[key] for key in EFFECTS if key!='none']
+        chains.append(['reverb','echo','delay','lofi','normalize','compressor','equalizer','mastering'])
+        for effects in chains:
+            with self.subTest(effects=effects):
+                response=await self.client.post('/api/studio',headers=self.headers,data=form(settings={'format':'wav','effects':effects}))
+                self.assertEqual(response.status,200)
+                with wave.open(io.BytesIO(await response.read())) as audio:
+                    self.assertGreater(audio.getnframes(),1000)
+
     async def test_wav_trim_preserves_requested_duration(self):
         response=await self.client.post('/api/studio',headers=self.headers,data=form(settings={'format':'wav','start':1,'end':3,'speed':.8,'fade':.4,'effect':'lofi'}))
         self.assertEqual(response.status,200)

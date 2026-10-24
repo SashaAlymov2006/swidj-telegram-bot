@@ -17,6 +17,12 @@ EFFECTS = {
     "lofi": "aresample=8000,lowpass=f=3000,highpass=f=150,aresample=44100",
     "normalize": "loudnorm=I=-16:TP=-1.5:LRA=11",
     "compressor": "acompressor=threshold=0.05:ratio=4",
+    "delay": "aecho=0.8:0.8:180|360|540:0.4|0.25|0.15",
+    "equalizer": "equalizer=f=1000:width_type=o:width=2:g=5",
+    "mastering": "afftdn,loudnorm=I=-16:TP=-1.5:LRA=11",
+    "pro_reverb": "aecho=0.8:0.9:1000:0.3",
+    "highpass": "highpass=f=3000", "lowpass": "lowpass=f=300",
+    "reverse": "areverse",
 }
 
 async def process(args, timeout=240):
@@ -52,8 +58,11 @@ def plan(settings, duration):
     if not isinstance(settings, dict) or duration > 1800:
         raise ValueError('Invalid audio settings')
     format = settings.get('format','mp3')
-    effect = settings.get('effect','none')
-    if format not in ('mp3','wav') or effect not in EFFECTS:
+    effects = settings.get('effects', [settings.get('effect','none')])
+    if not isinstance(effects,list) or len(effects)>8 or any(not isinstance(effect,str) or effect not in EFFECTS for effect in effects):
+        raise ValueError('Invalid effect chain')
+    effects=list(dict.fromkeys(effects))
+    if format not in ('mp3','wav'):
         raise ValueError('Invalid format or effect')
     start=number(settings,'start',0,0,1800)
     end=number(settings,'end',0,0,1800) or duration
@@ -79,7 +88,8 @@ def plan(settings, duration):
     while tempo > 2:
         filters.append('atempo=2');tempo/=2
     filters += [f'atempo={tempo}', 'aresample=44100']
-    if EFFECTS[effect]: filters.append(EFFECTS[effect])
+    for effect in effects:
+        if EFFECTS[effect]: filters.append(EFFECTS[effect])
     if fade:
         fade=min(fade,length/2)
         filters += [f'afade=t=in:d={fade}',f'afade=t=out:st={length-fade}:d={fade}']

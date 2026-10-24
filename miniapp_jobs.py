@@ -21,10 +21,11 @@ class Job:
     created: float = field(default_factory=time.monotonic)
     operation: object = None
     task: object = None
+    error: str = None
 
 
 class AudioJobs:
-    def __init__(self, downloader=None, root=None, *, max_bytes=256*1024**2):
+    def __init__(self, downloader=None, root=None, *, max_bytes=256*1024**2, queue_timeout=30, download_timeout=240):
         active = Path(os.getenv('AUDIO_CACHE_DIR', '/app/data/audio'))
         self.root = Path(root or os.getenv('MINIAPP_CACHE_DIR') or active.parent/'miniapp-cache')
         self.store = MediaStore(self.root)
@@ -32,6 +33,7 @@ class AudioJobs:
         self.limit = max_bytes
         self.jobs = {}
         self.slots = asyncio.Semaphore(2)
+        self.queue_timeout, self.download_timeout = queue_timeout, download_timeout
 
     def path(self, uid, identifier):
         directory = self.store.user_directory(uid)
@@ -86,14 +88,14 @@ class AudioJobs:
     def start(self, uid, song):
         now = time.monotonic()
         for token, job in list(self.jobs.items()):
-            if job.state not in ('queued', 'downloading', 'cancelling') and now-job.created > 600:
+            if (not job.task or job.task.done()) and now-job.created > 600:
                 self.jobs.pop(token)
         for job in self.jobs.values():
-            if job.uid == uid and job.state in ('queued', 'downloading', 'cancelling'):
+            if job.uid == uid and job.task and not job.task.done():
                 if job.song['id'] == song['id']:
                     return job
                 raise ValueError('User already preparing audio')
-        if not self.downloader or len(self.jobs) >= 100 or sum(j.state in ('queued','downloading','cancelling') for j in self.jobs.values()) >= 8:
+        if not self.downloader or len(self.jobs) >= 100 or sum(bool(j.task and not j.task.done()) for j in self.jobs.values()) >= 8:
             raise ValueError('Preparation capacity reached')
         job = Job(uid, dict(song), operation=Operation(uid))
         self.jobs[job.token] = job
@@ -104,16 +106,26 @@ class AudioJobs:
         source = None
         worker = None
         timed_out = False
+        acquired = False
         marker = _current.set(job.operation)
         try:
-            async with self.slots:
+            try:
+                await asyncio.wait_for(self.slots.acquire(), timeout=self.queue_timeout)
+                acquired = True
+            except asyncio.TimeoutError:
+                job.state, job.error = 'failed', 'queueTimeout'
+                return
+            if acquired:
                 checkpoint()
                 job.state = 'downloading'
                 worker = asyncio.create_task(asyncio.to_thread(self.downloader, job.song['url']))
-                done, _ = await asyncio.wait([worker], timeout=240)
+                done, _ = await asyncio.wait([worker], timeout=self.download_timeout)
                 if not done:
                     timed_out = True
+                    job.state, job.error = 'failed', 'downloadTimeout'
                     job.operation.stopped.set()
+                    # Keep the worker slot until cooperative cleanup actually finishes.
+                    # Reporting the timeout must not spawn more unbounded download threads.
                 source, _ = await asyncio.shield(worker)
                 checkpoint()
                 # One event loop serializes all budget checks and atomic cache promotions.
@@ -131,7 +143,9 @@ class AudioJobs:
             job.state = 'cancelled'
         except Exception:
             job.state = 'failed'
+            if not job.error: job.error = 'prepareFailed'
         finally:
+            if acquired: self.slots.release()
             _current.reset(marker)
             if source:
                 from scratch import remove_owned_file
@@ -145,7 +159,11 @@ class AudioJobs:
         job = self.get(uid, token)
         if job and job.state in ('queued','downloading'):
             job.operation.stopped.set()
-            job.state = 'cancelling'
+            if job.state == 'queued':
+                job.state = 'cancelled'
+                job.task.cancel()
+            else:
+                job.state = 'cancelling'
         return job
 
     async def close(self):

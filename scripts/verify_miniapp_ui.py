@@ -221,12 +221,22 @@ async def run():
         assert await app_page.locator('#now-title').inner_text()=='App recording 1'
         await app_page.locator('#mobile-nav [data-go=studio]').click()
         await app_page.locator('#mix-format').select_option('mp3')
-        await app_page.locator('#mix-effect').select_option('reverb')
+        await app_page.locator('[data-effect=reverb]').click()
+        await app_page.locator('[data-effect=lofi]').click()
+        await app_page.locator('[data-effect=compressor]').click()
+        assert await app_page.locator('.effect-tile[aria-pressed=true]').count()==3
+        await app_page.locator('#apply-mix').click()
+        await app_page.locator('#toast').filter(has_text='Playing your processed mix').wait_for()
+        await app_page.locator('#compare-fx').click()
+        await app_page.locator('#compare-fx[aria-pressed=true]').wait_for()
+        await app_page.locator('#compare-fx').click()
+        assert await app_page.evaluate('!document.querySelector("#audio").paused')
         await app_page.locator('#mix-pitch').fill('2')
         async with app_page.expect_download() as mp3_download:
             await app_page.locator('#export-mix').click()
         assert (await mp3_download.value).suggested_filename.endswith('.mp3')
-        await app_page.screenshot(path=str(output/'miniapp-expanded-studio.png'))
+        await app_page.locator('.studio-hero').scroll_into_view_if_needed()
+        await app_page.screenshot(path=str(output/'miniapp-expanded-studio.png'),full_page=True)
         await app_page.locator('#mobile-nav [data-go=search]').click()
         assert calls['send']==0
         assert await app_page.evaluate('window.chatOpens')==0
