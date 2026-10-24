@@ -779,7 +779,10 @@ AUDIO_EFFECTS = {
     "reverb": "Псевдо-реверб",
     "speed_up": "Ускорить",
     "slow_down": "Замедлить",
-    "bass_boost": "Больше баса",
+    "bass_boost": "Бас · средний",
+    "bass_less": "Бас · меньше",
+    "bass_light": "Бас · мягкий",
+    "bass_strong": "Бас · сильный",
     "normalize": "Нормализация",
     "pitch_up": "Повышение тона",
     "pitch_down": "Понижение тона",
@@ -1919,6 +1922,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Переключение эффекта
     if data.startswith("toggle_"):
         effect = data.split("_",1)[1]
+        if effect == "bass_boost":
+            from studio_ui import handle_studio
+            return await handle_studio(update, context, AUDIO_EFFECTS, action_override="studio:bass")
         if effect not in AUDIO_EFFECTS:
             return await query.message.reply_text("Неизвестный эффект.")
         sel = context.user_data.setdefault('pending_effects', [])
@@ -2306,7 +2312,7 @@ def build_application(*, request=None, updates_request=None):
     app.add_handler(CommandHandler("studio", serialize_user(studio_command)))
     app.add_handler(CommandHandler("trim", serialize_user(trim_command)))
     app.add_handler(CallbackQueryHandler(serialize_user(quick_callback), pattern=r"^quick:"))
-    app.add_handler(CallbackQueryHandler(serialize_user(studio_callback), pattern=r"^studio:(home|reset|help|trim|preview|mp3|wav|info|formats|more|group:(level|tone|color|space))$"))
+    app.add_handler(CallbackQueryHandler(serialize_user(studio_callback), pattern=r"^studio:(home|reset|help|trim|preview|mp3|wav|info|formats|more|bass(?::(?:off|bass_less|bass_light|bass_boost|bass_strong))?|group:(level|tone|color|space))$"))
     app.add_handler(CommandHandler("help", serialize_user(help_command)))
     app.add_handler(CommandHandler("cancel", localized_callback(cancel_entry)))
     app.add_handler(CallbackQueryHandler(serialize_user(menu_callback), pattern=r"^ui:(search|title|lyrics|recognize|audio|help|home|favorites|history)$"))

@@ -61,6 +61,12 @@ async def handle_quick(update, context):
             reply_markup=Markup([[Button(name, callback_data="quick:preset:"+key)] for key,(name,_) in PRESETS.items()] + [
                 [Button("🔔 Сделать рингтон", callback_data="quick:ringtone")],
                 [Button("← Студия", callback_data="studio:home")]]))
+    if data == "quick:preset:bass":
+        context.user_data["pending_effects"] = []
+        context.user_data.pop("effect_preview", None)
+        from studio_ui import handle_studio
+        from bass_labels import BASS_LABELS
+        return await handle_studio(update, context, BASS_LABELS, action_override="studio:bass")
     if data.startswith("quick:preset:"):
         preset = PRESETS.get(data.rsplit(":",1)[-1])
         if not preset:

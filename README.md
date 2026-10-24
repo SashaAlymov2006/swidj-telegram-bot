@@ -14,7 +14,7 @@ SwiDJ brings music discovery, personal audio tools and public video retrieval in
 | Discovery | Search by title or lyrics; transcribe spoken words for a song search |
 | Music links | YouTube and SoundCloud audio; Spotify, Apple Music and Yandex Music links resolve song metadata and search for an available recording |
 | Video | Public YouTube videos, TikTok videos and Instagram videos/Reels |
-| Audio studio | Trim, convert, speed up, slowed/reverb, bass, reverse, loops and phone ringtone exports |
+| Audio studio | Trim, convert, speed up, slowed/reverb, adjustable bass with preview, reverse, loops and phone ringtone exports |
 | Personal library | Favourites, playlists and saving users' own uploaded audio |
 | Experience | Russian/English UI, remembered language, compact result navigation, retries and cancellation |
 | Operations | Owner controls, persistent state, bounded caches and source/runtime backup utilities |
@@ -64,7 +64,7 @@ Keep `.env`, cookies, user databases and backups private. Persistent data and mo
 
 ## Verification
 
-The current source passed **158 offline tests**, including Telegram SDK flows, language isolation, playlists, cancellation, recovery and media cleanup. This is functional test coverage, not a large-scale performance benchmark.
+The current source passed **161 offline tests**, including Telegram SDK flows, language isolation, playlists, cancellation, recovery and media cleanup. This is functional test coverage, not a large-scale performance benchmark.
 
 ```sh
 docker build -t swidj:test .

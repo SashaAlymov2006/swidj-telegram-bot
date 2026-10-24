@@ -722,6 +722,10 @@ assert 78 not in h
         await self.app.process_update(self.callback("quick:home"))
         for key in ("speed","slow","bass"):
             await self.app.process_update(self.callback("quick:preset:"+key))
+            if key == "bass":
+                await self.app.process_update(self.callback("studio:bass:bass_light"))
+                self.assertEqual(self.app.user_data[77]["pending_effects"], ["bass_light"])
+                await self.app.process_update(self.callback("fx:preview"))
             self.assertIn("effect_preview",self.app.user_data[77])
             with io.BytesIO(self.request.uploads[-1][1]) as sample:
                 self.assertLessEqual(len(AudioSegment.from_file(sample,format="mp3")),15100)

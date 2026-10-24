@@ -10,7 +10,7 @@ from pathlib import Path
 FILTERS = {
     'reverb': 'aecho=0.8:0.8:80|140:0.25|0.15',
     'speed_up': 'atempo=1.3', 'slow_down': 'atempo=0.7',
-    'bass_boost': 'bass=g=10', 'normalize': 'loudnorm=I=-16:TP=-1.5:LRA=11',
+    'normalize': 'loudnorm=I=-16:TP=-1.5:LRA=11',
     'pitch_up': 'aresample=44100,asetrate=52920,aresample=44100,atempo=0.833333',
     'pitch_down': 'aresample=44100,asetrate=35280,aresample=44100,atempo=1.25',
     'lofi': 'aresample=8000,lowpass=f=3000,highpass=f=150,aresample=44100',
@@ -21,6 +21,15 @@ FILTERS = {
     'mastering': 'loudnorm=I=-16:TP=-1.5:LRA=11,afftdn',
     'pro_reverb': 'aecho=0.8:0.9:1000:0.3',
 }
+
+# Fixed gains keep callback input out of FFmpeg expressions.
+BASS_GAINS = {"bass_less": -6, "bass_light": 3, "bass_boost": 6, "bass_strong": 9}
+for _name, _gain in BASS_GAINS.items():
+    # Headroom before boosting; a limiter catches inter-sample/filter overshoots.
+    FILTERS[_name] = (
+        f"volume={-max(0, _gain)}dB,bass=g={_gain}:f=100,"
+        "alimiter=limit=0.95:level=false:latency=1"
+    )
 
 
 def transcode(source, target, *, audio_filter=None, seconds=None, rate=44100, channels=None):

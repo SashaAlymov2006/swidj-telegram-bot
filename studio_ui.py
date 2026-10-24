@@ -20,8 +20,15 @@ GROUPS = {
 
 def keyboard(effects, selected, song=None, category="main"):
     rows = []
-    if category in GROUPS:
-        rows = [[Button(("✓ " if key in selected else "") + effects[key], callback_data="toggle_" + key)]
+    if category == "bass":
+        from audio_tools import BASS_GAINS
+        options = [("off", "Без изменения")] + [(key, effects[key]) for key in BASS_GAINS]
+        active = next((key for key in selected if key in BASS_GAINS), "off")
+        rows = [[Button(("✓ " if active == key else "") + title,
+                        callback_data="studio:bass:" + key)] for key, title in options]
+        rows.append([Button("← Студия", callback_data="studio:home")])
+    elif category in GROUPS:
+        rows = [[Button(("✓ " if key in selected else "") + ("Регулировка баса" if key == "bass_boost" else effects[key]), callback_data="studio:bass" if key == "bass_boost" else "toggle_" + key)]
                 for key in GROUPS[category][1]]
         rows.append([Button("← Студия", callback_data="studio:home")])
     else:
@@ -97,12 +104,31 @@ async def trim_command(update, context):
         await update.effective_message.reply_text(str(exc))
 
 
-async def handle_studio(update, context, effects):
+async def handle_studio(update, context, effects, action_override=None):
     await update.callback_query.answer()
-    action = update.callback_query.data
+    action = action_override or update.callback_query.data
     context.user_data.pop("awaiting_ringtone", None)
     if action != "studio:trim":
         context.user_data.pop("awaiting_trim", None)
+    if action == "studio:bass" or action.startswith("studio:bass:"):
+        source = context.user_data.get("last_audio_path")
+        if not source or not os.path.isfile(source):
+            return await update.effective_message.reply_text("Сначала пришли аудиофайл.")
+        from audio_tools import BASS_GAINS
+        selected = list(context.user_data.get("pending_effects", []))
+        if action.startswith("studio:bass:"):
+            choice = action.rsplit(":", 1)[-1]
+            if choice not in BASS_GAINS and choice != "off":
+                return
+            selected = [key for key in selected if key not in BASS_GAINS]
+            if choice != "off":
+                selected.append(choice)
+            context.user_data["pending_effects"] = selected
+            context.user_data.pop("effect_preview", None)
+        context.user_data["studio_category"] = "bass"
+        return await update.callback_query.edit_message_text(
+            "🎚 Регулировка баса\nВыбери уровень → послушай пример → примени к треку.",
+            reply_markup=keyboard(effects, selected, context.user_data.get("downloaded_song"), "bass"))
     if action in ("studio:home", "studio:reset"):
         if action == "studio:reset":
             context.user_data["pending_effects"] = []
