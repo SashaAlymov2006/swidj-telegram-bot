@@ -6,16 +6,22 @@ from weakref import WeakValueDictionary
 _locks = WeakValueDictionary()
 
 
+def user_lock(user_id):
+    """Shared by Telegram updates and authenticated Mini App operations."""
+    lock = _locks.get(user_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _locks[user_id] = lock
+    return lock
+
+
 def serialize_user(handler):
     @functools.wraps(handler)
     async def wrapped(update, context):
         user = getattr(update, 'effective_user', None)
         if user is None:
             return await handler(update, context)
-        lock = _locks.get(user.id)
-        if lock is None:
-            lock = asyncio.Lock()
-            _locks[user.id] = lock
+        lock = user_lock(user.id)
         async with lock:
             application = getattr(context, 'application', None)
             hooks = getattr(application, 'bot_data', {})

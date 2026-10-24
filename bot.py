@@ -1007,9 +1007,24 @@ def home_keyboard():
     ])
 
 
+async def miniapp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from miniapp_server import public_url
+    from telegram import WebAppInfo
+    url = public_url()
+    if url:
+        return await update.effective_message.reply_text(tr("✨ SwiDJ · приложение"),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(tr("Открыть приложение"), web_app=WebAppInfo(url))]]))
+    await update.effective_message.reply_text(tr("Приложение пока тестируется. Музыка и студия доступны в меню бота."), reply_markup=home_keyboard())
+
+
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_navigation_entry(context)
     keyboard = home_keyboard()
+    from miniapp_server import public_url
+    if public_url():
+        from telegram import WebAppInfo
+        keyboard = InlineKeyboardMarkup(list(keyboard.inline_keyboard) + [
+            [InlineKeyboardButton(tr("✨ Открыть приложение"), web_app=WebAppInfo(public_url()))]])
     if access_policy.is_owner(update):
         keyboard = InlineKeyboardMarkup(list(keyboard.inline_keyboard) + [
             [InlineKeyboardButton("⚙ Панель владельца", callback_data="owner:home")]])
@@ -2211,6 +2226,8 @@ async def initialize_app(app):
     app.bot_data["is_owner"] = lambda update: access_policy.is_owner(update)
     app.bot_data['before_update'] = restore_session
     app.bot_data['after_update'] = save_session
+    from miniapp_server import start_for_bot
+    await start_for_bot(app, state_store, user_favorites, saved_sessions, access_policy.owner_ids)
     # Native composer menu and slash suggestions; no extra chat keyboard/messages.
     from telegram.error import TelegramError
     try:
@@ -2277,7 +2294,8 @@ def build_application(*, request=None, updates_request=None):
         bot_options["request"] = request
     if updates_request is not None:
         bot_options["get_updates_request"] = updates_request
-    builder = ApplicationBuilder().bot(LocalizedBot(TELEGRAM_TOKEN, **bot_options)).concurrent_updates(8).post_init(initialize_app)
+    from miniapp_server import stop_for_bot
+    builder = ApplicationBuilder().bot(LocalizedBot(TELEGRAM_TOKEN, **bot_options)).concurrent_updates(8).post_init(initialize_app).post_shutdown(stop_for_bot)
     app = builder.build()
     app.add_error_handler(localized_callback(error_handler))
     from operations import cancel_callback
@@ -2310,6 +2328,7 @@ def build_application(*, request=None, updates_request=None):
     app.add_handler(CommandHandler("menu", serialize_user(menu_command)))
     app.add_handler(CommandHandler("search", serialize_user(search_command)))
     app.add_handler(CommandHandler("studio", serialize_user(studio_command)))
+    app.add_handler(CommandHandler("app", serialize_user(miniapp_command)))
     app.add_handler(CommandHandler("trim", serialize_user(trim_command)))
     app.add_handler(CallbackQueryHandler(serialize_user(quick_callback), pattern=r"^quick:"))
     app.add_handler(CallbackQueryHandler(serialize_user(studio_callback), pattern=r"^studio:(home|reset|help|trim|preview|mp3|wav|info|formats|more|bass(?::(?:off|bass_less|bass_light|bass_boost|bass_strong))?|group:(level|tone|color|space))$"))

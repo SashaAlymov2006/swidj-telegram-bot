@@ -4,6 +4,10 @@ services:
     env_file: .env
     environment:
       EXTERNAL_PAID_API_ENABLED: 'false'
+      MINIAPP_ENABLED: 'true'
+      MINIAPP_HOST: '0.0.0.0'
+    ports:
+      - '127.0.0.1:8765:8765'
     restart: unless-stopped
     init: true
     stop_grace_period: 45s

@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent
 EXCLUDED = {".git", ".idea", ".venv", "__pycache__", ".railway", "data", "tmp", ".pytest_cache",
             "downloads", "media", "cache", "node_modules"}
 EXTENSIONS = {".py", ".md", ".txt", ".yaml", ".yml", ".ps1", ".xml", ".patch", ".toml",
-              ".json", ".png", ".jpg", ".jpeg", ".svg", ".cmd"}
+              ".json", ".html", ".css", ".js", ".png", ".jpg", ".jpeg", ".svg", ".cmd"}
 SPECIAL = {"Dockerfile", ".gitignore", ".dockerignore", ".env.example"}
 DATA_VOLUME = "swidj-local-data"
 IMAGE = "swidj:local-pycharm"

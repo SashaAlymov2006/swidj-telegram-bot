@@ -453,5 +453,9 @@
   "Бас · сильный": "Bass · strong",
   "Без изменения": "Unchanged",
   "Регулировка баса": "Bass control",
-  "Выбери уровень → послушай пример → примени к треку.": "Choose a level → preview → apply to the track."
+  "Выбери уровень → послушай пример → примени к треку.": "Choose a level → preview → apply to the track.",
+  "✨ Открыть приложение": "✨ Open app",
+  "Открыть приложение": "Open app",
+  "✨ SwiDJ · приложение": "✨ SwiDJ · app",
+  "Приложение пока тестируется. Музыка и студия доступны в меню бота.": "The app is being tested. Music and studio are available in the bot menu."
 }
