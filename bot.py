@@ -2236,7 +2236,12 @@ async def initialize_app(app):
         await app.bot.set_my_commands(commands, language_code="ru")
         from i18n_ui import english
         await app.bot.set_my_commands([BotCommand(command, english(description, protect=False)) for command, description in NAVIGATION_COMMANDS], language_code="en")
-        await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+        from miniapp_server import public_url
+        if public_url():
+            from telegram import MenuButtonWebApp, WebAppInfo
+            await app.bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="SwiDJ", web_app=WebAppInfo(public_url())))
+        else:
+            await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
         logger.info("Command menu configured")
     except TelegramError as exc:
         logger.warning("Command menu configuration failed (%s)", type(exc).__name__)

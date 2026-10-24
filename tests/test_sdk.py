@@ -141,6 +141,20 @@ class SDKTests(unittest.IsolatedAsyncioTestCase):
         token = next(reversed(self.app.user_data[77]["version_requests"]))
         await self.app.process_update(self.callback(f"ver:pick:{token}:{index}"))
 
+    async def test_https_miniapp_is_available_in_native_menu_and_app_command(self):
+        with patch.dict(os.environ, {'MINIAPP_URL':'https://preview.example.test'}), \
+             patch('state_store.migrate_users',return_value=False):
+            await self.bot.initialize_app(self.app)
+            menus=[data['menu_button'] for op,data in self.request.calls if op=='setChatMenuButton']
+            menu=json.loads(menus[-1]) if isinstance(menus[-1],str) else menus[-1]
+            self.assertEqual(menu['type'],'web_app')
+            self.assertEqual(menu['web_app']['url'],'https://preview.example.test')
+            await self.app.process_update(self.message('/app'))
+            messages=[data for op,data in self.request.calls if op=='sendMessage']
+            markup=messages[-1]['reply_markup']
+            if isinstance(markup,str):markup=json.loads(markup)
+            self.assertEqual(markup['inline_keyboard'][0][0]['web_app']['url'],'https://preview.example.test')
+
     def texts(self):
         return [params.get('text', '') for op, params in self.request.calls if op in ('sendMessage', 'editMessageText')]
 

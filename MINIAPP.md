@@ -49,10 +49,25 @@ python miniapp_server.py --demo
 
 ## Connect inside Telegram later
 
-This release has **not been publicly deployed**. For Telegram testing/launch,
-provide an HTTPS origin pointing to this server and set `MINIAPP_URL` privately.
-Then restart the bot: `/app` and the home menu show a Web App launch button.
-No domain, tunnel, account or paid server is automatically created.
+Production hosting has **not been deployed**. For free Telegram testing, run
+`python miniapp_tunnel.py start` (Windows: `Start SwiDJ App.cmd`). This explicitly
+starts the official Cloudflare Quick Tunnel container, checks the public URL,
+updates private `MINIAPP_URL`, and restarts the bot. The native composer menu
+button reads **SwiDJ**; `/app` and the home menu also offer a Web App button.
+No Cloudflare account, paid API, custom domain or inbound firewall port is needed.
+The URL changes when the tunnel is recreated and works only while the laptop,
+Docker, bot and tunnel are running. Quick Tunnels are for development/testing.
+
+`python miniapp_tunnel.py status` checks the current address.
+`python miniapp_tunnel.py stop` (Windows: `Stop SwiDJ App.cmd`) closes public
+access and restores the normal bot menu while leaving the bot running. These
+actions change the bot's configured menu for everyone; run them only as its owner.
+The normal bot Stop action stops the application; the tunnel may stay running
+until separately stopped, but cannot serve the stopped app.
+
+For a permanent launch, provide a stable HTTPS origin and set `MINIAPP_URL`
+privately. Do not publish .env or the token. A real Telegram WebView test with
+your account is required before claiming end-to-end phone compatibility.
 
 `MINIAPP_ENABLED=true` enables the server. `MINIAPP_HOST=0.0.0.0` is appropriate
 inside Docker with a loopback port mapping; outside Docker default to 127.0.0.1.

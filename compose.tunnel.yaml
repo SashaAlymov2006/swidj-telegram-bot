@@ -1,0 +1,18 @@
+# Temporary public HTTPS for Telegram testing. No account, token or inbound port.
+services:
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.3
+    command: tunnel --no-autoupdate --protocol http2 --url http://bot:8765
+    restart: 'no'
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: 2m
+        max-file: '2'
