@@ -40,7 +40,15 @@ async def run():
         await page.locator('#desktop-nav [data-go=library]').click()
         await page.locator('.track-row [data-action=menu]').nth(1).click()
         await page.locator('[data-action=queue-next]').click()
+        await page.locator('.track-row [data-action=menu]').nth(2).click()
+        await page.locator('[data-action=queue-add]').click()
         await page.locator('#open-queue').click()
+        assert await page.locator('.queue-row').count()==2
+        await page.locator('[data-q-down="0"]').click()
+        assert 'After the rain' in await page.locator('.queue-row').first.inner_text()
+        await page.locator('[data-q-up="1"]').click()
+        assert 'Sunset circuit' in await page.locator('.queue-row').first.inner_text()
+        await page.locator('[data-q-remove="1"]').click()
         assert await page.locator('.queue-row').count()==1
         await page.locator('#dialog .dialog-head button').click()
         await page.locator('#next').click()

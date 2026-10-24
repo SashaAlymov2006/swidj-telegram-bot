@@ -39,7 +39,7 @@ Object.assign(copy.en,{queue:'Play queue',playNext:'Play next',queueAdd:'Add to 
 Object.assign(copy.ru,{queue:'Очередь',playNext:'Следующим',queueAdd:'В очередь',queueEmpty:'Очередь пуста',queueAdded:'Добавлено в очередь',clearQueue:'Очистить',moveUp:'Выше',moveDown:'Ниже',resume:'Продолжить слушать',compare:'Сравнить до / после',dry:'Оригинал',wet:'Эффекты включены',presets:'Характер звука',clean:'Оригинал',warm:'Тёплый',night:'Ночной драйв',bright:'Яркий',treble:'Чёткость',saveMix:'Микс в библиотеку',mixSaved:'Микс готов в студии',queueRemove:'Убрать из очереди'});
 
 Object.assign(copy.en,{trimStart:'Start - seconds',trimEnd:'End - seconds (0 = full)',fade:'Smooth fade - seconds',invalidTrim:'End must be after the start.'});
-Object.assign(copy.ru,{trimStart:'Начало ? сек',trimEnd:'Конец ? сек (0 = до конца)',fade:'Плавный вход и выход ? сек',invalidTrim:'Конец должен быть после начала.'});
+Object.assign(copy.ru,{trimStart:'Начало - сек',trimEnd:'Конец - сек (0 = до конца)',fade:'Плавный вход и выход - сек',invalidTrim:'Конец должен быть после начала.'});
 const demo = !initData;
 let language = 'ru';
 try { language = localStorage.getItem('swidj-language') || tg?.initDataUnsafe?.user?.language_code?.slice(0,2) || 'ru'; } catch {}
