@@ -7,7 +7,7 @@ import shutil
 import time
 from media_store import MediaStore
 
-FILE_NAME=re.compile(r'[A-Za-z0-9_-]{32}\.(?:mp3|wav)')
+FILE_NAME=re.compile(r'[A-Za-z0-9_-]{32}\.(?:mp3|wav|mp4|jpg)')
 
 class ExportFiles:
     def __init__(self,root=None,ttl=600,budget=256*1024**2):
@@ -34,9 +34,9 @@ class ExportFiles:
         self.items={k:v for k,v in self.items.items() if v['expires']>now and v['path'].is_file()}
         if incoming>self.budget:raise ValueError('Export too large')
 
-    def retain(self,uid,source,title='SwiDJ mix'):
+    def retain(self,uid,source,title='SwiDJ mix',feature='studio'):
         source=Path(source)
-        if source.suffix not in ('.mp3','.wav') or source.is_symlink() or not 0<source.stat().st_size<=96*1024**2:
+        if source.suffix not in ('.mp3','.wav','.mp4','.jpg') or source.is_symlink() or not 0<source.stat().st_size<=96*1024**2:
             raise ValueError('Invalid export')
         self.prune(source.stat().st_size)
         while len(self.items)>=128:
@@ -45,7 +45,7 @@ class ExportFiles:
         path=self.store.user_directory(uid)/(token+source.suffix)
         shutil.copyfile(source,path)
         title=re.sub(r'[\\/:*?"<>|\x00-\x1f]','',str(title)).strip()[:80] or 'SwiDJ mix'
-        self.items[token]={'uid':uid,'path':path,'filename':title+source.suffix,'expires':time.time()+self.ttl}
+        self.items[token]={'uid':uid,'feature':feature,'path':path,'filename':title+source.suffix,'expires':time.time()+self.ttl}
         return token,self.items[token]
 
     def get(self,token):

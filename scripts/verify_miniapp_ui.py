@@ -1,5 +1,6 @@
 """Exercise our local demo in an isolated browser; never opens user accounts."""
 import asyncio
+import base64
 import json
 from pathlib import Path
 import subprocess
@@ -164,6 +165,7 @@ async def run():
                  'kind':'track','playable':False,'cover':None} for i in (1,2)]
         calls={'send':0,'poll':0,'cancel':False,'track':'1','upload':None}
         audio_fixture=urlopen('http://127.0.0.1:8765/demo/0.wav').read()
+        video_fixture=base64.b64decode((Path(__file__).resolve().parent.parent/'tests/fixtures/link_video_base64.txt').read_text())
         async def app_api(route):
             path=route.request.url.split('/api/',1)[-1].split('?',1)[0]
             result={}
@@ -197,6 +199,11 @@ async def run():
                 if b'"delivery":"ticket"' in route.request.post_data_buffer:
                     return await route.fulfill(status=200,body=json.dumps({'url':'https://preview.example.test/studio-file/'+'b'*32,'filename':'App recording 1 - SwiDJ mix.mp3','expires_in':600}),content_type='application/json')
                 return await route.fulfill(status=200,body=audio_fixture,content_type='audio/mpeg')
+            elif path=='link':
+                payload=route.request.post_data_json
+                mode=payload['mode'];calls['link']=payload
+                result={'kind':mode,'title':'Linked fixture','artist':'Fixture','filename':'Linked fixture.'+('mp4' if mode=='video' else 'mp3'),'duration':2,'has_audio':True,'poster':None,'url':'http://127.0.0.1:8765/studio-file/'+('c' if mode=='video' else 'd')*32}
+            elif path=='link/audio':result={'kind':'audio','title':'Linked fixture','artist':'Fixture','filename':'Linked fixture.mp3','duration':24,'url':'http://127.0.0.1:8765/studio-file/'+'d'*32}
             elif path=='voice':
                 assert route.request.headers['content-type'].startswith('multipart/form-data')
                 result={'text':'Never gonna give you up'}
@@ -204,6 +211,10 @@ async def run():
             else:raise AssertionError('Unexpected app API path: '+path)
             await route.fulfill(status=200,body=json.dumps(result),content_type='application/json')
         await live.route('**/api/**',app_api)
+        async def media_file(route):
+            video=route.request.url.endswith('c'*32)
+            await route.fulfill(status=200,body=video_fixture if video else audio_fixture,content_type='video/mp4' if video else 'audio/wav')
+        await live.route('**/studio-file/**',media_file)
         app_page=await live.new_page()
         app_page.on('pageerror',lambda error:errors.append(str(error)))
         await app_page.goto('http://127.0.0.1:8765/#search')
@@ -227,7 +238,7 @@ async def run():
         await app_page.locator('[data-effect=reverb]').click()
         await app_page.locator('[data-effect=lofi]').click()
         await app_page.locator('[data-effect=compressor]').click()
-        assert await app_page.locator('.effect-tile[aria-pressed=true]').count()==3
+        await app_page.wait_for_function("() => document.querySelectorAll('.effect-tile[aria-pressed=true]').length===3")
         assert await app_page.evaluate('!document.querySelector("#audio").paused')
         assert await app_page.evaluate('document.querySelector("#audio").currentTime>0')
         await app_page.locator('#apply-mix').click()
@@ -295,6 +306,31 @@ async def run():
         await app_page.locator('#dialog [value=remove]').click()
         await app_page.locator('.track-row').wait_for(state='hidden')
         assert calls['send']==0 and await app_page.evaluate('window.chatOpens')==0
+        await app_page.locator('#mobile-nav [data-go=search]').click()
+        await app_page.locator('[data-search-tab=links]').click()
+        await app_page.locator('#link-url').fill('https://www.instagram.com/reel/fixture/')
+        await app_page.locator('input[name=link-type][value=video]').check()
+        await app_page.locator('#prepare-link').click()
+        await app_page.locator('#link-video').wait_for()
+        assert await app_page.locator('#link-video').get_attribute('playsinline') is not None
+        assert await app_page.locator('#link-video').get_attribute('controls') is not None
+        await app_page.screenshot(path=str(output/'miniapp-video-links.png'))
+        await app_page.locator('#download-link').click()
+        assert await app_page.evaluate('window.nativeDownload.file_name.endsWith(".mp4")')
+        await app_page.locator('#dialog .dialog-head button').click()
+        await app_page.locator('#extract-link-audio').click()
+        await app_page.locator('#studio-link').click()
+        await app_page.locator('[data-speed-preset="1.25"]').click()
+        await app_page.locator('[data-tone-preset="0"]').click()
+        assert await app_page.locator('#speed').input_value()=='1.25'
+        assert await app_page.locator('#mix-pitch').input_value()=='0'
+        await app_page.locator('[data-tone-step="-1"]').click()
+        assert await app_page.locator('#speed').input_value()=='1.25'
+        assert await app_page.locator('#mix-pitch').input_value()=='-1'
+        if await app_page.locator('[data-effect=reverb]').get_attribute('aria-pressed')!='true':await app_page.locator('[data-effect=reverb]').click()
+        await app_page.locator('#ambience').fill('50')
+        assert await app_page.locator('#ambience-value').inner_text()=='50%'
+        assert await app_page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         # Verify the live audio graph changes actual samples, not just selected cards.
         ratio=await page.evaluate('''async () => {
           const {connectLive}=await import('/assets/live.js');
@@ -316,6 +352,7 @@ async def run():
         await safari.add_init_script("window.Telegram={WebApp:{initData:'offline-fixture',initDataUnsafe:{user:{first_name:'Fixture',language_code:'en'}},ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},isVersionAtLeast(){return true},downloadFile(value){window.nativeFile=value}}};")
         await safari.route('https://telegram.org/**',lambda route:route.fulfill(status=200,body=''))
         await safari.route('**/api/**',app_api)
+        await safari.route('**/studio-file/**',media_file)
         iphone=await safari.new_page()
         iphone.on('pageerror',lambda error:errors.append(str(error)))
         await iphone.goto('http://127.0.0.1:8765/#search')
@@ -332,6 +369,17 @@ async def run():
         assert await iphone.evaluate("window.nativeFile.url.includes('/studio-file/')")
         assert await iphone.evaluate('document.documentElement.scrollWidth<=innerWidth')
         await iphone.screenshot(path=str(output/'miniapp-iphone-download.png'))
+        await iphone.locator('#dialog .dialog-head button').click()
+        await iphone.locator('#mobile-nav [data-go=search]').click()
+        await iphone.locator('[data-search-tab=links]').click()
+        await iphone.locator('#link-url').fill('https://www.instagram.com/reel/fixture/')
+        await iphone.locator('input[name=link-type][value=video]').check()
+        await iphone.locator('#prepare-link').click()
+        await iphone.wait_for_function("() => document.querySelector('#link-video')?.videoHeight>0")
+        assert await iphone.evaluate('document.querySelector("#link-video").videoHeight>document.querySelector("#link-video").videoWidth')
+        assert await iphone.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        await iphone.locator('.link-result').scroll_into_view_if_needed()
+        await iphone.screenshot(path=str(output/'miniapp-iphone-video.png'))
         await safari_browser.close()
         await browser.close()
     assert not errors, errors

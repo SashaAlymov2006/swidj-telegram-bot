@@ -36,22 +36,23 @@ export function chain(context, source, destination, bass, treble = 0) {
 }
 
 export class AudioEngine {
-  constructor(element) { this.element = element; this.bass = 0; this.speed = 1; this.treble=0; this.bypass=false; this.trimStart=0; this.trimEnd=0; this.fade=0; this.effects=[]; this.processed=false; }
+  constructor(element) { this.element = element; this.bass = 0; this.speed = 1; this.treble=0; this.bypass=false; this.trimStart=0; this.trimEnd=0; this.fade=0; this.effects=[]; this.ambience=100; this.processed=false; }
   async unlock() {
     if (!this.context) {
       this.context = new AudioContext();
       this.nodes = chain(this.context, this.context.createMediaElementSource(this.element), this.context.destination, this.bypass?0:this.bass, this.bypass?0:this.treble);
+      this.rebuildLive();
     }
-    this.rebuildLive();
     await this.context.resume();
   }
   rebuildLive(){
     if(!this.nodes)return;
     if(this.disconnectLive)this.disconnectLive();
-    this.disconnectLive=connectLive(this.context,this.nodes.high,this.nodes.compressor,this.bypass||this.processed?[]:this.effects);
+    this.disconnectLive=connectLive(this.context,this.nodes.high,this.nodes.compressor,this.bypass||this.processed?[]:this.effects,this.ambience);
   }
   setEffects(effects){this.effects=[...effects];this.rebuildLive();}
-  setProcessed(value){this.processed=value;this.rebuildLive();this.applyTone();this.setSpeed(this.speed);}
+  setAmbience(value){this.ambience=value;this.disconnectLive?.setAmbience?.(value);}
+  setProcessed(value){if(this.processed===value)return;this.processed=value;this.rebuildLive();this.applyTone();this.setSpeed(this.speed);}
   applyTone() {
     if(!this.nodes)return;
     const bass=this.bypass||this.processed?0:this.bass,treble=this.bypass||this.processed?0:this.treble;
@@ -61,7 +62,7 @@ export class AudioEngine {
   }
   setBass(value){this.bass=value;this.applyTone();}
   setTreble(value){this.treble=value;this.applyTone();}
-  setBypass(value){this.bypass=value;this.rebuildLive();this.applyTone();this.setSpeed(this.speed);}
+  setBypass(value){if(this.bypass===value)return;this.bypass=value;this.rebuildLive();this.applyTone();this.setSpeed(this.speed);}
   setSpeed(value) {
     this.speed = value; this.element.playbackRate = this.bypass||this.processed?1:value;
     // Keep live tempo independent of pitch, matching server exports.

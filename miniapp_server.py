@@ -392,8 +392,11 @@ def create_app(*, token='', bridge=None):
                 uid = user['id']
                 bridge.allowed(uid)
                 from dispatch import user_lock
-                async with user_lock(uid):
-                    response = await handler(request)
+                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio'):
+                    response=await handler(request)
+                else:
+                    async with user_lock(uid):
+                        response = await handler(request)
             else:
                 response = await handler(request)
         except web.HTTPException as exc:
@@ -547,6 +550,8 @@ def create_app(*, token='', bridge=None):
     register(app, bridge)
     from app_lyrics import register as register_lyrics
     register_lyrics(app, bridge)
+    from app_media import register as register_media
+    register_media(app, bridge)
     return app
 
 

@@ -3,6 +3,7 @@ import asyncio
 import json
 import math
 import os
+import signal
 from pathlib import Path
 import sys
 import tempfile
@@ -26,7 +27,7 @@ EFFECTS = {
 }
 
 async def process(args, timeout=240):
-    child = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+    child = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,start_new_session=(os.name!='nt'))
     try:
         stdout, _ = await asyncio.wait_for(child.communicate(), timeout)
         if child.returncode:
@@ -34,7 +35,10 @@ async def process(args, timeout=240):
         return stdout
     finally:
         if child.returncode is None:
-            child.kill()
+            if os.name!='nt':
+                try:os.killpg(child.pid,signal.SIGKILL)
+                except ProcessLookupError:pass
+            else:child.kill()
             await child.wait()
 
 async def probe(path, allow_unknown=False):
@@ -72,6 +76,7 @@ def plan(settings, duration):
     bass=number(settings,'bass',0,-6,9)
     treble=number(settings,'treble',0,-6,6)
     fade=number(settings,'fade',0,0,10)
+    ambience=number(settings,'ambience',100,0,100)/100
     if end <= start or end > duration+.1:
         raise ValueError('Invalid trim')
     length=(min(end,duration)-start)/speed
@@ -90,7 +95,11 @@ def plan(settings, duration):
         filters.append('atempo=2');tempo/=2
     filters += [f'atempo={tempo}', 'aresample=44100']
     for effect in effects:
-        if EFFECTS[effect]: filters.append(EFFECTS[effect])
+        expression=EFFECTS[effect]
+        if expression and effect in ('reverb','echo','delay','pro_reverb'):
+            prefix,gains=expression.rsplit(':',1)
+            expression=prefix+':'+('|'.join(str(float(gain)*ambience) for gain in gains.split('|')))
+        if expression: filters.append(expression)
     if fade:
         fade=min(fade,length/2)
         filters += [f'afade=t=in:d={fade}',f'afade=t=out:st={length-fade}:d={fade}']
@@ -208,7 +217,7 @@ def register(app,bridge):
         from urllib.parse import quote
         item=studio.exports.get(request.match_info['ticket'])
         if not item:raise web.HTTPNotFound()
-        bridge.allowed(item['uid'],'downloads');bridge.allowed(item['uid'],'studio')
+        bridge.allowed(item['uid'],'downloads');bridge.allowed(item['uid'],item.get('feature','studio'))
         return web.FileResponse(item['path'],headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote(item['filename'],safe='')})
     app.router.add_get('/studio-file/{ticket:[A-Za-z0-9_-]{32}}',file)
     app.router.add_post('/api/studio',export)
