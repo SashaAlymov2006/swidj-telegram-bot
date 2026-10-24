@@ -78,6 +78,10 @@ def main():
         print(json.dumps({'url': url, 'reachable': bool(url and healthy(url))}))
         return
     run(cli, 'up', '-d', '--no-build', 'bot', 'tunnel')
+    previous = tunnel_info(cli)
+    if previous and not healthy(previous):
+        # Quick Tunnel registrations may expire even while the process is alive.
+        run(cli, 'restart', 'tunnel')
     url = None
     for _ in range(20):
         url = tunnel_info(cli)

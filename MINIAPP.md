@@ -74,7 +74,7 @@ starts the official Cloudflare Quick Tunnel container, checks the public URL,
 updates private `MINIAPP_URL`, and restarts the bot. The normal native command
 menu stays available; `/app` and a separate home-menu button open the app.
 No Cloudflare account, paid API, custom domain or inbound firewall port is needed.
-The URL changes when the tunnel is recreated and works only while the laptop,
+A Quick Tunnel registration may expire even while its container is running. Run the Start helper again to recreate an unreachable registration, then open a fresh `/app` button. The URL changes when the tunnel is recreated and works only while the laptop,
 Docker, bot and tunnel are running. Quick Tunnels are for development/testing.
 
 `python miniapp_tunnel.py status` checks the current address.
