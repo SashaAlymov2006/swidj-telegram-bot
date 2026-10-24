@@ -1,0 +1,27 @@
+# Telegram
+python-telegram-bot>=20.8
+
+# Env
+python-dotenv>=1.0
+
+# HTTP / parsing
+requests>=2.31
+beautifulsoup4>=4.12
+
+# OpenAI
+openai>=0.27,<1
+openai-whisper>=20240930
+
+# YouTube / media
+yt-dlp>=2024.12.30
+
+# Audio / DSP
+pydub>=0.25
+audioop-lts>=0.2.1; python_version >= "3.13"
+librosa>=0.10.2
+numpy>=1.26
+
+# Async
+nest-asyncio>=1.6
+aiosqlite>=0.20
+

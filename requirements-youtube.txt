@@ -1,0 +1,5 @@
+# YouTube JS challenge support; installed after the base audio dependencies.
+yt-dlp[default]>=2024.12.30
+
+# Explicit dependency for MP3 metadata and album art.
+mutagen>=1.47,<2

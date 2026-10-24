@@ -1,0 +1,22 @@
+services:
+  bot:
+    build: .
+    env_file: .env
+    environment:
+      EXTERNAL_PAID_API_ENABLED: 'false'
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 45s
+    mem_limit: 8g
+    cpus: 2
+    volumes:
+      - bot-data:/app/data
+      - model-cache:/home/bot/.cache
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+volumes:
+  bot-data:
+  model-cache:

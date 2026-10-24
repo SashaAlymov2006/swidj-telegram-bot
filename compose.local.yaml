@@ -1,0 +1,22 @@
+name: swidj-local
+services:
+  bot:
+    image: swidj:local-pycharm
+    build: .
+    env_file: .env
+    environment:
+      EXTERNAL_PAID_API_ENABLED: 'false'
+    restart: 'no'
+    init: true
+    stop_grace_period: 45s
+    mem_limit: 8g
+    cpus: 2
+    volumes:
+      - local-data:/app/data
+      - model-cache:/home/bot/.cache
+volumes:
+  local-data:
+    name: swidj-local-data
+  model-cache:
+    external: true
+    name: swidj-model-cache

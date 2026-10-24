@@ -1,0 +1,18 @@
+name: Offline tests
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build runtime
+        run: docker build -t swidj:ci .
+      - name: Run offline tests
+        run: docker run --rm --network none --mount type=bind,source="${{ github.workspace }}",target=/workspace,readonly --workdir /workspace swidj:ci python -m unittest discover -s tests -v
+      - name: Check dependencies
+        run: docker run --rm --network none swidj:ci python -m pip check
