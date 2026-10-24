@@ -195,9 +195,10 @@ async def run():
                 result={'track':uploaded,'library':{'tracks':[uploaded],'recent':[],'favorites':[uploaded['id']],'playlists':[],'language':'en','bot':'offline_bot'}}
             elif path=='lyrics':result={'matches':[{'title':'Fixture words','artist':'Fixture artist','text':'Original fixture words\n<img src=x onerror=alert(1)>','source':'LRCLIB'}]}
             elif path=='studio':
-                assert route.request.headers['content-type'].startswith('multipart/form-data')
+                assert route.request.headers['content-type'].startswith(('multipart/form-data','application/json'))
+                if route.request.headers['content-type'].startswith('application/json'):calls['studioSettings']=route.request.post_data_json
                 if b'"delivery":"ticket"' in route.request.post_data_buffer:
-                    return await route.fulfill(status=200,body=json.dumps({'url':'https://preview.example.test/studio-file/'+'b'*32,'filename':'App recording 1 - SwiDJ mix.mp3','expires_in':600}),content_type='application/json')
+                    return await route.fulfill(status=200,body=json.dumps({'url':'http://127.0.0.1:8765/studio-file/'+'b'*32,'filename':'App recording 1 - SwiDJ mix.mp3','expires_in':600}),content_type='application/json')
                 return await route.fulfill(status=200,body=audio_fixture,content_type='audio/mpeg')
             elif path=='link':
                 payload=route.request.post_data_json
@@ -330,6 +331,31 @@ async def run():
         if await app_page.locator('[data-effect=reverb]').get_attribute('aria-pressed')!='true':await app_page.locator('[data-effect=reverb]').click()
         await app_page.locator('#ambience').fill('50')
         assert await app_page.locator('#ambience-value').inner_text()=='50%'
+        await app_page.locator('[data-linked=true]').click()
+        await app_page.locator('[data-speed-preset="1.5"]').click()
+        assert abs(float(await app_page.locator('#mix-pitch').input_value())-7.02)<.1
+        assert not await app_page.evaluate('document.querySelector("#audio").preservesPitch')
+        await app_page.locator('[data-tone-preset="0"]').click()
+        assert float(await app_page.locator('#speed').input_value())==1
+        await app_page.locator('[data-linked=false]').click()
+        await app_page.locator('[data-speed-preset="1.25"]').click()
+        await app_page.locator('[data-tone-preset="2"]').click()
+        for effect in ['equalizer','stereo','distortion','tremolo']:
+            await app_page.locator('[data-effect='+effect+']').click()
+        await app_page.locator('.dsp-panel summary').click()
+        await app_page.locator('#param-eq60').fill('6')
+        await app_page.locator('#param-comp_ratio').fill('6')
+        await app_page.locator('#param-stereo_width').fill('1.5')
+        await app_page.locator('#param-drive').fill('3')
+        await app_page.locator('#apply-mix').click()
+        await app_page.locator('#toast').filter(has_text='Playing your processed mix').wait_for()
+        assert calls['studioSettings']['source_ticket']=='d'*32
+        assert calls['studioSettings']['params']['eq60']==6
+        assert calls['studioSettings']['linked'] is False
+        assert abs(calls['studioSettings']['speed']-1.25)<.01
+        assert calls['studioSettings']['pitch']==2
+        await app_page.locator('.tempo-panel').scroll_into_view_if_needed()
+        await app_page.screenshot(path=str(output/'miniapp-remix-controls.png'))
         assert await app_page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         # Verify the live audio graph changes actual samples, not just selected cards.
         ratio=await page.evaluate('''async () => {

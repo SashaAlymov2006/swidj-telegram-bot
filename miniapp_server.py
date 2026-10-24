@@ -4,6 +4,7 @@ Local preview: python miniapp_server.py --demo (no token or private data).
 Production identity is exclusively verified Telegram initData, never client IDs.
 """
 import argparse
+from app_limits import MEDIA_BYTES
 import asyncio
 from copy import deepcopy
 from functools import lru_cache
@@ -440,7 +441,7 @@ def create_app(*, token='', bridge=None):
         bridge.allowed(uid, 'downloads')
         song = await bridge.find(uid, request.match_info['track'])
         path = bridge.audio_path(uid, song)
-        if not path or path.stat().st_size > 49*1024**2:
+        if not path or path.stat().st_size > MEDIA_BYTES:
             raise web.HTTPNotFound()
         headers = {}
         if song.get('kind') == 'upload':
@@ -529,7 +530,7 @@ def create_app(*, token='', bridge=None):
             raise web.HTTPNotFound()
         bridge.allowed(item['uid'], 'downloads')
         path = bridge.audio_path(item['uid'], item['song'])
-        if not path or path.stat().st_size > 49*1024**2:
+        if not path or path.stat().st_size > MEDIA_BYTES:
             raise web.HTTPNotFound()
         return web.FileResponse(path, headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote(item['filename'],safe='')})
     async def close_jobs(_):
@@ -564,7 +565,8 @@ def public_url():
 async def start_for_bot(application, store, favorites, sessions, owner_ids, downloader=None):
     if os.getenv('MINIAPP_ENABLED', '').lower() not in ('1', 'true'):
         return
-    bridge = BotLibrary(application, store, favorites, sessions, owner_ids, downloader)
+    from app_media import download_app_audio
+    bridge = BotLibrary(application, store, favorites, sessions, owner_ids, download_app_audio)
     runner = web.AppRunner(create_app(token=application.bot.token, bridge=bridge), access_log=None)
     await runner.setup()
     try:

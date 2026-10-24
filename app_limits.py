@@ -1,0 +1,7 @@
+"""Mini App limits; independent of Telegram chat upload restrictions."""
+MEDIA_BYTES = 256*1024**2
+MEDIA_SECONDS = 2*60*60
+STUDIO_OUTPUT_BYTES = 512*1024**2
+TEMP_CACHE_BYTES = 1024*1024**2
+LIBRARY_USER_BYTES = 512*1024**2
+LIBRARY_TOTAL_BYTES = 2*1024**3

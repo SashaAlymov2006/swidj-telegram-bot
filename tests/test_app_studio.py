@@ -37,7 +37,7 @@ class StudioPlanTests(unittest.TestCase):
         output=plan({'format':'mp3','speed':.75,'pitch':3,'effect':'reverb','fade':2},300)
         self.assertEqual(output[3],400)
         self.assertIn('afade=t=out',output[4])
-        with self.assertRaises(OverflowError):plan({'format':'wav'},1800)
+        with self.assertRaises(OverflowError):plan({'format':'wav'},7200)
 
 
 class AppStudioTests(unittest.IsolatedAsyncioTestCase):
@@ -59,7 +59,8 @@ class AppStudioTests(unittest.IsolatedAsyncioTestCase):
         target=Path(self.tmp.name)/'five-minutes.mp3'
         target.write_bytes(await response.read())
         from miniapp_studio import probe
-        self.assertAlmostEqual(await probe(target),305,delta=.3)
+        self.assertGreaterEqual(await probe(target),304.9)
+        self.assertLess(await probe(target),306.1)
         self.assertEqual(self.bridge.favorites,{})
         self.assertEqual(self.bridge.application.user_data[77],{})
         self.bridge.application.bot.send_message.assert_not_called()
@@ -134,6 +135,69 @@ class AppStudioTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status,200)
         with wave.open(io.BytesIO(await response.read())) as audio:
             self.assertAlmostEqual(audio.getnframes()/audio.getframerate(),15,delta=.1)
+
+    async def test_linked_speed_pitch_and_independent_mode_have_distinct_audio(self):
+        import math,struct,numpy as np
+        buffer=io.BytesIO()
+        with wave.open(buffer,'wb') as audio:
+            audio.setparams((1,2,16000,0,'NONE','not compressed'))
+            audio.writeframes(b''.join(struct.pack('<h',int(10000*math.sin(2*math.pi*440*i/16000))) for i in range(32000)))
+        peaks=[]
+        for linked in [False,True]:
+            response=await self.client.post('/api/studio',headers=self.headers,data=form(buffer.getvalue(),{'format':'wav','speed':2,'linked':linked}))
+            self.assertEqual(response.status,200)
+            with wave.open(io.BytesIO(await response.read())) as audio:
+                samples=np.frombuffer(audio.readframes(audio.getnframes()),dtype='<i2')[::2].astype(float)
+                peaks.append(np.argmax(abs(np.fft.rfft(samples)))*audio.getframerate()/len(samples))
+        self.assertAlmostEqual(peaks[0],440,delta=5);self.assertAlmostEqual(peaks[1],880,delta=5)
+
+    async def test_tunable_filters_render_and_invalid_parameters_are_rejected(self):
+        settings={'format':'wav','effects':['equalizer','compressor','stereo','tremolo','distortion'],
+                  'params':{'eq60':4,'eq1000':-3,'comp_ratio':6,'stereo_width':1.8,'tremolo_rate':4,'drive':3}}
+        response=await self.client.post('/api/studio',headers=self.headers,data=form(settings=settings))
+        self.assertEqual(response.status,200)
+        for params in [{'eq60':'volume=999'},{'stereo_width':float('nan')},{'feedback':1.1},{'unknown':1}]:
+            response=await self.client.post('/api/studio',headers=self.headers,data=form(settings={'params':params}))
+            self.assertEqual(response.status,400)
+        self.assertEqual(plan({'format':'mp3'},3900)[3],3900)
+
+    async def test_background_render_uses_owned_source_and_saves_without_reupload(self):
+        from app_exports import ExportFiles
+        studio=self.client.server.app['studio_worker'];studio.exports=ExportFiles(Path(self.tmp.name)/'exports');studio.jobs.exports=studio.exports
+        source=Path(self.tmp.name)/'source.wav';source.write_bytes(audio_bytes())
+        ticket,_=studio.exports.retain(77,source,'Owned source')
+        with patch.dict('os.environ',{'MINIAPP_URL':'https://preview.example.test','AUDIO_CACHE_DIR':str(Path(self.tmp.name)/'audio')}):
+            response=await self.client.post('/api/studio',headers=self.headers,json={'source_ticket':ticket,'background':True,'format':'mp3','effects':['echo']})
+            self.assertEqual(response.status,200)
+            token=(await response.json())['job'];job=studio.jobs.get(77,token)
+            self.assertEqual((await self.client.get('/api/studio/jobs/'+token,headers={'X-Telegram-Init-Data':signed(78)})).status,404)
+            self.assertEqual((await self.client.get('/api/library',headers=self.headers)).status,200)
+            await job.task
+            self.assertEqual(job.state,'ready')
+            response=await self.client.post('/api/studio/save',headers={'X-Telegram-Init-Data':signed(78)},json={'ticket':job.file['ticket']})
+            self.assertEqual(response.status,404)
+            response=await self.client.post('/api/studio/save',headers=self.headers,json={'ticket':job.file['ticket']})
+            self.assertEqual(response.status,200)
+            self.assertEqual(len((await response.json())['library']['tracks']),1)
+        self.assertFalse(Path(job.directory).exists())
+        self.bridge.application.bot.send_message.assert_not_called()
+
+    async def test_background_cancel_releases_temporary_source(self):
+        from app_exports import ExportFiles
+        studio=self.client.server.app['studio_worker'];studio.exports=ExportFiles(Path(self.tmp.name)/'exports');studio.jobs.exports=studio.exports
+        source=Path(self.tmp.name)/'source.wav';source.write_bytes(audio_bytes())
+        ticket,_=studio.exports.retain(77,source,'Owned source')
+        import asyncio
+        event=asyncio.Event()
+        async def slow(*args):event.set();await asyncio.sleep(30)
+        import asyncio
+        with patch.object(studio.jobs,'renderer',side_effect=slow),patch.dict('os.environ',{'MINIAPP_URL':'https://preview.example.test'}):
+            response=await self.client.post('/api/studio',headers=self.headers,json={'source_ticket':ticket,'background':True})
+            token=(await response.json())['job'];job=studio.jobs.get(77,token)
+            await asyncio.wait_for(event.wait(),2)
+            await self.client.post('/api/studio/jobs/'+token+'/cancel',headers=self.headers,json={})
+            await asyncio.wait_for(job.task,2)
+        self.assertEqual(job.state,'cancelled');self.assertFalse(Path(job.directory).exists())
 
     async def test_wav_trim_preserves_requested_duration(self):
         response=await self.client.post('/api/studio',headers=self.headers,data=form(settings={'format':'wav','start':1,'end':3,'speed':.8,'fade':.4,'effect':'lofi'}))

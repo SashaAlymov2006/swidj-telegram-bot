@@ -20,6 +20,10 @@ class LinkValidationTests(unittest.TestCase):
             with self.subTest(payload=payload),self.assertRaises(ValueError):validate(payload)
         self.assertEqual(validate({'url':'https://www.youtube.com/watch?v=abcdefghijk&utm_secret=discarded'})[0],'https://www.youtube.com/watch?v=abcdefghijk')
         self.assertEqual(validate({'url':'https://www.instagram.com/reel/abcde/','mode':'video'})[3],'instagram')
+        duplicated='https://youtu.be/7DVM7DYJX1c?si=abchttps://youtu.be/7DVM7DYJX1c?si=abc'
+        self.assertEqual(validate({'url':duplicated})[0],'https://www.youtube.com/watch?v=7DVM7DYJX1c')
+        self.assertEqual(validate({'url':'https://artist.bandcamp.com/track/song'})[3],'bandcamp')
+        self.assertEqual(validate({'url':'https://vimeo.com/12345','mode':'video'})[3],'vimeo')
 
 class AppMediaTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

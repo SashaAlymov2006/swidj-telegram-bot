@@ -15,7 +15,8 @@ class ExportRetentionTests(unittest.TestCase):
             b,second=cache.retain(78,source,'B')
             self.assertIsNone(cache.get(a));self.assertIsNotNone(cache.get(b))
             self.assertTrue(protected.exists())
-            os.utime(second['path'],(time.time()-700,time.time()-700))
+            second['expires']=time.time()-1
+            os.utime(second['path'],(time.time()-4000,time.time()-4000))
             self.assertIsNone(cache.get(b));self.assertFalse(second['path'].exists())
             self.assertTrue(protected.exists())
 
@@ -27,3 +28,13 @@ class ExportRetentionTests(unittest.TestCase):
             self.assertEqual(len(token),32)
             self.assertNotIn('/',item['filename'])
             self.assertEqual(item['path'].parent,root/'exports'/'77')
+
+    def test_hundred_megabyte_file_and_long_playback_ttl_are_supported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'large.mp4'
+            with source.open('wb') as stream:stream.truncate(100*1024**2)
+            cache=ExportFiles(root/'exports')
+            token,item=cache.retain(77,source,'Large video',feature='downloads',ttl=7800)
+            self.assertEqual(item['path'].stat().st_size,100*1024**2)
+            os.utime(item['path'],(time.time()-4000,time.time()-4000))
+            self.assertIsNotNone(cache.get(token))

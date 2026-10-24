@@ -1,5 +1,5 @@
 import {AudioEngine, stamp} from './audio.js';
-import {liveEffects} from './live.js';
+import {liveEffects,dspDefaults} from './live.js';
 
 const paths = {
   home:'M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z',
@@ -50,6 +50,8 @@ Object.assign(copy.ru,{openDownload:'Открыть файл',iphoneSave:'Наж
 Object.assign(copy.en,{pitch:'Tone',pitchNote:'0 is original. Minus is lower, plus is higher. Tone does not change the track speed; use Apply to hear it.',speed:'Speed',ambience:'Reverb / echo strength',extractAudio:'Audio from video',links:'From a link',linkTitle:'Paste. Play. Keep.',linkNote:'YouTube, SoundCloud, TikTok and Instagram. Music catalog links find a matching recording.',linkPlaceholder:'Paste a music or video link',audioMode:'Audio MP3',videoMode:'Video MP4',prepareLink:'Prepare',linkBusy:'Preparing your media...',linkFailed:'This link is unavailable. Try another public link or lower video quality.',linkCancel:'Stop',quality:'Video quality',openMediaStudio:'Open in studio',linkLimit:'Public recordings up to 30 minutes and 49 MB. Temporary files expire in 10 minutes.',toneDown:'Lower tone',toneUp:'Higher tone',speedDown:'Slower',speedUp:'Faster',linkExpired:'The temporary file expired. Prepare the link again.'});
 Object.assign(copy.ru,{pitch:'Тон',pitchNote:'0 - оригинал. Минус - ниже, плюс - выше. Тон не меняет скорость трека; для прослушивания нажми Применить.',speed:'Скорость',ambience:'Сила реверба / эха',extractAudio:'Аудио из видео',links:'По ссылке',linkTitle:'Вставь. Смотри. Сохраняй.',linkNote:'YouTube, SoundCloud, TikTok и Instagram. Для ссылок музыкальных каталогов ищем подходящую запись.',linkPlaceholder:'Вставь ссылку на музыку или видео',audioMode:'Аудио MP3',videoMode:'Видео MP4',prepareLink:'Подготовить',linkBusy:'Готовлю файл...',linkFailed:'Ссылка недоступна. Попробуй другую публичную ссылку или уменьши качество.',linkCancel:'Остановить',quality:'Качество видео',openMediaStudio:'В студию',linkLimit:'Публичные записи до 30 минут и 49 МБ. Файлы доступны 10 минут.',toneDown:'Тон ниже',toneUp:'Тон выше',speedDown:'Медленнее',speedUp:'Быстрее',linkExpired:'Срок файла истёк. Подготовь ссылку заново.'});
 let linkMode=false,linkUrl='',linkType='audio',linkQuality=360,linkBusy=false,linkResult=null,linkController=null;
+Object.assign(copy.en,{studioInvalid:'Check the trim range and effect settings.',linked:'Together',independent:'Independent',linkTone:'Speed + tone',fineTune:'Fine tune effects',equalizer:'5-band EQ',tremolo:'Tremolo',distortion:'Saturation',stereo:'Stereo width',highpass_hz:'Remove lows - Hz',lowpass_hz:'Remove highs - Hz',lofi_hz:'Lo-fi brightness - Hz',delay_ms:'Delay time - ms',feedback:'Repeats',room_s:'Room size - seconds',comp_threshold:'Compressor threshold - dB',comp_ratio:'Compression ratio',comp_attack:'Attack - ms',comp_release:'Release - ms',stereo_width:'Stereo width',tremolo_rate:'Pulse speed - Hz',tremolo_depth:'Pulse depth',drive:'Saturation strength',eq60:'60 Hz - sub bass',eq250:'250 Hz - warmth',eq1000:'1 kHz - mids',eq4000:'4 kHz - clarity',eq12000:'12 kHz - air',sourceUnavailable:'The platform could not provide this recording. Try another version.',mediaTooLarge:'This file exceeds 256 MB. Select lower video quality.',mediaTooLong:'Choose a recording up to 2 hours.',sourceLogin:'This recording requires access on its platform. Try a public recording.',sourceRateLimit:'The platform temporarily limited requests. Try again later.',unsupportedLink:'Paste a supported public music or video link.',fileTooLarge:'Choose an audio file up to 256 MB.',linkLimit:'Public recordings up to 2 hours and 256 MB. Files are temporary.',studioFine:'MP3: source and result up to 2 hours; input up to 256 MB. WAV output up to 512 MB.',iphoneSave:'Use Download or Open file, then Share > Save to Files. This is a temporary link.',linkNote:'YouTube, SoundCloud, TikTok, Instagram, Vimeo and Bandcamp. Spotify, Apple Music and Yandex Music find matching recordings.'});
+Object.assign(copy.ru,{studioInvalid:'\u041f\u0440\u043e\u0432\u0435\u0440\u044c \u043e\u0431\u0440\u0435\u0437\u043a\u0443 \u0438 \u043f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u044d\u0444\u0444\u0435\u043a\u0442\u043e\u0432.',linked:'Вместе',independent:'Независимо',linkTone:'Скорость + тон',fineTune:'Точная настройка эффектов',equalizer:'Эквалайзер - 5 полос',tremolo:'Тремоло',distortion:'Насыщение',stereo:'Стерео',highpass_hz:'Срез низких - Гц',lowpass_hz:'Срез высоких - Гц',lofi_hz:'Яркость lo-fi - Гц',delay_ms:'Время задержки - мс',feedback:'Повторы',room_s:'Размер комнаты - сек',comp_threshold:'Порог компрессора - dB',comp_ratio:'Степень сжатия',comp_attack:'Атака - мс',comp_release:'Восстановление - мс',stereo_width:'Ширина стерео',tremolo_rate:'Скорость пульсации - Гц',tremolo_depth:'Глубина пульсации',drive:'Сила насыщения',eq60:'60 Гц - суббас',eq250:'250 Гц - тепло',eq1000:'1 кГц - середина',eq4000:'4 кГц - чёткость',eq12000:'12 кГц - воздух',sourceUnavailable:'Платформа не отдала эту запись. Попробуй другую версию.',mediaTooLarge:'Файл больше 256 МБ. Уменьши качество видео.',mediaTooLong:'Выбери запись до 2 часов.',sourceLogin:'Эта запись требует доступа на платформе. Попробуй публичную запись.',sourceRateLimit:'Платформа временно ограничила запросы. Попробуй позже.',unsupportedLink:'Вставь публичную ссылку поддерживаемой платформы.',fileTooLarge:'Выбери аудио до 256 МБ.',linkLimit:'Публичные записи до 2 часов и 256 МБ. Файлы временные.',studioFine:'MP3: исходник и результат до 2 часов; вход до 256 МБ. WAV до 512 МБ.',iphoneSave:'Скачай файл или открой его: Поделиться > Сохранить в Файлы. Ссылка временная.',linkNote:'YouTube, SoundCloud, TikTok, Instagram, Vimeo и Bandcamp. Spotify, Apple Music и Яндекс Музыка - поиск подходящей записи.'});
 const demo = !initData;
 let language = 'ru';
 try { language = localStorage.getItem('swidj-language') || tg?.initDataUnsafe?.user?.language_code?.slice(0,2) || 'ru'; } catch {}
@@ -69,7 +71,7 @@ let trackBlob = null, trackUrl = null, previewUrl = null, loadingTrack = 0, toas
 let renderBusy = false, refreshing = false, sourceDuration = 0;
 let preparation = null, searchQuery = '';
 let lastRendered=null;
-function studioSignature(){return JSON.stringify([loadingTrack,engine.bass,engine.speed,engine.treble,studioPitch,studioEffects,engine.trimStart,engine.trimEnd,engine.fade,engine.ambience]);}
+function studioSignature(){return JSON.stringify([loadingTrack,engine.bass,engine.speed,engine.treble,studioPitch,studioEffects,engine.trimStart,engine.trimEnd,engine.fade,engine.ambience,engine.linked,engine.params]);}
 function invalidateMix(){lastRendered=null;engine.setProcessed(false);if(previewUrl&&trackUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setProcessed(false);engine.setBass(engine.bass);engine.setSpeed(engine.speed);}}
 let playQueue=[], playHistory=[], restoredTracks=[], resumeState=null, lastPositionSave=0;
 const sessionKey='swidj-session-v1-'+(demo?'demo':String(tg?.initDataUnsafe?.user?.id||'unknown'));
@@ -151,14 +153,20 @@ function render() {
   $('connection').textContent=t(demo?'demo':'connected'); $('language').textContent=language==='ru'?'EN':'RU';
   $('content').innerHTML=failed?empty('authError','authHint','info'):({home,search:searchScreen,library:libraryScreen,studio}[route])();
   if(route==='home'&&resumeState&&trackById(resumeState.id))$('content').insertAdjacentHTML('afterbegin',`<button class="resume-card" id="resume-track">${icon('play')}<span><strong>${e(t('resume'))}</strong><small>${e(trackById(resumeState.id).title)} &middot; ${stamp(resumeState.position)}</small></span></button>`);
-  if(route==='studio')$('content').querySelector('.studio-controls').insertAdjacentHTML('afterbegin',`<div class="studio-recipes"><h3>${e(t('presets'))}</h3><div class="recipe-grid">${['clean','warm','night','bright'].map(key=>`<button type="button" class="chip" data-recipe="${key}">${e(t(key))}</button>`).join('')}</div><div class="control-label"><label for="treble">${e(t('treble'))}</label><output>${engine.treble} dB</output></div><input id="treble" class="control-range" type="range" min="-6" max="6" step="1" value="${engine.treble}"><button type="button" class="btn secondary" id="compare-fx" aria-pressed="${engine.bypass}">${e(t(engine.bypass?'dry':'compare'))}</button><div class="studio-advanced"><label>${e(t('format'))}<select id="mix-format">${['mp3','wav'].map(f=>`<option value="${f}" ${f===exportFormat?'selected':''}>${f.toUpperCase()}</option>`).join('')}</select></label><section class="effect-rack"><div class="rack-heading"><h3>${e(t('effectRack'))}</h3><span>${studioEffects.length}/8</span></div><p class="fineprint">${e(t('liveNote'))}</p><div class="effect-grid">${['reverb','echo','delay','lofi','normalize','compressor','equalizer','mastering','pro_reverb','highpass','lowpass','reverse'].map((f,i)=>`<button type="button" class="effect-tile ${studioEffects.includes(f)?'selected':''}" data-effect="${f}" aria-pressed="${studioEffects.includes(f)}" ${studioEffects.length>=8&&!studioEffects.includes(f)?'disabled':''}><span class="effect-glyph">${['~','&#9678;','///','&#9682;','=','&#8779;','&#9783;','&#10022;','&#8734;','&#8599;','&#8600;','&#8630;'][i]}</span><strong>${e(t(f))}</strong><span class="effect-mode">${e(t(liveEffects.has(f)?'live':'renderOnly'))}</span><small>${studioEffects.includes(f)?'&#10003;':''}</small></button>`).join('')}</div><div class="effect-chain">${studioEffects.length?studioEffects.map((f,i)=>`<span>${i+1}. ${e(t(f))}</span>`).join(''):e(t('none'))}</div></section><label>${e(t('pitch'))}<input id="mix-pitch" type="range" min="-6" max="6" step="1" value="${studioPitch}"><output id="pitch-value">${studioPitch}</output></label><p class="fineprint">${e(t('pitchNote'))}</p></div><div class="trim-grid">${['trimStart','trimEnd','fade'].map(key=>`<label>${e(t(key))}<input class="studio-number" type="number" min="0" max="${key==='fade'?10:1800}" step="0.1" data-edit="${key}" value="${engine[key]}"></label>`).join('')}</div><button type="button" class="btn secondary" id="save-mix" ${!trackBlob?'disabled':''}>${e(t('saveMix'))}</button></div>`);
+  if(route==='studio')$('content').querySelector('.studio-controls').insertAdjacentHTML('afterbegin',`<div class="studio-recipes"><h3>${e(t('presets'))}</h3><div class="recipe-grid">${['clean','warm','night','bright'].map(key=>`<button type="button" class="chip" data-recipe="${key}">${e(t(key))}</button>`).join('')}</div><div class="control-label"><label for="treble">${e(t('treble'))}</label><output>${engine.treble} dB</output></div><input id="treble" class="control-range" type="range" min="-6" max="6" step="1" value="${engine.treble}"><button type="button" class="btn secondary" id="compare-fx" aria-pressed="${engine.bypass}">${e(t(engine.bypass?'dry':'compare'))}</button><div class="studio-advanced"><label>${e(t('format'))}<select id="mix-format">${['mp3','wav'].map(f=>`<option value="${f}" ${f===exportFormat?'selected':''}>${f.toUpperCase()}</option>`).join('')}</select></label><section class="effect-rack"><div class="rack-heading"><h3>${e(t('effectRack'))}</h3><span>${studioEffects.length}/8</span></div><p class="fineprint">${e(t('liveNote'))}</p><div class="effect-grid">${['reverb','echo','delay','lofi','normalize','compressor','equalizer','mastering','pro_reverb','highpass','lowpass','reverse','tremolo','distortion','stereo'].map((f,i)=>`<button type="button" class="effect-tile ${studioEffects.includes(f)?'selected':''}" data-effect="${f}" aria-pressed="${studioEffects.includes(f)}" ${studioEffects.length>=8&&!studioEffects.includes(f)?'disabled':''}><span class="effect-glyph">${['~','&#9678;','///','&#9682;','=','&#8779;','&#9783;','&#10022;','&#8734;','&#8599;','&#8600;','&#8630;','&#8779;','&#9889;','&#8646;'][i]}</span><strong>${e(t(f))}</strong><span class="effect-mode">${e(t(liveEffects.has(f)?'live':'renderOnly'))}</span><small>${studioEffects.includes(f)?'&#10003;':''}</small></button>`).join('')}</div><div class="effect-chain">${studioEffects.length?studioEffects.map((f,i)=>`<span>${i+1}. ${e(t(f))}</span>`).join(''):e(t('none'))}</div></section><label>${e(t('pitch'))}<input id="mix-pitch" type="range" min="-12" max="12" step="0.1" value="${studioPitch}"><output id="pitch-value">${studioPitch}</output></label><p class="fineprint">${e(t('pitchNote'))}</p></div><div class="trim-grid">${['trimStart','trimEnd','fade'].map(key=>`<label>${e(t(key))}<input class="studio-number" type="number" min="0" max="${key==='fade'?10:7200}" step="0.1" data-edit="${key}" value="${engine[key]}"></label>`).join('')}</div><button type="button" class="btn secondary" id="save-mix" ${!trackBlob?'disabled':''}>${e(t('saveMix'))}</button></div>`);
   if(route==='studio'){
     $('speed').insertAdjacentHTML('afterend',`<div class="touch-stepper"><button type="button" data-speed-step="-0.05" aria-label="${e(t('speedDown'))}">&minus;</button>${[.75,1,1.25,1.5].map(v=>`<button type="button" data-speed-preset="${v}" aria-pressed="${engine.speed===v}">${v}&times;</button>`).join('')}<button type="button" data-speed-step="0.05" aria-label="${e(t('speedUp'))}">+</button></div>`);
     $('mix-pitch').insertAdjacentHTML('afterend',`<div class="touch-stepper"><button type="button" data-tone-step="-1" aria-label="${e(t('toneDown'))}">&minus;</button>${[-2,0,2].map(v=>`<button type="button" data-tone-preset="${v}" aria-pressed="${studioPitch===v}">${v===0?e(t('original')):v>0?'+'+v:v}</button>`).join('')}<button type="button" data-tone-step="1" aria-label="${e(t('toneUp'))}">+</button></div>`);
     if(studioEffects.some(f=>['reverb','pro_reverb','echo','delay'].includes(f)))document.querySelector('.effect-chain').insertAdjacentHTML('afterend',`<div class="ambience-control"><label for="ambience">${e(t('ambience'))}<output id="ambience-value">${engine.ambience}%</output></label><input id="ambience" type="range" min="0" max="100" step="5" value="${engine.ambience}"></div>`);
+    const tempo=document.createElement('section');tempo.className='tempo-panel';tempo.innerHTML=`<div class="tempo-mode"><strong>${e(t('linkTone'))}</strong><button type="button" data-linked="false" aria-pressed="${!engine.linked}">${e(t('independent'))}</button><button type="button" data-linked="true" aria-pressed="${engine.linked}">${e(t('linked'))}</button></div>`;
+    const speed=$('speed'),speedLabel=speed.previousElementSibling,steps=speed.nextElementSibling,rangeLabels=steps.nextElementSibling;
+    const tone=$('mix-pitch').closest('label'),toneNote=tone.nextElementSibling;
+    tempo.append(speedLabel,speed,steps,rangeLabels,tone,toneNote);document.querySelector('.studio-controls').prepend(tempo);syncTempo();
+    if(studioEffects.length)document.querySelector('.effect-rack').insertAdjacentHTML('afterend',dspControls());
     const actions=document.createElement('div');actions.className='studio-actions';
     for(const id of ['apply-mix','compare-fx','export-mix','save-mix','preview-mix'])actions.append($(id));
     document.querySelector('.effect-rack').after(actions);
+    if(activeRenderJob)actions.insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" id="cancel-mix">${e(t('cancel'))}</button>`);
   }
   if(route==='studio'&&current?.local&&!failed)$('content').querySelector('.studio-source').insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" id="save-local-file">${icon('heart')}${e(t('saveToLibrary'))}</button>`);
   $('previous').innerHTML=icon('previous'); $('next').innerHTML=icon('next'); $('repeat').innerHTML=icon('repeat');
@@ -213,8 +221,9 @@ async function saveLocalTrack(track) {
   if(preparation){toast('preparingOther');return null;}
   const item={track,status:'upload',cancel:false,upload:true};preparation=item;showPreparation();
   try {
-    const form=new FormData();form.append('file',track.blob,track.blob.name);
-    const response=await fetch('/api/upload',{method:'POST',headers:{'X-Telegram-Init-Data':initData},body:form,credentials:'omit'});
+    let response;
+    if(track.serverTicket)response=await api('studio/save',{ticket:track.serverTicket});
+    else{const form=new FormData();form.append('file',track.blob,track.blob.name);response=await fetch('/api/upload',{method:'POST',headers:{'X-Telegram-Init-Data':initData},body:form,credentials:'omit'});}
     if(!response.ok)throw new Error(({413:'fileTooLarge',400:'invalidAudio',507:'storageFull',401:'expired',409:'capacity'})[response.status]||'error');
     const result=await response.json(),oldId=track.id;
     Object.assign(track,result.track,{local:false});delete track.blob;
@@ -298,7 +307,7 @@ async function prepareTrack(track) {
       dialog(t('chooseVersion'),info.tracks.length?info.tracks.map(choice=>`<button type="button" class="dialog-option" data-track="${e(choice.id)}" data-action="play">${icon('play')}<span>${e(choice.title)}<small class="version-artist">${e(choice.artist)} · ${stamp(choice.duration)}</small></span></button>`).join(''):`<p class="dialog-copy">${e(t('noResults'))}</p>`);
       return null;
     }
-    item.job=info.job;const deadline=Date.now()+300000;
+    item.job=info.job;const deadline=Date.now()+1200000;
     while(['queued','downloading','cancelling'].includes(info.status)) {
       if(Date.now()>deadline){if(item.job)api('jobs/'+item.job+'/cancel',{}).catch(()=>{});throw new Error('downloadTimeout');}
       item.status=info.status;showPreparation();
@@ -357,6 +366,7 @@ async function sendTrack(track) {
   await api('send',{track:track.id});$('dialog').close();toast('sent');
 }
 async function downloadTrack(track) {
+  if(track.local&&track.serverTicket){showExportDownload({url:location.origin+'/studio-file/'+track.serverTicket,filename:track.blob.name});nativeExportDownload();return;}
   if(!await playTrack(track))return;
   if(!demo&&!track.local&&typeof tg?.downloadFile==='function'&&tg.isVersionAtLeast?.('8.0')!==false) {
     const ticket=await(await api('download',{track:track.id})).json();
@@ -368,28 +378,55 @@ async function downloadTrack(track) {
   a.href=url;a.download=track.title.replace(/[\\/:*?"<>|]/g,'').slice(0,100)+'.'+extension;
   a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
+let activeRenderJob=null;
 async function processMix(preview=false,delivery=false) {
   if(demo){if(exportFormat==='mp3'||studioPitch||studioEffects.length)throw new Error('needsTelegram');return engine.render(trackBlob,preview,sourceDuration);}
-  const start=engine.trimStart,end=engine.trimEnd||0;
-  const settings={preview,delivery:delivery?'ticket':'inline',title:(current?.title||'SwiDJ')+' - SwiDJ mix',format:preview?'mp3':exportFormat,start,end,speed:engine.speed,pitch:studioPitch,bass:engine.bass,treble:engine.treble,effects:[...studioEffects],ambience:engine.ambience,fade:engine.fade};
-  const form=new FormData();form.append('settings',JSON.stringify(settings));form.append('file',trackBlob,'source.audio');
-  const response=await fetch('/api/studio',{method:'POST',headers:{'X-Telegram-Init-Data':initData},body:form,credentials:'omit'});
-  if(!response.ok)throw new Error(({413:'studioSize',400:'invalidTrim',401:'expired',429:'rateLimit',504:'studioTimeout'})[response.status]||'error');
-  return delivery?response.json():response.blob();
+  const settings={background:true,preview,delivery:delivery?'ticket':'inline',title:(current?.title||'SwiDJ')+' - SwiDJ mix',format:preview?'mp3':exportFormat,start:engine.trimStart,end:engine.trimEnd||0,speed:engine.speed,pitch:studioPitch,bass:engine.bass,treble:engine.treble,effects:[...studioEffects],linked:engine.linked,params:{...engine.params},ambience:engine.ambience,fade:engine.fade};
+  let body,headers={'X-Telegram-Init-Data':initData};
+  if(current?.serverTicket||!current?.local){
+    if(current.serverTicket&&current.local)settings.source_ticket=current.serverTicket;else settings.source_track=String(current.id);
+    headers['Content-Type']='application/json';body=JSON.stringify(settings);
+  }else{body=new FormData();body.append('settings',JSON.stringify(settings));body.append('file',trackBlob,'source.audio');}
+  const response=await fetch('/api/studio',{method:'POST',headers,body,credentials:'omit'});
+  if(!response.ok)throw new Error(({413:'studioSize',400:'studioInvalid',410:'linkExpired',401:'expired',429:'rateLimit',504:'studioTimeout'})[response.status]||'error');
+  if(response.headers.get('content-type')?.startsWith('audio/'))return response.blob();
+  let info=await response.json();
+  if(info.job){
+    activeRenderJob=info.job;if(route==='studio')render();const deadline=Date.now()+1200000;
+    try{
+      while(['queued','processing'].includes(info.status)){
+        if(Date.now()>deadline){api('studio/jobs/'+activeRenderJob+'/cancel',{}).catch(()=>{});throw new Error('studioTimeout');}
+        await new Promise(resolve=>setTimeout(resolve,900));info=await(await api('studio/jobs/'+activeRenderJob)).json();
+      }
+      if(info.status==='cancelled')throw new Error('cancelled');
+      if(info.status!=='ready')throw new Error(copy.en[info.error]?info.error:'error');
+      info=info.file;
+    }finally{activeRenderJob=null;}
+  }
+  if(delivery)return info;
+  const file=await fetch(info.url,{credentials:'omit'});if(!file.ok)throw new Error('linkExpired');return file.blob();
 }
+
 function linkScreen(){return heading('linkTitle','linkNote')+`<section class="link-panel"><input id="link-url" type="url" value="${e(linkUrl)}" placeholder="${e(t('linkPlaceholder'))}" aria-label="${e(t('linkPlaceholder'))}" maxlength="2048"><div class="link-options"><label><input type="radio" name="link-type" value="audio" ${linkType==='audio'?'checked':''}>${e(t('audioMode'))}</label><label><input type="radio" name="link-type" value="video" ${linkType==='video'?'checked':''}>${e(t('videoMode'))}</label></div>${linkType==='video'?`<label class="quality-label">${e(t('quality'))}<select id="link-quality"><option value="360" ${linkQuality===360?'selected':''}>360p</option><option value="720" ${linkQuality===720?'selected':''}>720p HD</option></select></label>`:''}<button type="button" class="btn" id="prepare-link" ${linkBusy?'disabled':''}>${e(t(linkBusy?'linkBusy':'prepareLink'))}</button>${linkBusy?`<button type="button" class="text-btn" id="cancel-link">${e(t('linkCancel'))}</button>`:''}<p class="fineprint">${e(t('linkLimit'))}</p></section>${linkResult?`<section class="link-result"><h2>${e(linkResult.title)}</h2><p>${e(linkResult.artist||'')}</p>${linkResult.kind==='video'?`<video id="link-video" controls playsinline poster="${e(linkResult.poster||'')}" preload="metadata" src="${e(linkResult.url)}"></video>`:`<audio controls preload="metadata" src="${e(linkResult.url)}"></audio>`}<div class="link-result-actions"><button type="button" class="btn" id="download-link">${e(t('downloadTrack'))}</button>${linkResult.kind==='video'&&linkResult.has_audio!==false?`<button type="button" class="btn secondary" id="extract-link-audio">${e(t('extractAudio'))}</button>`:''}${linkResult.kind==='audio'?`<button type="button" class="btn secondary" id="studio-link">${e(t('openMediaStudio'))}</button>`:''}</div></section>`:''}`;}
 async function importLink(){
   if(demo)return toast('needsTelegram');if(linkBusy||!linkUrl.trim())return;
-  const previousResult=linkResult;document.activeElement?.blur();linkBusy=true;linkController=new AbortController();const timer=setTimeout(()=>linkController.abort(),370000);render();
+  try{const host=new URL((linkUrl.match(/https?:\/\/\S+/)||[])[0]).hostname;if(['soundcloud.com','www.soundcloud.com','on.soundcloud.com','open.spotify.com','music.apple.com','music.yandex.ru','music.yandex.com'].includes(host)||host.endsWith('.bandcamp.com'))linkType='audio';}catch{}
+  const previousResult=linkResult;document.activeElement?.blur();linkBusy=true;linkController=new AbortController();const timer=setTimeout(()=>linkController.abort(),1230000);render();
   try{
     const response=await fetch('/api/link',{method:'POST',headers:{'X-Telegram-Init-Data':initData,'Content-Type':'application/json'},body:JSON.stringify({url:linkUrl.trim(),mode:linkType,height:linkQuality}),signal:linkController.signal,credentials:'omit'});
-    if(!response.ok)throw new Error(({429:'rateLimit',401:'expired',504:'studioTimeout'})[response.status]||'linkFailed');
+    if(!response.ok){let reason;try{reason=(await response.json()).reason;}catch{}throw new Error(copy.en[reason]?reason:({429:'rateLimit',401:'expired',400:'unsupportedLink',504:'studioTimeout'})[response.status]||'linkFailed');}
     const data=await response.json();
     if(data.kind==='search'){searchQuery=data.query;results=(await(await api('search?q='+encodeURIComponent(searchQuery))).json()).tracks;linkMode=false;}
     else linkResult=data;
   }catch(error){if(error.name==='AbortError')toast('cancelled');else report(error);}finally{clearTimeout(timer);linkBusy=false;linkController=null;if(route==='search'){render();if(linkMode&&linkResult!==previousResult)document.querySelector('.link-result')?.scrollIntoView({block:'start',behavior:'smooth'});}}
 }
 document.addEventListener('play',event=>{if(event.target.closest?.('.link-result')){audio.pause();updatePlayer();}},true);
+function setStudioSpeed(value){engine.setSpeed(Math.max(.5,Math.min(2,value)));if(engine.linked)studioPitch=12*Math.log2(engine.speed);}
+function setStudioPitch(value){studioPitch=Math.max(-12,Math.min(12,value));if(engine.linked)engine.setSpeed(2**(studioPitch/12));}
+function syncTempo(){if($('speed')){$('speed').value=engine.speed;$('speed-value').textContent=engine.speed.toFixed(2)+'\u00d7';}if($('mix-pitch')){$('mix-pitch').value=studioPitch;$('pitch-value').textContent=Number(studioPitch.toFixed(2));}}
+const paramGroups={equalizer:['eq60','eq250','eq1000','eq4000','eq12000'],reverb:['room_s'],pro_reverb:['room_s'],echo:['delay_ms','feedback'],delay:['delay_ms','feedback'],lofi:['lofi_hz'],highpass:['highpass_hz'],lowpass:['lowpass_hz'],compressor:['comp_threshold','comp_ratio','comp_attack','comp_release'],stereo:['stereo_width'],tremolo:['tremolo_rate','tremolo_depth'],distortion:['drive']};
+const paramRanges={eq60:[-12,12,1],eq250:[-12,12,1],eq1000:[-12,12,1],eq4000:[-12,12,1],eq12000:[-12,12,1],room_s:[.2,3,.1],delay_ms:[60,1000,10],feedback:[0,.65,.05],lofi_hz:[500,3500,100],highpass_hz:[20,6000,20],lowpass_hz:[100,20000,100],comp_threshold:[-48,-6,1],comp_ratio:[1,12,.5],comp_attack:[1,100,1],comp_release:[20,1000,10],stereo_width:[0,2,.1],tremolo_rate:[.5,12,.5],tremolo_depth:[0,1,.05],drive:[1,8,.5]};
+function dspControls(){const seen=new Set();return `<details class="dsp-panel"><summary>${e(t('fineTune'))}</summary>${studioEffects.map(f=>{const keys=(paramGroups[f]||[]).filter(k=>!seen.has(k));keys.forEach(k=>seen.add(k));return keys.length?`<section><h3>${e(t(f))}</h3>${keys.map(k=>`<label for="param-${k}">${e(t(k))}<output id="value-${k}">${engine.params[k]}</output></label><input id="param-${k}" data-param="${k}" type="range" min="${paramRanges[k][0]}" max="${paramRanges[k][1]}" step="${paramRanges[k][2]}" value="${engine.params[k]}">`).join('')}</section>`:'';}).join('')}</details>`;}
 let lyricMatches=[];
 async function showLyrics(track){
   if(demo)return toast('needsTelegram');
@@ -451,11 +488,13 @@ async function renderMix(preview) {
   const button=$(applying?'apply-mix':preview?'preview-mix':'export-mix');button.disabled=true;button.textContent=t('rendering');
   try {
     const nativeExport=!preview&&!demo;
-    const blob=await processMix(applying?false:preview,nativeExport);
+    const remotePlayback=applying&&!demo;
+    const blob=await processMix(applying?false:preview,nativeExport||remotePlayback);
     if(signature!==studioSignature()||ticket!==loadingTrack||bass!==engine.bass||speed!==engine.speed||treble!==engine.treble||bypass!==engine.bypass||format!==exportFormat||pitch!==studioPitch||effect!==JSON.stringify(studioEffects))return;
     if(preview) {
-      if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(blob);
-      if(!bypass)lastRendered={blob,key:studioSignature()};
+      if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=remotePlayback?blob.url:URL.createObjectURL(blob);
+      if(!bypass)lastRendered=remotePlayback?{url:blob.url,key:studioSignature()}:{blob,key:studioSignature()};
+      if(remotePlayback){URL.revokeObjectURL(previewUrl);previewUrl=blob.url;}
       audio.src=previewUrl;audio.playbackRate=1;
       // Rendered audio already includes settings: do not apply the live chain twice.
       engine.setProcessed(true);
@@ -474,15 +513,17 @@ async function renderMix(preview) {
 document.addEventListener('click',async event=>{
   const button=event.target.closest('button,a,label');if(!button)return;
   try {
+    if(button.id==='cancel-mix'&&activeRenderJob){await api('studio/jobs/'+activeRenderJob+'/cancel',{});return;}
+    if(button.dataset.linked!==undefined){const playing=!audio.paused;invalidateMix();engine.setLinked(button.dataset.linked==='true');if(engine.linked)studioPitch=12*Math.log2(engine.speed);render();if(playing)await audio.play();return;}
     if(button.dataset.openLinks!==undefined){linkMode=true;return navigate('search');}
     if(button.dataset.searchTab){linkMode=button.dataset.searchTab==='links';return render();}
     if(button.id==='prepare-link')return await importLink();
     if(button.id==='cancel-link'){linkController?.abort();api('link/cancel',{}).catch(()=>{});return;}
     if(button.id==='extract-link-audio'&&linkResult){button.disabled=true;button.textContent=t('rendering');try{linkResult=await(await api('link/audio',{ticket:new URL(linkResult.url).pathname.split('/').pop()})).json();}finally{if(route==='search')render();}return;}
     if(button.id==='download-link'&&linkResult){showExportDownload(linkResult);nativeExportDownload();return;}
-    if(button.id==='studio-link'&&linkResult){const response=await fetch(linkResult.url,{credentials:'omit'});if(!response.ok)throw new Error('linkExpired');const blob=await response.blob();const track={id:'local:'+crypto.randomUUID(),title:linkResult.title,artist:linkResult.artist||'',kind:'upload',playable:true,local:true,blob:new File([blob],linkResult.filename,{type:blob.type})};localTracks.set(track.id,track);await playTrack(track);return navigate('studio');}
-    if(button.dataset.speedPreset!==undefined||button.dataset.speedStep!==undefined){const playing=!audio.paused;invalidateMix();engine.setBypass(false);const value=button.dataset.speedPreset!==undefined?Number(button.dataset.speedPreset):engine.speed+Number(button.dataset.speedStep);engine.setSpeed(Math.max(.5,Math.min(2,Math.round(value*100)/100)));if(playing)await audio.play();return render();}
-    if(button.dataset.tonePreset!==undefined||button.dataset.toneStep!==undefined){invalidateMix();engine.setBypass(false);studioPitch=Math.max(-6,Math.min(6,button.dataset.tonePreset!==undefined?Number(button.dataset.tonePreset):studioPitch+Number(button.dataset.toneStep)));return render();}
+    if(button.id==='studio-link'&&linkResult){const response=await fetch(linkResult.url,{credentials:'omit'});if(!response.ok)throw new Error('linkExpired');const blob=await response.blob();const track={id:'local:'+crypto.randomUUID(),title:linkResult.title,artist:linkResult.artist||'',kind:'upload',playable:true,local:true,serverTicket:new URL(linkResult.url).pathname.split('/').pop(),blob:new File([blob],linkResult.filename,{type:blob.type})};localTracks.set(track.id,track);await playTrack(track);return navigate('studio');}
+    if(button.dataset.speedPreset!==undefined||button.dataset.speedStep!==undefined){const playing=!audio.paused;invalidateMix();engine.setBypass(false);const value=button.dataset.speedPreset!==undefined?Number(button.dataset.speedPreset):engine.speed+Number(button.dataset.speedStep);setStudioSpeed(Math.round(value*100)/100);render();if(playing)await audio.play();return;}
+    if(button.dataset.tonePreset!==undefined||button.dataset.toneStep!==undefined){invalidateMix();engine.setBypass(false);setStudioPitch(button.dataset.tonePreset!==undefined?Number(button.dataset.tonePreset):studioPitch+Number(button.dataset.toneStep));return render();}
     if(button.matches('.export-link')&&typeof tg?.openLink==='function'){event.preventDefault();tg.openLink(button.href);return;}
     if(button.dataset.lyric!==undefined)return readLyrics(Number(button.dataset.lyric));
     if(button.id==='native-export')return nativeExportDownload();
@@ -498,11 +539,18 @@ document.addEventListener('click',async event=>{
     if(button.id==='compare-fx'){
       const wasPlaying=!audio.paused,pos=audio.currentTime;
       if(previewUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setProcessed(false);engine.setBypass(true);try{audio.currentTime=pos+engine.trimStart;}catch{}if(wasPlaying)await audio.play();}
-      else if(lastRendered?.key===studioSignature()){engine.setBypass(false);previewUrl=URL.createObjectURL(lastRendered.blob);audio.src=previewUrl;audio.playbackRate=1;engine.setProcessed(true);await audio.play();}
+      else if(lastRendered?.key===studioSignature()){engine.setBypass(false);previewUrl=lastRendered.url||URL.createObjectURL(lastRendered.blob);audio.src=previewUrl;audio.playbackRate=1;engine.setProcessed(true);await audio.play();}
       else engine.setBypass(!engine.bypass);
       return render();
     }
-    if(button.id==='save-mix'){if(renderBusy||!trackBlob)return;renderBusy=true;try{const ticket=loadingTrack;const format=exportFormat;const title=current.title;$('save-mix').disabled=true;$('save-mix').textContent=t('rendering');const blob=await processMix(false);if(ticket!==loadingTrack)return;const file=new File([blob],title+' - SwiDJ mix.'+format,{type:blob.type});if(file.size>20*1024**2)return toast('studioSize');studioPitch=0;studioEffects=[];engine.setEffects([]);const track={id:'local:'+crypto.randomUUID(),title:title+' - SwiDJ mix',artist:'SwiDJ Studio',kind:'upload',playable:true,local:true,blob:file};localTracks.set(track.id,track);engine.setBass(0);engine.setTreble(0);engine.setSpeed(1);engine.setBypass(false);await playTrack(track);if(!demo)await saveLocalTrack(track);toast('mixSaved');}finally{renderBusy=false;render();}return;}
+    if(button.id==='save-mix'){
+      if(renderBusy||!trackBlob)return;renderBusy=true;
+      try{
+        $('save-mix').disabled=true;$('save-mix').textContent=t('rendering');
+        if(!demo){const file=await processMix(false,true);const result=await(await api('studio/save',{ticket:new URL(file.url).pathname.split('/').pop()})).json();state=result.library;extraTracks.set(result.track.id,result.track);studioPitch=0;studioEffects=[];engine.setEffects([]);engine.setLinked(false);engine.setParams({...dspDefaults});engine.setBass(0);engine.setTreble(0);engine.setSpeed(1);await playTrack(result.track);toast('saved');}
+        else{const blob=await processMix(false);const track={id:'local:'+crypto.randomUUID(),title:current.title+' - SwiDJ mix',artist:'SwiDJ Studio',kind:'upload',playable:true,local:true,blob:new File([blob],'SwiDJ mix.wav',{type:blob.type})};localTracks.set(track.id,track);engine.setBass(0);engine.setTreble(0);engine.setSpeed(1);await playTrack(track);toast('mixSaved');}
+      }finally{renderBusy=false;render();}return;
+    }
     if(button.dataset.go)return navigate(button.dataset.go);
     if(button.dataset.filter){filter=button.dataset.filter;playlist=null;return render();}
     if(button.dataset.playlist){playlist=button.dataset.playlist;return render();}
@@ -537,7 +585,7 @@ document.addEventListener('click',async event=>{
       }
     }
     if(button.dataset.bass!==undefined){invalidateMix();engine.setBypass(false);if(previewUrl&&trackUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;}engine.setBass(Number(button.dataset.bass));engine.setSpeed(engine.speed);return render();}
-    if(button.id==='reset-fx'){invalidateMix();studioPitch=0;studioEffects=[];engine.setEffects([]);engine.setProcessed(false);engine.trimStart=0;engine.trimEnd=0;engine.fade=0;engine.setBass(0);engine.setTreble(0);engine.setBypass(false);engine.setSpeed(1);if(trackUrl)audio.src=trackUrl;return render();}
+    if(button.id==='reset-fx'){invalidateMix();studioPitch=0;studioEffects=[];engine.setEffects([]);engine.setLinked(false);engine.setParams({...dspDefaults});engine.setProcessed(false);engine.trimStart=0;engine.trimEnd=0;engine.fade=0;engine.setBass(0);engine.setTreble(0);engine.setBypass(false);engine.setSpeed(1);if(trackUrl)audio.src=trackUrl;return render();}
     if(button.id==='preview-mix')return await renderMix(true);
     if(button.id==='export-mix')return await renderMix(false);
     if(button.id==='play')return await togglePlay();
@@ -563,8 +611,9 @@ document.addEventListener('submit',async event=>{
 document.addEventListener('input',event=>{
   const node=event.target;
   if(node.matches('[data-edit],#speed,#treble,#mix-pitch')){invalidateMix();engine.setBypass(false);}
-  if(node.id==='mix-pitch'){studioPitch=Number(node.value);$('pitch-value').textContent=studioPitch;}
-  if(node.dataset.edit){engine[node.dataset.edit]=Math.max(0,Math.min(node.dataset.edit==='fade'?10:1800,Number(node.value)||0));}
+  if(node.id==='mix-pitch'){setStudioPitch(Number(node.value));syncTempo();}
+  if(node.dataset.edit){engine[node.dataset.edit]=Math.max(0,Math.min(node.dataset.edit==='fade'?10:7200,Number(node.value)||0));}
+  if(node.dataset.param){const playing=!audio.paused;invalidateMix();engine.setBypass(false);engine.setParams({[node.dataset.param]:Number(node.value)});$('value-'+node.dataset.param).textContent=node.value;if(playing)audio.play().catch(report);}
   if(node.id==='link-url')linkUrl=node.value;
   if(node.id==='ambience'){const playing=!audio.paused;invalidateMix();engine.setBypass(false);if(playing)audio.play().catch(report);engine.setAmbience(Number(node.value));$('ambience-value').textContent=engine.ambience+'%';}
   if(node.id==='search-input')searchQuery=node.value;
@@ -582,7 +631,7 @@ document.addEventListener('change',async event=>{
   if(event.target.id==='mix-format'){exportFormat=event.target.value;return;}
   if(event.target.id==='voice-file'){const file=event.target.files[0];if(!file)return;if(file.size>8*1024**2)return toast('voiceLimit');voiceBlob=file;if(voiceUrl)URL.revokeObjectURL(voiceUrl);voiceUrl=URL.createObjectURL(file);render();document.querySelector('.voice-panel').open=true;return;}
   if(event.target.id!=='local-file')return;
-  const file=event.target.files[0];if(!file)return;if(file.size>49*1024**2)return toast('fileTooLarge');
+  const file=event.target.files[0];if(!file)return;if(file.size>256*1024**2)return toast('fileTooLarge');
   try {
     const track={id:'local:'+crypto.randomUUID(),title:file.name.replace(/\.[^.]+$/,''),artist:t('uploads'),kind:'upload',playable:true,local:true,blob:file};
     localTracks.set(track.id,track);await playTrack(track);render();

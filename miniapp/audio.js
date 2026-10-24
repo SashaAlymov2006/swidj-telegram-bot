@@ -1,4 +1,4 @@
-import {connectLive} from './live.js';
+import {connectLive,dspDefaults} from './live.js';
 // Browser audio stays on the user's device. No microphone access or uploads.
 export function stamp(value) {
   const seconds = Math.max(0, Math.floor(Number(value) || 0));
@@ -36,7 +36,7 @@ export function chain(context, source, destination, bass, treble = 0) {
 }
 
 export class AudioEngine {
-  constructor(element) { this.element = element; this.bass = 0; this.speed = 1; this.treble=0; this.bypass=false; this.trimStart=0; this.trimEnd=0; this.fade=0; this.effects=[]; this.ambience=100; this.processed=false; }
+  constructor(element) { this.element = element; this.bass = 0; this.speed = 1; this.treble=0; this.bypass=false; this.trimStart=0; this.trimEnd=0; this.fade=0; this.effects=[]; this.params={...dspDefaults}; this.linked=false; this.ambience=100; this.processed=false; }
   async unlock() {
     if (!this.context) {
       this.context = new AudioContext();
@@ -48,8 +48,10 @@ export class AudioEngine {
   rebuildLive(){
     if(!this.nodes)return;
     if(this.disconnectLive)this.disconnectLive();
-    this.disconnectLive=connectLive(this.context,this.nodes.high,this.nodes.compressor,this.bypass||this.processed?[]:this.effects,this.ambience);
+    this.disconnectLive=connectLive(this.context,this.nodes.high,this.nodes.compressor,this.bypass||this.processed?[]:this.effects,this.ambience,this.params);
   }
+  setLinked(value){this.linked=value;this.setSpeed(this.speed);}
+  setParams(values){const room=values.room_s??this.params.room_s;const oldRoom=this.params.room_s;Object.assign(this.params,values);if(room!==oldRoom)this.rebuildLive();else this.disconnectLive?.setParams?.(this.params);}
   setEffects(effects){this.effects=[...effects];this.rebuildLive();}
   setAmbience(value){this.ambience=value;this.disconnectLive?.setAmbience?.(value);}
   setProcessed(value){if(this.processed===value)return;this.processed=value;this.rebuildLive();this.applyTone();this.setSpeed(this.speed);}
@@ -66,7 +68,8 @@ export class AudioEngine {
   setSpeed(value) {
     this.speed = value; this.element.playbackRate = this.bypass||this.processed?1:value;
     // Keep live tempo independent of pitch, matching server exports.
-    this.element.preservesPitch = true;
+    this.element.preservesPitch = !this.linked;
+    if('webkitPreservesPitch' in this.element)this.element.webkitPreservesPitch=!this.linked;
   }
   async render(blob, preview = false, sourceDuration = this.element.duration) {
     const bass = this.bypass?0:this.bass, treble=this.bypass?0:this.treble, speed = this.bypass?1:this.speed;

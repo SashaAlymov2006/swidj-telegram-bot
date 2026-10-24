@@ -12,9 +12,10 @@ import threading
 from operations import run_process
 from uploaded_media import library_store
 
-MAX_FILE_BYTES = 20*1024**2
-MAX_USER_BYTES = 128*1024**2
-MAX_TOTAL_BYTES = 512*1024**2
+from app_limits import MEDIA_BYTES,MEDIA_SECONDS,LIBRARY_USER_BYTES,LIBRARY_TOTAL_BYTES
+MAX_FILE_BYTES = MEDIA_BYTES
+MAX_USER_BYTES = LIBRARY_USER_BYTES
+MAX_TOTAL_BYTES = LIBRARY_TOTAL_BYTES
 _quota_lock = threading.Lock()
 
 
@@ -31,13 +32,16 @@ def retain(source, uid, filename):
                           '-of','json',str(source)], check=True, capture_output=True, timeout=15)
     data = json.loads(result.stdout)
     duration = float(data['format']['duration'])
-    if not data.get('streams') or not math.isfinite(duration) or not 0 < duration <= 3600:
+    if not data.get('streams') or not math.isfinite(duration) or not 0 < duration <= MEDIA_SECONDS:
         raise ValueError('Invalid audio')
     format = data['format']['format_name'].split(',')[0]
     suffix = {'mp3':'.mp3','wav':'.wav','ogg':'.ogg','flac':'.flac','mov':'.m4a','mp4':'.m4a'}.get(format)
     if not suffix:
         raise ValueError('Unsupported audio container')
-    digest = hashlib.sha256(str(uid).encode()+b':'+source.read_bytes()).hexdigest()
+    hasher=hashlib.sha256(str(uid).encode()+b':')
+    with source.open('rb') as stream:
+        while chunk:=stream.read(1024*1024):hasher.update(chunk)
+    digest=hasher.hexdigest()
     store = library_store()
     directory = store.user_directory(uid)
     target = directory/('app-'+digest[:24]+suffix)

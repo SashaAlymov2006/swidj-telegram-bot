@@ -9,6 +9,7 @@ import shutil
 import time
 
 from media_store import MediaStore
+from app_limits import MEDIA_BYTES,TEMP_CACHE_BYTES
 from operations import Operation, OperationCancelled, _current, checkpoint
 
 
@@ -25,7 +26,7 @@ class Job:
 
 
 class AudioJobs:
-    def __init__(self, downloader=None, root=None, *, max_bytes=256*1024**2, queue_timeout=30, download_timeout=240):
+    def __init__(self, downloader=None, root=None, *, max_bytes=TEMP_CACHE_BYTES, queue_timeout=30, download_timeout=900):
         active = Path(os.getenv('AUDIO_CACHE_DIR', '/app/data/audio'))
         self.root = Path(root or os.getenv('MINIAPP_CACHE_DIR') or active.parent/'miniapp-cache')
         self.store = MediaStore(self.root)
@@ -71,7 +72,7 @@ class AudioJobs:
 
     def retain(self, uid, identifier, source):
         source = Path(source)
-        if source.is_symlink() or not source.is_file() or not 0 < source.stat().st_size <= 49*1024**2:
+        if source.is_symlink() or not source.is_file() or not 0 < source.stat().st_size <= MEDIA_BYTES:
             raise ValueError('Invalid audio output')
         directory = self.store.user_directory(uid)
         self.trim(source.stat().st_size)
