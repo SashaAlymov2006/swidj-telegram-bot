@@ -409,7 +409,7 @@ def create_app(*, token='', bridge=None):
     app = web.Application(middlewares=[boundary], client_max_size=16*1024)
     async def asset(request):
         name = request.match_info.get('name', 'index.html')
-        if name not in ('index.html', 'app.css', 'app.js', 'audio.js'):
+        if name not in ('index.html', 'app.css', 'app.js', 'audio.js', 'live.js'):
             raise web.HTTPNotFound()
         return web.FileResponse(ASSETS / name)
     async def demo(request):
@@ -545,6 +545,8 @@ def create_app(*, token='', bridge=None):
                     web.post('/api/jobs/{job:[a-f0-9]{24}}/cancel', job_status)])
     from miniapp_studio import register
     register(app, bridge)
+    from app_lyrics import register as register_lyrics
+    register_lyrics(app, bridge)
     return app
 
 

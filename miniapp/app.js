@@ -1,4 +1,5 @@
 import {AudioEngine, stamp} from './audio.js';
+import {liveEffects} from './live.js';
 
 const paths = {
   home:'M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z',
@@ -44,6 +45,8 @@ Object.assign(copy.en,{resolving:'Checking the recording...',queued:'Waiting for
 Object.assign(copy.ru,{resolving:'Проверяю запись...',queued:'Ожидаю очередь на загрузку...',queueTimeout:'Очередь занята. Попробуй чуть позже или выбери другую запись.',downloadTimeout:'Источник долго не отвечает. Выбери другую запись.',requestTimeout:'Сервер не ответил вовремя. Проверь соединение и повтори.',prepareFailed:'Не удалось загрузить эту запись. Выбери другой результат.'});
 Object.assign(copy.en,{makeSound:'Make your sound.',effectRack:'Your effect chain',effectRackNote:'Combine up to 8 effects. They run in the order you select.',delay:'Delay',equalizer:'Presence',mastering:'Mastering',pro_reverb:'Wide reverb',highpass:'High pass',lowpass:'Low pass',reverse:'Reverse',applyMix:'Apply to full track',applyNote:'Choose your effects, then apply them to hear the result.',mixApplied:'Playing your processed mix',preview:'Hear effects - 15 sec'});
 Object.assign(copy.ru,{makeSound:'Создай свой звук.',effectRack:'Цепочка эффектов',effectRackNote:'Сочетай до 8 эффектов. Они применяются в порядке выбора.',delay:'Дилей',equalizer:'Присутствие',mastering:'Мастеринг',pro_reverb:'Объёмный реверб',highpass:'Высокие частоты',lowpass:'Низкие частоты',reverse:'Реверс',applyMix:'Применить ко всему треку',applyNote:'Выбери эффекты и нажми Применить, чтобы услышать результат.',mixApplied:'Играет обработанный микс',preview:'Слушать эффекты - 15 сек'});
+Object.assign(copy.en,{openDownload:'Open file',iphoneSave:'Use Download. If unavailable, open the file, then Share > Save to Files. The link expires in 10 minutes.',lyrics:'Lyrics',lyricsLoading:'Finding lyrics...',lyricsEmpty:'No lyrics found for this recording.',lyricsChoose:'Choose the matching song',pitch:'Lower / higher sound',pitchNote:'0 = unchanged. Minus lowers the voice; plus raises it. Apply to hear this change.',liveNote:'Reverb, echo, lo-fi and filters play live. Reverse, mastering and volume leveling use Apply.',live:'Live',renderOnly:'Apply',downloadReady:'Your file is ready'});
+Object.assign(copy.ru,{openDownload:'Открыть файл',iphoneSave:'Нажми Скачать. Если недоступно: открой файл, затем Поделиться > Сохранить в Файлы. Ссылка действует 10 минут.',lyrics:'Текст песни',lyricsLoading:'Ищу текст...',lyricsEmpty:'Текст для этой записи не найден.',lyricsChoose:'Выбери нужную песню',pitch:'Звук ниже / выше',pitchNote:'0 - без изменений. Минус понижает голос, плюс повышает. Нажми Применить, чтобы услышать.',liveNote:'Реверб, эхо, lo-fi и фильтры слышны сразу. Реверс, мастеринг и ровная громкость - через Применить.',live:'Сразу',renderOnly:'Применить',downloadReady:'Файл готов'});
 const demo = !initData;
 let language = 'ru';
 try { language = localStorage.getItem('swidj-language') || tg?.initDataUnsafe?.user?.language_code?.slice(0,2) || 'ru'; } catch {}
@@ -64,7 +67,7 @@ let renderBusy = false, refreshing = false, sourceDuration = 0;
 let preparation = null, searchQuery = '';
 let lastRendered=null;
 function studioSignature(){return JSON.stringify([loadingTrack,engine.bass,engine.speed,engine.treble,studioPitch,studioEffects,engine.trimStart,engine.trimEnd,engine.fade]);}
-function invalidateMix(){lastRendered=null;if(previewUrl&&trackUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setBass(engine.bass);engine.setSpeed(engine.speed);}}
+function invalidateMix(){lastRendered=null;engine.setProcessed(false);if(previewUrl&&trackUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setProcessed(false);engine.setBass(engine.bass);engine.setSpeed(engine.speed);}}
 let playQueue=[], playHistory=[], restoredTracks=[], resumeState=null, lastPositionSave=0;
 const sessionKey='swidj-session-v1-'+(demo?'demo':String(tg?.initDataUnsafe?.user?.id||'unknown'));
 try {const saved=JSON.parse(localStorage.getItem(sessionKey)||'null');if(saved){resumeState=saved.resume;restoredTracks=Array.isArray(saved.tracks)?saved.tracks.slice(0,101):[];playQueue=Array.isArray(saved.queue)?saved.queue.filter(x=>typeof x==='string').slice(0,100):[];}}catch{}
@@ -143,10 +146,10 @@ function render() {
   $('connection').textContent=t(demo?'demo':'connected'); $('language').textContent=language==='ru'?'EN':'RU';
   $('content').innerHTML=failed?empty('authError','authHint','info'):({home,search:searchScreen,library:libraryScreen,studio}[route])();
   if(route==='home'&&resumeState&&trackById(resumeState.id))$('content').insertAdjacentHTML('afterbegin',`<button class="resume-card" id="resume-track">${icon('play')}<span><strong>${e(t('resume'))}</strong><small>${e(trackById(resumeState.id).title)} &middot; ${stamp(resumeState.position)}</small></span></button>`);
-  if(route==='studio')$('content').querySelector('.studio-controls').insertAdjacentHTML('afterbegin',`<div class="studio-recipes"><h3>${e(t('presets'))}</h3><div class="recipe-grid">${['clean','warm','night','bright'].map(key=>`<button type="button" class="chip" data-recipe="${key}">${e(t(key))}</button>`).join('')}</div><div class="control-label"><label for="treble">${e(t('treble'))}</label><output>${engine.treble} dB</output></div><input id="treble" class="control-range" type="range" min="-6" max="6" step="1" value="${engine.treble}"><button type="button" class="btn secondary" id="compare-fx" aria-pressed="${engine.bypass}">${e(t(engine.bypass?'dry':'compare'))}</button><div class="studio-advanced"><label>${e(t('format'))}<select id="mix-format">${['mp3','wav'].map(f=>`<option value="${f}" ${f===exportFormat?'selected':''}>${f.toUpperCase()}</option>`).join('')}</select></label><section class="effect-rack"><div class="rack-heading"><h3>${e(t('effectRack'))}</h3><span>${studioEffects.length}/8</span></div><p class="fineprint">${e(t('effectRackNote'))}</p><div class="effect-grid">${['reverb','echo','delay','lofi','normalize','compressor','equalizer','mastering','pro_reverb','highpass','lowpass','reverse'].map((f,i)=>`<button type="button" class="effect-tile ${studioEffects.includes(f)?'selected':''}" data-effect="${f}" aria-pressed="${studioEffects.includes(f)}" ${studioEffects.length>=8&&!studioEffects.includes(f)?'disabled':''}><span class="effect-glyph">${['~','&#9678;','///','&#9682;','=','&#8779;','&#9783;','&#10022;','&#8734;','&#8599;','&#8600;','&#8630;'][i]}</span><strong>${e(t(f))}</strong><small>${studioEffects.includes(f)?'&#10003;':''}</small></button>`).join('')}</div><div class="effect-chain">${studioEffects.length?studioEffects.map((f,i)=>`<span>${i+1}. ${e(t(f))}</span>`).join(''):e(t('none'))}</div></section><label>${e(t('pitch'))}<input id="mix-pitch" type="range" min="-6" max="6" step="1" value="${studioPitch}"><output id="pitch-value">${studioPitch}</output></label><p class="fineprint">${e(t('pitchNote'))}</p></div><div class="trim-grid">${['trimStart','trimEnd','fade'].map(key=>`<label>${e(t(key))}<input class="studio-number" type="number" min="0" max="${key==='fade'?10:1800}" step="0.1" data-edit="${key}" value="${engine[key]}"></label>`).join('')}</div><button type="button" class="btn secondary" id="save-mix" ${!trackBlob?'disabled':''}>${e(t('saveMix'))}</button></div>`);
+  if(route==='studio')$('content').querySelector('.studio-controls').insertAdjacentHTML('afterbegin',`<div class="studio-recipes"><h3>${e(t('presets'))}</h3><div class="recipe-grid">${['clean','warm','night','bright'].map(key=>`<button type="button" class="chip" data-recipe="${key}">${e(t(key))}</button>`).join('')}</div><div class="control-label"><label for="treble">${e(t('treble'))}</label><output>${engine.treble} dB</output></div><input id="treble" class="control-range" type="range" min="-6" max="6" step="1" value="${engine.treble}"><button type="button" class="btn secondary" id="compare-fx" aria-pressed="${engine.bypass}">${e(t(engine.bypass?'dry':'compare'))}</button><div class="studio-advanced"><label>${e(t('format'))}<select id="mix-format">${['mp3','wav'].map(f=>`<option value="${f}" ${f===exportFormat?'selected':''}>${f.toUpperCase()}</option>`).join('')}</select></label><section class="effect-rack"><div class="rack-heading"><h3>${e(t('effectRack'))}</h3><span>${studioEffects.length}/8</span></div><p class="fineprint">${e(t('liveNote'))}</p><div class="effect-grid">${['reverb','echo','delay','lofi','normalize','compressor','equalizer','mastering','pro_reverb','highpass','lowpass','reverse'].map((f,i)=>`<button type="button" class="effect-tile ${studioEffects.includes(f)?'selected':''}" data-effect="${f}" aria-pressed="${studioEffects.includes(f)}" ${studioEffects.length>=8&&!studioEffects.includes(f)?'disabled':''}><span class="effect-glyph">${['~','&#9678;','///','&#9682;','=','&#8779;','&#9783;','&#10022;','&#8734;','&#8599;','&#8600;','&#8630;'][i]}</span><strong>${e(t(f))}</strong><span class="effect-mode">${e(t(liveEffects.has(f)?'live':'renderOnly'))}</span><small>${studioEffects.includes(f)?'&#10003;':''}</small></button>`).join('')}</div><div class="effect-chain">${studioEffects.length?studioEffects.map((f,i)=>`<span>${i+1}. ${e(t(f))}</span>`).join(''):e(t('none'))}</div></section><label>${e(t('pitch'))}<input id="mix-pitch" type="range" min="-6" max="6" step="1" value="${studioPitch}"><output id="pitch-value">${studioPitch}</output></label><p class="fineprint">${e(t('pitchNote'))}</p></div><div class="trim-grid">${['trimStart','trimEnd','fade'].map(key=>`<label>${e(t(key))}<input class="studio-number" type="number" min="0" max="${key==='fade'?10:1800}" step="0.1" data-edit="${key}" value="${engine[key]}"></label>`).join('')}</div><button type="button" class="btn secondary" id="save-mix" ${!trackBlob?'disabled':''}>${e(t('saveMix'))}</button></div>`);
   if(route==='studio'){
     const actions=document.createElement('div');actions.className='studio-actions';
-    for(const id of ['apply-mix','preview-mix','compare-fx','export-mix','save-mix'])actions.append($(id));
+    for(const id of ['apply-mix','compare-fx','export-mix','save-mix','preview-mix'])actions.append($(id));
     document.querySelector('.effect-rack').after(actions);
   }
   if(route==='studio'&&current?.local&&!failed)$('content').querySelector('.studio-source').insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" id="save-local-file">${icon('heart')}${e(t('saveToLibrary'))}</button>`);
@@ -225,6 +228,7 @@ function trackMenu(track) {
   dialog(track.title,`<button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="like">${icon('heart')}${e(t(liked(track)?'unsave':'save'))}</button><button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="playlist">${icon('plus')}${e(t('addPlaylist'))}</button><button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="studio">${icon('studio')}${e(t('openStudio'))}</button><button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="send">${icon('send')}${e(t('send'))}</button><button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="remove">${icon('trash')}${e(t('remove'))}</button>`);
   if(playlist&&state.playlists.find(p=>p.id===playlist)?.tracks.includes(track.id))
     $('dialog-body').insertAdjacentHTML('beforeend',`<button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="unlist">${icon('folder')}${e(t('removeFromPlaylist'))}</button>`);
+  $('dialog-body').insertAdjacentHTML('afterbegin',`<button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="lyrics">${icon('info')}${e(t('lyrics'))}</button>`);
   $('dialog-body').insertAdjacentHTML('afterbegin',`<button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="queue-next">${icon('next')}${e(t('playNext'))}</button><button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="queue-add">${icon('plus')}${e(t('queueAdd'))}</button>`);
   $('dialog-body').insertAdjacentHTML('afterbegin',`<button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="download">${icon('download')}${e(t('downloadTrack'))}</button>`);
 }
@@ -257,6 +261,7 @@ function fullPlayer() {
   if(!current)return navigate('library');
   $('dialog-form').onsubmit=null;
   dialog(t('nowPlaying'),`<div class="full-player"><div class="full-player-art">${art(current)}</div><h3>${e(current.title)}</h3><p>${e(current.artist)}</p><input id="full-seek" type="range" min="0" max="1000" value="${$('seek').value}" aria-label="${e(t('seek'))}"><div class="full-times"><span id="full-elapsed">${stamp(audio.currentTime)}</span><span id="full-duration">${stamp(audio.duration)}</span></div><div class="full-controls"><button type="button" class="icon-btn" data-player="previous" aria-label="${e(t('previous'))}">${icon('previous')}</button><button type="button" id="full-play" class="play-main" data-player="play" aria-label="${e(t(audio.paused?'play':'pause'))}">${icon(audio.paused?'play':'pause')}</button><button type="button" class="icon-btn" data-player="next" aria-label="${e(t('next'))}">${icon('next')}</button></div><button type="button" class="btn secondary" data-track="${e(current.id)}" data-action="studio">${icon('studio')}${e(t('openStudio'))}</button></div>`);
+  $('dialog-body').querySelector('.full-player>.btn').insertAdjacentHTML('beforebegin',`<button type="button" class="btn secondary" data-track="${e(current.id)}" data-action="lyrics">${e(t('lyrics'))}</button>`);
   $('dialog-body').querySelector('.full-player>.btn').insertAdjacentHTML('beforebegin',`<button type="button" class="btn" data-track="${e(current.id)}" data-action="download">${icon('download')}${e(t('downloadTrack'))}</button>`);
 }
 async function refreshLibrary() {
@@ -303,7 +308,7 @@ async function prepareTrack(track) {
 async function playTrack(track) {
   if(preparation){toast('preparingOther');return false;}
   if(current?.id===track.id&&trackUrl){
-    if(previewUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setBass(engine.bass);engine.setSpeed(engine.speed);}
+    if(previewUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setProcessed(false);engine.setBass(engine.bass);engine.setSpeed(engine.speed);}
     await engine.unlock();try{await audio.play();}catch{toast('readyToPlay');}return true;
   }
   const ticket=++loadingTrack;
@@ -315,7 +320,7 @@ async function playTrack(track) {
   else if(demo) {const response=await fetch(`/demo/${track.demo}.wav`);if(!response.ok)throw new Error('invalidAudio');blob=await response.blob();}
   else blob=await (await api('audio/'+encodeURIComponent(track.id))).blob();
   if(ticket!==loadingTrack)return false;
-  audio.pause();lastRendered=null;engine.trimStart=0;engine.trimEnd=0;engine.fade=0;if(trackUrl)URL.revokeObjectURL(trackUrl);if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=null;}
+  audio.pause();engine.setProcessed(false);lastRendered=null;engine.trimStart=0;engine.trimEnd=0;engine.fade=0;if(trackUrl)URL.revokeObjectURL(trackUrl);if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=null;}
   trackBlob=blob;trackUrl=URL.createObjectURL(blob);audio.src=trackUrl;current=track;
   engine.setBass(engine.bass);engine.setSpeed(engine.speed);
   try{await audio.play();}catch(error){if(error.name==='NotAllowedError')toast('readyToPlay');else throw error;}
@@ -354,14 +359,35 @@ async function downloadTrack(track) {
   a.href=url;a.download=track.title.replace(/[\\/:*?"<>|]/g,'').slice(0,100)+'.'+extension;
   a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
-async function processMix(preview=false) {
+async function processMix(preview=false,delivery=false) {
   if(demo){if(exportFormat==='mp3'||studioPitch||studioEffects.length)throw new Error('needsTelegram');return engine.render(trackBlob,preview,sourceDuration);}
-  const start=engine.trimStart,end=engine.trimEnd||sourceDuration;
-  const settings={format:preview?'mp3':exportFormat,start,end:preview?Math.min(end,start+15*engine.speed):end,speed:engine.speed,pitch:studioPitch,bass:engine.bass,treble:engine.treble,effects:[...studioEffects],fade:engine.fade};
+  const start=engine.trimStart,end=engine.trimEnd||0;
+  const settings={preview,delivery:delivery?'ticket':'inline',title:(current?.title||'SwiDJ')+' - SwiDJ mix',format:preview?'mp3':exportFormat,start,end,speed:engine.speed,pitch:studioPitch,bass:engine.bass,treble:engine.treble,effects:[...studioEffects],fade:engine.fade};
   const form=new FormData();form.append('settings',JSON.stringify(settings));form.append('file',trackBlob,'source.audio');
   const response=await fetch('/api/studio',{method:'POST',headers:{'X-Telegram-Init-Data':initData},body:form,credentials:'omit'});
   if(!response.ok)throw new Error(({413:'studioSize',400:'invalidTrim',401:'expired',429:'rateLimit',504:'studioTimeout'})[response.status]||'error');
-  return response.blob();
+  return delivery?response.json():response.blob();
+}
+let lyricMatches=[];
+async function showLyrics(track){
+  if(demo)return toast('needsTelegram');
+  dialog(t('lyrics'),`<p>${e(t('lyricsLoading'))}</p>`);
+  try{const data=await(await api('lyrics?track='+encodeURIComponent(track.id))).json();lyricMatches=data.matches||[];
+    if(!lyricMatches.length)return dialog(t('lyrics'),`<p>${e(t('lyricsEmpty'))}</p>`);
+    if(lyricMatches.length===1)return readLyrics(0);
+    dialog(t('lyricsChoose'),lyricMatches.map((m,i)=>`<button type="button" class="dialog-option" data-lyric="${i}"><span>${e(m.title)}<small>${e(m.artist)}</small></span></button>`).join(''));
+  }catch(error){$('dialog').close();throw error;}
+}
+function readLyrics(index){const item=lyricMatches[index];if(item)dialog(item.title,`<p class="lyric-artist">${e(item.artist)} / LRCLIB</p><pre class="lyrics-text">${e(item.text)}</pre>`);}
+let currentExport=null;
+function showExportDownload(file){
+  currentExport=file;
+  dialog(t('downloadReady'),`<p class="dialog-copy">${e(file.filename)}</p><button type="button" class="btn" id="native-export">${icon('download')}${e(t('downloadTrack'))}</button><a class="btn secondary export-link" href="${e(file.url)}" target="_blank" rel="noopener noreferrer" download="${e(file.filename)}">${e(t('openDownload'))}</a><p class="fineprint">${e(t('iphoneSave'))}</p>`);
+}
+function nativeExportDownload(){
+  if(!currentExport)return;
+  if(typeof tg?.downloadFile==='function'&&tg.isVersionAtLeast?.('8.0')!==false){try{tg.downloadFile({url:currentExport.url,file_name:currentExport.filename});return;}catch{}}
+  const link=document.querySelector('.export-link');if(link)link.click();
 }
 async function recordVoice(){
   if(demo)return toast('voiceDemo');
@@ -402,15 +428,19 @@ async function renderMix(preview) {
   const applying=preview==='apply';
   const button=$(applying?'apply-mix':preview?'preview-mix':'export-mix');button.disabled=true;button.textContent=t('rendering');
   try {
-    const blob=await processMix(applying?false:preview);
+    const nativeExport=!preview&&!demo;
+    const blob=await processMix(applying?false:preview,nativeExport);
     if(signature!==studioSignature()||ticket!==loadingTrack||bass!==engine.bass||speed!==engine.speed||treble!==engine.treble||bypass!==engine.bypass||format!==exportFormat||pitch!==studioPitch||effect!==JSON.stringify(studioEffects))return;
     if(preview) {
       if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(blob);
       if(!bypass)lastRendered={blob,key:studioSignature()};
       audio.src=previewUrl;audio.playbackRate=1;
       // Rendered audio already includes settings: do not apply the live chain twice.
-      engine.nodes.headroom.gain.value=1;engine.nodes.filter.gain.value=0;engine.nodes.high.gain.value=0;
+      engine.setProcessed(true);
       await audio.play();toast(applying?'mixApplied':'previewReady');
+    } else if(nativeExport){
+      showExportDownload(blob);
+      if(typeof tg?.downloadFile==='function'&&tg.isVersionAtLeast?.('8.0')!==false)nativeExportDownload();
     } else {
       const url=URL.createObjectURL(blob),a=document.createElement('a');
       a.href=url;a.download=(current?.title || 'SwiDJ').replace(/[\\/:*?"<>|]/g,'').slice(0,80)+' - SwiDJ mix.'+format;
@@ -422,7 +452,10 @@ async function renderMix(preview) {
 document.addEventListener('click',async event=>{
   const button=event.target.closest('button,a,label');if(!button)return;
   try {
-    if(button.dataset.effect){invalidateMix();engine.setBypass(false);const value=button.dataset.effect;if(studioEffects.includes(value))studioEffects=studioEffects.filter(x=>x!==value);else if(studioEffects.length<8)studioEffects.push(value);return render();}
+    if(button.matches('.export-link')&&typeof tg?.openLink==='function'){event.preventDefault();tg.openLink(button.href);return;}
+    if(button.dataset.lyric!==undefined)return readLyrics(Number(button.dataset.lyric));
+    if(button.id==='native-export')return nativeExportDownload();
+    if(button.dataset.effect){const playing=!audio.paused;invalidateMix();engine.setBypass(false);const value=button.dataset.effect;if(studioEffects.includes(value))studioEffects=studioEffects.filter(x=>x!==value);else if(studioEffects.length<8)studioEffects.push(value);engine.setEffects(studioEffects);await engine.unlock();if(playing)await audio.play();return render();}
     if(button.id==='apply-mix')return await renderMix('apply');
     if(button.id==='record-voice')return await recordVoice();
     if(button.id==='transcribe-voice')return await transcribeVoice();
@@ -433,12 +466,12 @@ document.addEventListener('click',async event=>{
     if(button.dataset.recipe){invalidateMix();if(previewUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;}const values={clean:[0,0,1],warm:[3,-2,1],night:[6,1,.9],bright:[0,4,1] }[button.dataset.recipe];engine.setBypass(false);engine.setBass(values[0]);engine.setTreble(values[1]);engine.setSpeed(values[2]);return render();}
     if(button.id==='compare-fx'){
       const wasPlaying=!audio.paused,pos=audio.currentTime;
-      if(previewUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setBypass(true);try{audio.currentTime=pos+engine.trimStart;}catch{}if(wasPlaying)await audio.play();}
-      else if(lastRendered?.key===studioSignature()){engine.setBypass(false);previewUrl=URL.createObjectURL(lastRendered.blob);audio.src=previewUrl;audio.playbackRate=1;engine.nodes.headroom.gain.value=1;engine.nodes.filter.gain.value=0;engine.nodes.high.gain.value=0;await audio.play();}
+      if(previewUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setProcessed(false);engine.setBypass(true);try{audio.currentTime=pos+engine.trimStart;}catch{}if(wasPlaying)await audio.play();}
+      else if(lastRendered?.key===studioSignature()){engine.setBypass(false);previewUrl=URL.createObjectURL(lastRendered.blob);audio.src=previewUrl;audio.playbackRate=1;engine.setProcessed(true);await audio.play();}
       else engine.setBypass(!engine.bypass);
       return render();
     }
-    if(button.id==='save-mix'){if(renderBusy||!trackBlob)return;renderBusy=true;try{const ticket=loadingTrack;const format=exportFormat;const title=current.title;$('save-mix').disabled=true;$('save-mix').textContent=t('rendering');const blob=await processMix(false);if(ticket!==loadingTrack)return;const file=new File([blob],title+' - SwiDJ mix.'+format,{type:blob.type});if(file.size>20*1024**2)return toast('studioSize');studioPitch=0;studioEffects=[];const track={id:'local:'+crypto.randomUUID(),title:title+' - SwiDJ mix',artist:'SwiDJ Studio',kind:'upload',playable:true,local:true,blob:file};localTracks.set(track.id,track);engine.setBass(0);engine.setTreble(0);engine.setSpeed(1);engine.setBypass(false);await playTrack(track);if(!demo)await saveLocalTrack(track);toast('mixSaved');}finally{renderBusy=false;render();}return;}
+    if(button.id==='save-mix'){if(renderBusy||!trackBlob)return;renderBusy=true;try{const ticket=loadingTrack;const format=exportFormat;const title=current.title;$('save-mix').disabled=true;$('save-mix').textContent=t('rendering');const blob=await processMix(false);if(ticket!==loadingTrack)return;const file=new File([blob],title+' - SwiDJ mix.'+format,{type:blob.type});if(file.size>20*1024**2)return toast('studioSize');studioPitch=0;studioEffects=[];engine.setEffects([]);const track={id:'local:'+crypto.randomUUID(),title:title+' - SwiDJ mix',artist:'SwiDJ Studio',kind:'upload',playable:true,local:true,blob:file};localTracks.set(track.id,track);engine.setBass(0);engine.setTreble(0);engine.setSpeed(1);engine.setBypass(false);await playTrack(track);if(!demo)await saveLocalTrack(track);toast('mixSaved');}finally{renderBusy=false;render();}return;}
     if(button.dataset.go)return navigate(button.dataset.go);
     if(button.dataset.filter){filter=button.dataset.filter;playlist=null;return render();}
     if(button.dataset.playlist){playlist=button.dataset.playlist;return render();}
@@ -459,6 +492,7 @@ document.addEventListener('click',async event=>{
       const action=button.dataset.action;
       if(action==='queue-next'||action==='queue-add'){if(playQueue.length>=100)return toast('capacity');extraTracks.set(track.id,track);if(action==='queue-next')playQueue.unshift(track.id);else playQueue.push(track.id);persistSession();$('dialog').close();return toast('queueAdded');}
       if(action==='play')return await playTrack(track);
+      if(action==='lyrics')return await showLyrics(track);
       if(action==='download'){$('dialog').close();return await downloadTrack(track);}
       if(action==='like'){$('dialog').close();return await favorite(track);}
       if(action==='menu')return trackMenu(track);
@@ -472,7 +506,7 @@ document.addEventListener('click',async event=>{
       }
     }
     if(button.dataset.bass!==undefined){invalidateMix();engine.setBypass(false);if(previewUrl&&trackUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;}engine.setBass(Number(button.dataset.bass));engine.setSpeed(engine.speed);return render();}
-    if(button.id==='reset-fx'){invalidateMix();studioPitch=0;studioEffects=[];engine.trimStart=0;engine.trimEnd=0;engine.fade=0;engine.setBass(0);engine.setTreble(0);engine.setBypass(false);engine.setSpeed(1);if(trackUrl)audio.src=trackUrl;return render();}
+    if(button.id==='reset-fx'){invalidateMix();studioPitch=0;studioEffects=[];engine.setEffects([]);engine.setProcessed(false);engine.trimStart=0;engine.trimEnd=0;engine.fade=0;engine.setBass(0);engine.setTreble(0);engine.setBypass(false);engine.setSpeed(1);if(trackUrl)audio.src=trackUrl;return render();}
     if(button.id==='preview-mix')return await renderMix(true);
     if(button.id==='export-mix')return await renderMix(false);
     if(button.id==='play')return await togglePlay();
@@ -502,7 +536,7 @@ document.addEventListener('input',event=>{
   if(node.dataset.edit){engine[node.dataset.edit]=Math.max(0,Math.min(node.dataset.edit==='fade'?10:1800,Number(node.value)||0));}
   if(node.id==='search-input')searchQuery=node.value;
   if(node.id==='speed'){
-    if(previewUrl&&trackUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setBass(engine.bass);}
+    if(previewUrl&&trackUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setProcessed(false);engine.setBass(engine.bass);}
     engine.setSpeed(Number(node.value));$('speed-value').textContent=engine.speed.toFixed(2)+'×';
   }
   if(node.id==='treble'){if(previewUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setSpeed(engine.speed);}engine.setTreble(Number(node.value));node.previousElementSibling.querySelector('output').textContent=engine.treble+' dB';}
@@ -519,12 +553,13 @@ document.addEventListener('change',async event=>{
     localTracks.set(track.id,track);await playTrack(track);render();
   }catch{toast('invalidAudio');}
 });
+audio.addEventListener('loadedmetadata',()=>{if(!previewUrl&&Number.isFinite(audio.duration))sourceDuration=audio.duration;});
 audio.addEventListener('timeupdate',()=>{if(Date.now()-lastPositionSave>3000&&!previewUrl){lastPositionSave=Date.now();persistSession();}$('elapsed').textContent=stamp(audio.currentTime);$('duration').textContent=stamp(audio.duration);$('seek').value=Number.isFinite(audio.duration)?String(audio.currentTime/audio.duration*1000):'0';if($('full-seek')){$('full-seek').value=$('seek').value;$('full-elapsed').textContent=stamp(audio.currentTime);$('full-duration').textContent=stamp(audio.duration);}});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshLibrary().catch(report);});
 audio.addEventListener('play',updatePlayer);audio.addEventListener('pause',updatePlayer);
 audio.addEventListener('error',()=>toast('invalidAudio'));
 document.addEventListener('error',event=>{if(event.target.matches?.('.cover-image'))event.target.remove();},true);
-audio.addEventListener('ended',()=>{if(previewUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setBass(engine.bass);engine.setSpeed(engine.speed);updatePlayer();}else if(!audio.loop)nextTrack().catch(report);});
+audio.addEventListener('ended',()=>{if(previewUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setProcessed(false);engine.setBass(engine.bass);engine.setSpeed(engine.speed);updatePlayer();}else if(!audio.loop)nextTrack().catch(report);});
 window.addEventListener('keydown',event=>{if(event.code==='Space'&&!['INPUT','TEXTAREA','BUTTON'].includes(document.activeElement?.tagName)&&!$('dialog').open){event.preventDefault();togglePlay().catch(report);}});
 window.addEventListener('pagehide',()=>{clearTimeout(recordTimer);if(recorder?.state==='recording')recorder.stop();recordStream?.getTracks().forEach(t=>t.stop());persistSession();if(trackUrl)URL.revokeObjectURL(trackUrl);if(previewUrl)URL.revokeObjectURL(previewUrl);});
 

@@ -95,6 +95,46 @@ class AppStudioTests(unittest.IsolatedAsyncioTestCase):
                 with wave.open(io.BytesIO(await response.read())) as audio:
                     self.assertGreater(audio.getnframes(),1000)
 
+    async def test_native_mobile_export_uses_expiring_file_url_without_library_write(self):
+        from app_exports import ExportFiles
+        self.client.server.app['studio_worker'].exports=ExportFiles(Path(self.tmp.name)/'exports')
+        with patch.dict('os.environ',{'MINIAPP_URL':'https://preview.example.test'}):
+            response=await self.client.post('/api/studio',headers=self.headers,data=form(settings={'format':'mp3','effects':['lofi'],'delivery':'ticket','title':'My mix'}))
+        self.assertEqual(response.status,200)
+        data=await response.json()
+        self.assertEqual(data['filename'],'My mix.mp3')
+        self.assertNotIn('path',data)
+        from urllib.parse import urlsplit
+        path=urlsplit(data['url']).path
+        response=await self.client.get(path)
+        self.assertEqual(response.status,200)
+        self.assertEqual(response.content_type,'audio/mpeg')
+        self.assertGreater(len(await response.read()),1000)
+        self.assertEqual((await self.client.head(path)).status,200)
+        item=next(iter(self.client.server.app['studio_worker'].exports.items.values()))
+        item['expires']=0
+        self.assertEqual((await self.client.get(path)).status,404)
+        self.assertEqual(self.bridge.favorites,{})
+        self.bridge.application.bot.send_message.assert_not_called()
+
+    async def test_lyrics_stays_in_app_and_cannot_lookup_other_users_tracks(self):
+        self.bridge.favorites[77]=[{'id':1,'title':'Fixture song','artist':'Fixture artist'}]
+        service=self.client.server.app['lyrics_service']
+        with patch.object(service,'lookup',new=AsyncMock(return_value={'matches':[{'title':'Fixture song','artist':'Fixture artist','text':'Original fixture words','source':'LRCLIB'}]})) as lookup:
+            response=await self.client.get('/api/lyrics?track=1',headers=self.headers)
+            self.assertEqual(response.status,200)
+            self.assertEqual((await response.json())['matches'][0]['text'],'Original fixture words')
+            lookup.assert_awaited_once_with('Fixture song','Fixture artist')
+            response=await self.client.get('/api/lyrics?track=1',headers={'X-Telegram-Init-Data':signed(78)})
+            self.assertEqual(response.status,404)
+        self.bridge.application.bot.send_message.assert_not_called()
+
+    async def test_mobile_preview_does_not_require_browser_duration_metadata(self):
+        response=await self.client.post('/api/studio',headers=self.headers,data=form(audio_bytes(20),{'format':'wav','end':0,'preview':True}))
+        self.assertEqual(response.status,200)
+        with wave.open(io.BytesIO(await response.read())) as audio:
+            self.assertAlmostEqual(audio.getnframes()/audio.getframerate(),15,delta=.1)
+
     async def test_wav_trim_preserves_requested_duration(self):
         response=await self.client.post('/api/studio',headers=self.headers,data=form(settings={'format':'wav','start':1,'end':3,'speed':.8,'fade':.4,'effect':'lofi'}))
         self.assertEqual(response.status,200)

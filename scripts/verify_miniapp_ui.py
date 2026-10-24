@@ -191,8 +191,11 @@ async def run():
                 uploaded={'id':'-20000000000000001','title':'My uploaded remix','artist':'','kind':'upload','app_upload':True,'duration':24,'playable':True,'cover':None}
                 calls['upload']=uploaded
                 result={'track':uploaded,'library':{'tracks':[uploaded],'recent':[],'favorites':[uploaded['id']],'playlists':[],'language':'en','bot':'offline_bot'}}
+            elif path=='lyrics':result={'matches':[{'title':'Fixture words','artist':'Fixture artist','text':'Original fixture words\n<img src=x onerror=alert(1)>','source':'LRCLIB'}]}
             elif path=='studio':
                 assert route.request.headers['content-type'].startswith('multipart/form-data')
+                if b'"delivery":"ticket"' in route.request.post_data_buffer:
+                    return await route.fulfill(status=200,body=json.dumps({'url':'https://preview.example.test/studio-file/'+'b'*32,'filename':'App recording 1 - SwiDJ mix.mp3','expires_in':600}),content_type='application/json')
                 return await route.fulfill(status=200,body=audio_fixture,content_type='audio/mpeg')
             elif path=='voice':
                 assert route.request.headers['content-type'].startswith('multipart/form-data')
@@ -225,6 +228,8 @@ async def run():
         await app_page.locator('[data-effect=lofi]').click()
         await app_page.locator('[data-effect=compressor]').click()
         assert await app_page.locator('.effect-tile[aria-pressed=true]').count()==3
+        assert await app_page.evaluate('!document.querySelector("#audio").paused')
+        assert await app_page.evaluate('document.querySelector("#audio").currentTime>0')
         await app_page.locator('#apply-mix').click()
         await app_page.locator('#toast').filter(has_text='Playing your processed mix').wait_for()
         await app_page.locator('#compare-fx').click()
@@ -232,14 +237,25 @@ async def run():
         await app_page.locator('#compare-fx').click()
         assert await app_page.evaluate('!document.querySelector("#audio").paused')
         await app_page.locator('#mix-pitch').fill('2')
-        async with app_page.expect_download() as mp3_download:
-            await app_page.locator('#export-mix').click()
-        assert (await mp3_download.value).suggested_filename.endswith('.mp3')
+        await app_page.evaluate("window.Telegram.WebApp.downloadFile=(value)=>{window.nativeExport=value};window.Telegram.WebApp.isVersionAtLeast=()=>true")
+        await app_page.locator('#export-mix').click()
+        await app_page.locator('#native-export').click()
+        assert await app_page.evaluate("window.nativeExport.file_name.endsWith('mix.mp3')")
+        assert await app_page.evaluate("window.nativeExport.url.includes('/studio-file/')")
+        assert await app_page.locator('.export-link').get_attribute('href')==await app_page.evaluate('window.nativeExport.url')
+        await app_page.locator('#dialog .dialog-head button').click()
         await app_page.locator('.studio-hero').scroll_into_view_if_needed()
         await app_page.screenshot(path=str(output/'miniapp-expanded-studio.png'),full_page=True)
+        await app_page.evaluate('delete window.Telegram.WebApp.downloadFile')
         await app_page.locator('#mobile-nav [data-go=search]').click()
         assert calls['send']==0
         assert await app_page.evaluate('window.chatOpens')==0
+        await app_page.locator('.track-row').first.locator('[data-action=menu]').click()
+        await app_page.locator('[data-action=lyrics]').click()
+        await app_page.locator('.lyrics-text').wait_for()
+        assert '<img' in await app_page.locator('.lyrics-text').inner_text()
+        assert await app_page.locator('.lyrics-text img').count()==0
+        await app_page.locator('#dialog .dialog-head button').click()
         await app_page.locator('.track-row').first.locator('[data-action=menu]').click()
         async with app_page.expect_download() as prepared_download:
             await app_page.locator('#dialog [data-action=download]').click()
@@ -279,6 +295,44 @@ async def run():
         await app_page.locator('#dialog [value=remove]').click()
         await app_page.locator('.track-row').wait_for(state='hidden')
         assert calls['send']==0 and await app_page.evaluate('window.chatOpens')==0
+        # Verify the live audio graph changes actual samples, not just selected cards.
+        ratio=await page.evaluate('''async () => {
+          const {connectLive}=await import('/assets/live.js');
+          async function measure(effects){
+            const ctx=new OfflineAudioContext(1,44100,44100),src=ctx.createBufferSource(),input=ctx.createGain();
+            const buffer=ctx.createBuffer(1,44100,44100),samples=buffer.getChannelData(0);
+            for(let i=0;i<samples.length;i++)samples[i]=.2*Math.sin(2*Math.PI*440*i/44100)+.2*Math.sin(2*Math.PI*6000*i/44100);
+            src.buffer=buffer;src.connect(input);connectLive(ctx,input,ctx.destination,effects);src.start();
+            const out=(await ctx.startRendering()).getChannelData(0);
+            function power(hz){let a=0,b=0;for(let i=0;i<out.length;i++){a+=out[i]*Math.cos(2*Math.PI*hz*i/44100);b+=out[i]*Math.sin(2*Math.PI*hz*i/44100);}return Math.hypot(a,b);}
+            return power(6000)/Math.max(1e-6,power(440));
+          }
+          return (await measure(['reverb','lofi','compressor']))/(await measure([]));
+        }''')
+        assert ratio < .2,ratio
+        # WebKit exercises the iPhone browser engine without controlling the user's phone.
+        safari_browser=await p.webkit.launch()
+        safari=await safari_browser.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
+        await safari.add_init_script("window.Telegram={WebApp:{initData:'offline-fixture',initDataUnsafe:{user:{first_name:'Fixture',language_code:'en'}},ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},isVersionAtLeast(){return true},downloadFile(value){window.nativeFile=value}}};")
+        await safari.route('https://telegram.org/**',lambda route:route.fulfill(status=200,body=''))
+        await safari.route('**/api/**',app_api)
+        iphone=await safari.new_page()
+        iphone.on('pageerror',lambda error:errors.append(str(error)))
+        await iphone.goto('http://127.0.0.1:8765/#search')
+        await iphone.locator('#search-input').fill('recording')
+        await iphone.locator('#search-form .btn').click()
+        await iphone.locator('.track-row').first.locator('[data-action=play]').first.click()
+        await iphone.locator('#now-title').filter(has_text='App recording 1').wait_for()
+        if await iphone.evaluate('document.querySelector("#audio").paused'):await iphone.locator('#play').click()
+        await iphone.locator('#mobile-nav [data-go=studio]').click()
+        await iphone.locator('[data-effect=reverb]').click()
+        await iphone.locator('[data-effect=lofi]').click()
+        await iphone.locator('#export-mix').click()
+        await iphone.locator('#native-export').click()
+        assert await iphone.evaluate("window.nativeFile.url.includes('/studio-file/')")
+        assert await iphone.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        await iphone.screenshot(path=str(output/'miniapp-iphone-download.png'))
+        await safari_browser.close()
         await browser.close()
     assert not errors, errors
     print(json.dumps({'desktop_mobile_ui':'passed','playback':'passed','studio_preview_wav':'passed',

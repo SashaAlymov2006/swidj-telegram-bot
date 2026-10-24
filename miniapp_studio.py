@@ -67,6 +67,7 @@ def plan(settings, duration):
     start=number(settings,'start',0,0,1800)
     end=number(settings,'end',0,0,1800) or duration
     speed=number(settings,'speed',1,.5,2)
+    if settings.get('preview') is True:end=min(end,start+15*speed)
     pitch=number(settings,'pitch',0,-6,6)
     bass=number(settings,'bass',0,-6,9)
     treble=number(settings,'treble',0,-6,6)
@@ -118,6 +119,7 @@ async def read_upload(request, target, limit, settings=False):
         raw=await part.read_chunk(4096)
         if len(raw)>=4096: raise ValueError('Settings too large')
         options=json.loads(raw)
+        if not isinstance(options,dict):raise ValueError('Invalid settings')
         part=await reader.next()
     if not part or part.name!='file': raise ValueError('Missing audio')
     total=0
@@ -132,6 +134,8 @@ async def read_upload(request, target, limit, settings=False):
 class Studio:
     def __init__(self):
         self.slots=asyncio.Semaphore(1)
+        from app_exports import ExportFiles
+        self.exports=ExportFiles()
 
     async def handle(self, request, voice=False):
         uid=request['user']['id']
@@ -154,7 +158,14 @@ class Studio:
                         raw=await process([sys.executable,str(Path(__file__).resolve()),'transcribe',str(clip)],240)
                         result=json.loads(raw)
                         return web.json_response({'text':str(result.get('text',''))[:120]})
+                    if settings.get('delivery')=='ticket':
+                        from miniapp_server import public_url
+                        if not public_url():raise web.HTTPConflict()
                     target=await render(source,folder,settings)
+                    if settings.get('delivery')=='ticket':
+                        token,item=self.exports.retain(uid,target,settings.get('title','SwiDJ mix'))
+                        return web.json_response({'url':public_url().rstrip('/')+'/studio-file/'+token,
+                                                  'filename':item['filename'],'expires_in':self.exports.ttl})
                     response=web.StreamResponse(headers={
                         'Content-Type':'audio/mpeg' if target.suffix=='.mp3' else 'audio/wav',
                         'Content-Length':str(target.stat().st_size),
@@ -178,8 +189,28 @@ class Studio:
 def register(app,bridge):
     studio=Studio()
     app['studio_bridge']=bridge
+    app['studio_worker']=studio
+    async def sweeper():
+        while True:
+            await asyncio.sleep(60)
+            studio.exports.prune()
+    async def start_cleanup(_):
+        studio.exports.prune()
+        studio.sweeper=asyncio.create_task(sweeper())
+    async def stop_cleanup(_):
+        studio.sweeper.cancel()
+        await asyncio.gather(studio.sweeper,return_exceptions=True)
+    app.on_startup.append(start_cleanup)
+    app.on_cleanup.append(stop_cleanup)
     async def export(request): return await studio.handle(request)
     async def voice(request): return await studio.handle(request,True)
+    async def file(request):
+        from urllib.parse import quote
+        item=studio.exports.get(request.match_info['ticket'])
+        if not item:raise web.HTTPNotFound()
+        bridge.allowed(item['uid'],'downloads');bridge.allowed(item['uid'],'studio')
+        return web.FileResponse(item['path'],headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote(item['filename'],safe='')})
+    app.router.add_get('/studio-file/{ticket:[A-Za-z0-9_-]{32}}',file)
     app.router.add_post('/api/studio',export)
     app.router.add_post('/api/voice',voice)
 

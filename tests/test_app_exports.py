@@ -1,0 +1,29 @@
+from pathlib import Path
+import os
+import tempfile
+import time
+import unittest
+from app_exports import ExportFiles
+
+class ExportRetentionTests(unittest.TestCase):
+    def test_budget_and_expiry_remove_only_managed_temporary_exports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'input.mp3';source.write_bytes(b'x'*30)
+            cache=ExportFiles(root/'exports',budget=40)
+            a,first=cache.retain(77,source,'A')
+            protected=first['path'].parent/'keep-user-file.txt';protected.write_text('Keep')
+            b,second=cache.retain(78,source,'B')
+            self.assertIsNone(cache.get(a));self.assertIsNotNone(cache.get(b))
+            self.assertTrue(protected.exists())
+            os.utime(second['path'],(time.time()-700,time.time()-700))
+            self.assertIsNone(cache.get(b));self.assertFalse(second['path'].exists())
+            self.assertTrue(protected.exists())
+
+    def test_filenames_are_safe_and_tokens_are_not_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'input.mp3';source.write_bytes(b'x')
+            cache=ExportFiles(root/'exports')
+            token,item=cache.retain(77,source,'../unsafe/name')
+            self.assertEqual(len(token),32)
+            self.assertNotIn('/',item['filename'])
+            self.assertEqual(item['path'].parent,root/'exports'/'77')

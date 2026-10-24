@@ -1,3 +1,4 @@
+import {connectLive} from './live.js';
 // Browser audio stays on the user's device. No microphone access or uploads.
 export function stamp(value) {
   const seconds = Math.max(0, Math.floor(Number(value) || 0));
@@ -31,30 +32,38 @@ export function chain(context, source, destination, bass, treble = 0) {
   compressor.threshold.value = -2; compressor.knee.value = 0; compressor.ratio.value = 20;
   compressor.attack.value = .002; compressor.release.value = .1;
   source.connect(headroom).connect(filter).connect(high).connect(compressor).connect(destination);
-  return {headroom, filter, high};
+  return {headroom, filter, high, compressor};
 }
 
 export class AudioEngine {
-  constructor(element) { this.element = element; this.bass = 0; this.speed = 1; this.treble=0; this.bypass=false; this.trimStart=0; this.trimEnd=0; this.fade=0; }
+  constructor(element) { this.element = element; this.bass = 0; this.speed = 1; this.treble=0; this.bypass=false; this.trimStart=0; this.trimEnd=0; this.fade=0; this.effects=[]; this.processed=false; }
   async unlock() {
     if (!this.context) {
       this.context = new AudioContext();
       this.nodes = chain(this.context, this.context.createMediaElementSource(this.element), this.context.destination, this.bypass?0:this.bass, this.bypass?0:this.treble);
     }
+    this.rebuildLive();
     await this.context.resume();
   }
+  rebuildLive(){
+    if(!this.nodes)return;
+    if(this.disconnectLive)this.disconnectLive();
+    this.disconnectLive=connectLive(this.context,this.nodes.high,this.nodes.compressor,this.bypass||this.processed?[]:this.effects);
+  }
+  setEffects(effects){this.effects=[...effects];this.rebuildLive();}
+  setProcessed(value){this.processed=value;this.rebuildLive();this.applyTone();this.setSpeed(this.speed);}
   applyTone() {
     if(!this.nodes)return;
-    const bass=this.bypass?0:this.bass,treble=this.bypass?0:this.treble;
+    const bass=this.bypass||this.processed?0:this.bass,treble=this.bypass||this.processed?0:this.treble;
     this.nodes.headroom.gain.setTargetAtTime(10**(-(Math.max(0,bass)+Math.max(0,treble))/20),this.context.currentTime,.03);
     this.nodes.filter.gain.setTargetAtTime(bass,this.context.currentTime,.03);
     this.nodes.high.gain.setTargetAtTime(treble,this.context.currentTime,.03);
   }
   setBass(value){this.bass=value;this.applyTone();}
   setTreble(value){this.treble=value;this.applyTone();}
-  setBypass(value){this.bypass=value;this.applyTone();this.setSpeed(this.speed);}
+  setBypass(value){this.bypass=value;this.rebuildLive();this.applyTone();this.setSpeed(this.speed);}
   setSpeed(value) {
-    this.speed = value; this.element.playbackRate = this.bypass?1:value;
+    this.speed = value; this.element.playbackRate = this.bypass||this.processed?1:value;
     // Keep live tempo independent of pitch, matching server exports.
     this.element.preservesPitch = true;
   }
