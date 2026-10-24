@@ -105,10 +105,105 @@ async def run():
         await page.locator('.studio-controls').wait_for()
         await page.screenshot(path=str(output/'miniapp-studio-mobile.png'))
         assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        # Exercise the authenticated app UI, not only demo shortcuts. API transport
+        # is deterministic here; real signature, ownership and job behavior have
+        # separate offline backend tests.
+        live = await browser.new_context(viewport={'width':390,'height':844},accept_downloads=True)
+        await live.add_init_script("""window.chatOpens=0; window.Telegram={WebApp:{
+            initData:'offline-fixture',initDataUnsafe:{user:{first_name:'Fixture',language_code:'en'}},
+            ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},
+            openTelegramLink(){window.chatOpens++}
+        }};""")
+        await live.route('https://telegram.org/**',lambda route:route.fulfill(status=200,body=''))
+        tracks=[{'id':str(i),'title':'App recording '+str(i),'artist':'Offline artist','duration':24,
+                 'kind':'track','playable':False,'cover':None} for i in (1,2)]
+        calls={'send':0,'poll':0,'cancel':False,'track':'1','upload':None}
+        audio_fixture=urlopen('http://127.0.0.1:8765/demo/0.wav').read()
+        async def app_api(route):
+            path=route.request.url.split('/api/',1)[-1].split('?',1)[0]
+            result={}
+            if path=='library':
+                if route.request.method=='POST' and route.request.post_data_json.get('action')=='remove':
+                    assert route.request.post_data_json['delete_file'] is True
+                    calls['upload']=None
+                result={'tracks':[calls['upload']] if calls['upload'] else [],'recent':[],
+                        'favorites':[calls['upload']['id']] if calls['upload'] else [],'playlists':[],'language':'en','bot':'offline_bot'}
+            elif path=='search':result={'tracks':tracks}
+            elif path=='prepare':
+                calls['track']=route.request.post_data_json['track'];calls['poll']=0;calls['cancel']=False
+                result={'job':'a'*24,'status':'queued','track':tracks[int(calls['track'])-1]}
+            elif path.endswith('/cancel'):
+                calls['cancel']=True;result={'status':'cancelling'}
+            elif path.startswith('jobs/'):
+                calls['poll']+=1
+                status='cancelled' if calls['cancel'] else 'ready' if calls['track']=='1' and calls['poll']>=2 else 'downloading'
+                result={'job':'a'*24,'status':status,'track':dict(tracks[int(calls['track'])-1],playable=status=='ready')}
+            elif path.startswith('audio/'):
+                return await route.fulfill(status=200,body=audio_fixture,content_type='audio/wav')
+            elif path=='download':result={'url':'https://preview.example.test/download/'+'a'*32,'filename':'App recording 1.mp3'}
+            elif path=='upload':
+                assert route.request.headers['content-type'].startswith('multipart/form-data')
+                uploaded={'id':'-20000000000000001','title':'My uploaded remix','artist':'','kind':'upload','app_upload':True,'duration':24,'playable':True,'cover':None}
+                calls['upload']=uploaded
+                result={'track':uploaded,'library':{'tracks':[uploaded],'recent':[],'favorites':[uploaded['id']],'playlists':[],'language':'en','bot':'offline_bot'}}
+            elif path=='send':calls['send']+=1;result={'ok':True}
+            else:raise AssertionError('Unexpected app API path: '+path)
+            await route.fulfill(status=200,body=json.dumps(result),content_type='application/json')
+        await live.route('**/api/**',app_api)
+        app_page=await live.new_page()
+        app_page.on('pageerror',lambda error:errors.append(str(error)))
+        await app_page.goto('http://127.0.0.1:8765/#search')
+        await app_page.locator('#search-input').fill('recording')
+        await app_page.locator('#search-form .btn').click()
+        await app_page.locator('.track-row').first.locator('[data-action=play]').first.click()
+        await app_page.locator('#activity:not([hidden])').wait_for()
+        await app_page.locator('#play[aria-label=Pause]').wait_for()
+        assert await app_page.locator('#now-title').inner_text()=='App recording 1'
+        assert calls['send']==0
+        assert await app_page.evaluate('window.chatOpens')==0
+        await app_page.locator('.track-row').first.locator('[data-action=menu]').click()
+        async with app_page.expect_download() as prepared_download:
+            await app_page.locator('#dialog [data-action=download]').click()
+        await (await prepared_download.value).save_as(str(output/'app-full-audio.wav'))
+        assert (output/'app-full-audio.wav').read_bytes()[:4]==b'RIFF'
+        await app_page.evaluate("window.Telegram.WebApp.downloadFile=(value)=>{window.nativeDownload=value};window.Telegram.WebApp.isVersionAtLeast=()=>true")
+        await app_page.locator('#player-art').click()
+        await app_page.locator('#dialog [data-action=download]').click()
+        for _ in range(30):
+            if await app_page.evaluate('Boolean(window.nativeDownload)'):
+                break
+            await asyncio.sleep(.1)
+        assert await app_page.evaluate('window.nativeDownload.file_name')=='App recording 1.mp3'
+        await app_page.locator('.track-row').nth(1).locator('[data-action=play]').first.click()
+        await app_page.locator('#activity:not([hidden])').wait_for()
+        await app_page.locator('#cancel-prepare').click()
+        await app_page.locator('#activity:not([hidden])').wait_for(state='hidden')
+        assert calls['cancel'] and calls['send']==0
+        assert await app_page.locator('#now-title').inner_text()=='App recording 1'
+        assert await app_page.evaluate('window.chatOpens')==0
+        await app_page.screenshot(path=str(output/'miniapp-in-app-playback.png'))
+        await app_page.locator('#mobile-nav [data-go=studio]').click()
+        await app_page.locator('#local-file').set_input_files(str(output/'app-full-audio.wav'))
+        await app_page.locator('#save-local-file').wait_for()
+        await app_page.locator('#save-local-file').click()
+        await app_page.locator('#save-local-file').wait_for(state='hidden')
+        assert await app_page.locator('#now-title').inner_text()=='My uploaded remix'
+        await app_page.locator('#mobile-nav [data-go=library]').click()
+        await app_page.locator('.track-copy').filter(has_text='My uploaded remix').wait_for()
+        artwork=await app_page.locator('.track-row .mini-art').bounding_box()
+        title=await app_page.locator('.track-row .track-copy').bounding_box()
+        assert artwork['x']+artwork['width'] <= title['x']
+        await app_page.screenshot(path=str(output/'miniapp-own-files.png'))
+        await app_page.locator('.track-row [data-action=menu]').click()
+        await app_page.locator('#dialog [data-action=remove]').click()
+        assert 'permanently deleted' in await app_page.locator('#dialog-body').inner_text()
+        await app_page.locator('#dialog [value=remove]').click()
+        await app_page.locator('.track-row').wait_for(state='hidden')
+        assert calls['send']==0 and await app_page.evaluate('window.chatOpens')==0
         await browser.close()
     assert not errors, errors
     print(json.dumps({'desktop_mobile_ui':'passed','playback':'passed','studio_preview_wav':'passed',
-                      'playlists_search_favorites_languages':'passed','browser_errors':errors}))
+                      'playlists_search_favorites_languages':'passed','app_prepare_play_download_cancel_without_chat':'passed','browser_errors':errors}))
 
 
 if __name__ == '__main__':

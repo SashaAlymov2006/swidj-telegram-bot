@@ -29,20 +29,39 @@ python miniapp_server.py --demo
   seeking, volume, next/previous track, repeat and RU/EN UI.
 - Demo search, favorites and playlists. In Telegram, signed authentication
   connects these screens to the bot's existing SQLite library and live state.
-- Real search uses the bot's YouTube recording finder. “Get it in the bot” sends
-  a selection to the user's private chat and reuses the existing download,
-  retry and track-card flow. It does not promise subscription-catalog originals.
-- Local playback is available for owned saved audio and the current downloaded
-  track. Other saved catalog entries offer the chat download flow.
+- Real search uses the recording finder. Selecting a track prepares its full
+  recording and plays it **inside the app**. Catalog entries with ambiguous
+  recordings offer choices inside the app. No automatic chat messages or chat
+  navigation are part of searching, preparing, playing or downloading audio.
+- Audio preparation has visible queued/loading states, cancellation and retry.
+  There are at most two workers, one pending task per user and eight pending
+  tasks globally. The app has separate recent listening history and temporary
+  audio cache, bounded to 256 MiB / 24h; it does not replace chat studio state.
+  External recordings may fail or become unavailable; subscription-catalog
+  protected originals are not promised.
+- Download buttons save audio to the device. Compatible Telegram clients use
+  native file download with a private, scoped link valid for two minutes;
+  other browsers use a local Blob download. “Send to chat” is a separate,
+  explicit action and never opens the chat automatically.
+- Your own audio can be saved from Studio without sending it to the bot chat.
+  Uploads require verified Telegram identity and valid audio, up to 20 MiB and
+  one hour. ffprobe is restricted to local-file/pipe protocols. At most two
+  uploads are processed at once. Durable audio storage is capped at 128 MiB per
+  user and 512 MiB total; duplicate app uploads are deduplicated per user.
+  Unfavoriting preserves the app library entry. Permanently deleting a file
+  uploaded in the app requires explicit confirmation and reclaims its owned
+  server copy after committing library/history changes. General bot recordings
+  are not physically purged by this action.
 - Browser Studio opens a local file (up to 20 MiB), plays adjustable bass and
   speed, previews up to 15 seconds, and exports WAV. Source audio and the full
   exported mix must each be up to 3 minutes to bound browser memory. Speed also
-  changes pitch. Files are not uploaded. The bot retains full-track MP3 tools.
+  changes pitch. Processing stays on the device; a file uploads only when the
+  user explicitly chooses Save. The bot retains full-track MP3 tools.
 - Playlist creation, renaming, adding/removing tracks, confirmed playlist
   deletion, favorites, and confirmed library removal. Deleting a playlist or
   membership keeps its tracks in the library. Playlist playback follows its order.
-  Removal updates memberships, not physical audio files. No automatic permanent
-  file purge was added.
+  General removal updates memberships. App-owned uploads use the separate
+  permanent file-deletion confirmation described above.
 - A full player opens from the bottom artwork/title. Library state refreshes
   when the app regains visibility. Failed database commits preserve live state;
   stale/concurrent browser renders cannot overwrite a newly selected track.
@@ -52,16 +71,15 @@ python miniapp_server.py --demo
 Production hosting has **not been deployed**. For free Telegram testing, run
 `python miniapp_tunnel.py start` (Windows: `Start SwiDJ App.cmd`). This explicitly
 starts the official Cloudflare Quick Tunnel container, checks the public URL,
-updates private `MINIAPP_URL`, and restarts the bot. The native composer menu
-button reads **SwiDJ**; `/app` and the home menu also offer a Web App button.
+updates private `MINIAPP_URL`, and restarts the bot. The normal native command
+menu stays available; `/app` and a separate home-menu button open the app.
 No Cloudflare account, paid API, custom domain or inbound firewall port is needed.
 The URL changes when the tunnel is recreated and works only while the laptop,
 Docker, bot and tunnel are running. Quick Tunnels are for development/testing.
 
 `python miniapp_tunnel.py status` checks the current address.
 `python miniapp_tunnel.py stop` (Windows: `Stop SwiDJ App.cmd`) closes public
-access and restores the normal bot menu while leaving the bot running. These
-actions change the bot's configured menu for everyone; run them only as its owner.
+access while leaving the normal bot running. Run tunnel controls only as its owner.
 The normal bot Stop action stops the application; the tunnel may stay running
 until separately stopped, but cannot serve the stopped app.
 

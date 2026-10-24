@@ -23,9 +23,17 @@ const copy = {
   en:{home:'Home',search:'Search',library:'Your music',studio:'Studio',yourSpace:'YOUR SPACE',makeItYours:'Make it sound like you.',railNote:'A little more bass. A whole new mood.',openStudio:'Open studio →',musicSpace:'Your personal music space',footer:'Listen. Create. Keep.',demo:'Demo',connected:'In Telegram',heroLabel:'LESS TAPPING. MORE MUSIC.',hero1:'Your music.',hero2:'Your rules.',heroNote:'Favorite tracks, personal playlists and your own sound. All in one place.',findMusic:'Find your music',yourSound:'YOUR SOUND. YOUR CHOICE.',continue:'Find your frequency',continueNote:'Pick a cover. Press play.',allMusic:'All your music →',fresh:'From your collection',freshNote:'Pick up where you left off',quickStudio:'Make it your mix',quickStudioNote:'Speed, bass and a quick preview',quickLibrary:'Keep the good stuff',quickLibraryNote:'Build a playlist for your mood',searchTitle:'Find your next favorite.',searchNote:'Search by song or artist.',searchPlaceholder:'Song title or artist',searchButton:'Search',searchEmpty:'What are we playing?',searchHint:'Find a song or explore your saved music.',results:'Results',searching:'Finding recordings…',noResults:'No tracks found',retrySearch:'Try another title or add the artist.',demoSearch:'Demo search covers six original instrumental samples.',libraryTitle:'All yours. All here.',libraryNote:'For the tracks worth keeping.',all:'All tracks',favorites:'Favorites',uploads:'Your files',playlists:'Playlists',newPlaylist:'New playlist',playlistName:'Playlist name',create:'Create',cancel:'Cancel',tracks:'tracks',emptyLibrary:'Your music starts here',emptyLibraryNote:'Save a search result or send your own file to the bot.',emptyPlaylist:'Make this playlist yours',emptyPlaylistNote:'Open a track menu and choose “Add to playlist”.',addPlaylist:'Add to playlist',save:'Add to favorites',unsave:'Remove from favorites',remove:'Remove from library',removeQuestion:'Remove this track from favorites and all playlists?',removed:'Removed from library',saved:'Saved',created:'Playlist created',studioTitle:'Same track. New energy.',studioNote:'Choose audio, shape the sound and hear the difference.',localProcessing:'Processed on your device',chooseFile:'Open your audio',chooseFirst:'Choose a track or your audio file',chooseFirstNote:'Your file stays on your device.',soundSettings:'Find your sound',soundNote:'Hear your changes while the track plays.',bass:'Bass',bassLess:'Less',bassOff:'Original',bassGentle:'Gentle',bassMedium:'Medium',bassStrong:'Strong',speed:'Speed & pitch',slower:'Slower',original:'Original',faster:'Faster',preview:'Preview · 15 sec',export:'Save mix · WAV',reset:'Reset settings',rendering:'Preparing audio…',studioFine:'Speed changes pitch too. Browser export supports up to 3 minutes. Use the bot studio for longer tracks and MP3.',demoNote:'Demo: original instrumental samples. Library changes stay in this browser.',demoStudio:'Your file is processed locally without a server upload.',selectTrack:'Choose a track',ready:'Your next favorite sound',play:'Play',pause:'Pause',previous:'Previous track',next:'Next track',favorite:'Favorite',more:'Track actions',sent:'Recording choices sent to the bot',send:'Get it in the bot',sendNote:'This recording is not downloaded yet. Open the bot chat to choose and download the full version.',openChat:'Open bot chat',demoSend:'Sending to Telegram is unavailable in demo mode.',fileTooLarge:'Choose an audio file up to 20 MB.',invalidAudio:'Could not open the audio. Try MP3, WAV or OGG.',long:'Browser export supports up to 3 minutes. Use the bot for longer full tracks.',error:'Something went wrong. Please try again.',expired:'Reopen the app from Telegram — your login has expired.',unavailable:'Temporarily unavailable.',rateLimit:'Wait a few seconds and try again.',previewReady:'Preview ready',exportReady:'Mix saved',localSave:'Send this file to the bot to save it permanently.',back:'Back',loading:'Loading your music…',authError:'Could not verify your login',authHint:'Open the app from your private chat with the bot.',repeat:'Repeat track',seek:'Track position',volume:'Volume',language:'Change language',capacity:'Library or playlist limit reached.'}
 };
 const tg = window.Telegram?.WebApp;
+Object.assign(copy.ru,{preparing:'Готовлю полную запись…',queued:'Ожидание свободного места…',cancelling:'Отменяю загрузку…',cancelled:'Загрузка отменена',prepareFailed:'Не удалось подготовить запись. Нажми на трек для повтора или выбери другую версию.',chooseVersion:'Выбери запись',preparingOther:'Дождись загрузки или нажми «Отмена».',readyToPlay:'Трек готов — нажми ▶',downloadTrack:'Скачать аудио',send:'Отправить в чат',sent:'Отправлено в чат. Можно продолжать слушать здесь.',sendNote:'Музыка открывается прямо в приложении.',noResults:'Записи не найдены'});
+Object.assign(copy.en,{preparing:'Preparing the full recording…',queued:'Waiting for a free slot…',cancelling:'Cancelling download…',cancelled:'Download cancelled',prepareFailed:'Could not prepare this recording. Tap to retry or choose another version.',chooseVersion:'Choose a recording',preparingOther:'Wait for the download or press Cancel.',readyToPlay:'Track ready — press ▶',downloadTrack:'Download audio',send:'Send to chat',sent:'Sent to chat. You can keep listening here.',sendNote:'Music opens right inside the app.',noResults:'No recordings found'});
 Object.assign(copy.ru,{nowPlaying:'Сейчас играет',rename:'Переименовать',deletePlaylist:'Удалить плейлист',playlistDeleteNote:'Плейлист исчезнет. Треки останутся в твоей библиотеке.',playlistDeleted:'Плейлист удалён',saveName:'Сохранить изменения',renamed:'Название изменено',removeFromPlaylist:'Убрать из этого плейлиста',refresh:'Обновить',refreshed:'Библиотека обновлена',long:'Для обработки в браузере выбери трек до 3 минут. Длинные треки обрабатывай в боте.',studioFine:'Скорость меняется вместе с тоном. В браузере исходный трек и готовый WAV — до 3 минут. Для длинного трека и MP3 используй студию бота.'});
 Object.assign(copy.en,{nowPlaying:'Now playing',rename:'Rename',deletePlaylist:'Delete playlist',playlistDeleteNote:'The playlist will be removed. Its tracks stay in your library.',playlistDeleted:'Playlist deleted',saveName:'Save changes',renamed:'Name updated',removeFromPlaylist:'Remove from this playlist',refresh:'Refresh',refreshed:'Library refreshed',long:'Browser processing supports tracks up to 3 minutes. Use the bot for longer tracks.',studioFine:'Speed changes pitch too. Browser source audio and exported WAV support up to 3 minutes. Use the bot studio for longer tracks and MP3.'});
+Object.assign(copy.ru,{removeUploadQuestion:'??????? ???? ???? ?? ?????????? ? ???? ??????????? ??????????? ?? ??????? ????? ????? ??????? ??? ??????????? ??????????????.'});
+Object.assign(copy.en,{removeUploadQuestion:'Delete this file from the library and all playlists? The stored server copy will be permanently deleted.'});
+Object.assign(copy.ru,{missingFile:'Файл удалён или недоступен. Добавь его заново.'});
+Object.assign(copy.en,{missingFile:'This file was removed or is unavailable. Add it again.'});
 const initData = tg?.initData || '';
+Object.assign(copy.ru,{saveToLibrary:'Сохранить в библиотеку',savingFile:'Сохраняю файл в библиотеку…',storageFull:'В библиотеке недостаточно места для этого файла.',emptyLibraryNote:'Найди трек или сохрани свой аудиофайл из студии.',localSave:'В деморежиме файл можно слушать и обрабатывать. Сохранение доступно после входа из Telegram.',long:'Для обработки здесь выбери исходный файл и готовый микс до 3 минут.',studioFine:'Обработка на твоём устройстве. Исходный файл и готовый WAV — до 3 минут. Скорость меняется вместе с тоном.',demoStudio:'Эффекты обрабатываются на устройстве. Свой файл загружается в библиотеку только по нажатию «Сохранить».'});
+Object.assign(copy.en,{saveToLibrary:'Save to library',savingFile:'Saving your audio file…',storageFull:'There is not enough library storage for this file.',emptyLibraryNote:'Find a track or save your audio file from the studio.',localSave:'You can listen and edit in demo mode. Saving files requires Telegram sign-in.',long:'Choose source audio and an exported mix up to 3 minutes for processing here.',studioFine:'Processed on your device. Source audio and exported WAV support up to 3 minutes. Speed changes pitch too.',demoStudio:'Effects run on your device. Your audio is uploaded to the library only when you choose Save.'});
 const demo = !initData;
 let language = 'ru';
 try { language = localStorage.getItem('swidj-language') || tg?.initDataUnsafe?.user?.language_code?.slice(0,2) || 'ru'; } catch {}
@@ -39,6 +47,8 @@ let state = {tracks:[],favorites:[],playlists:[],bot:''};
 let route = 'home', filter = 'all', playlist = null, current = null, results = null, searching = false, failed = false;
 let trackBlob = null, trackUrl = null, previewUrl = null, loadingTrack = 0, toastTimer;
 let renderBusy = false, refreshing = false, sourceDuration = 0;
+let preparation = null, searchQuery = '';
+const extraTracks = new Map();
 const localTracks = new Map();
 const audio = $('audio'), engine = new AudioEngine(audio);
 audio.volume = .8;
@@ -46,17 +56,18 @@ let demoState;
 try { demoState = JSON.parse(localStorage.getItem('swidj-demo-library') || 'null'); } catch {}
 const api = async (path, payload) => {
   const response = await fetch('/api/' + path, {method:payload ? 'POST':'GET', headers:{'X-Telegram-Init-Data':initData,...(payload ? {'Content-Type':'application/json'}:{})},body:payload ? JSON.stringify(payload):undefined, credentials:'omit'});
-  if (!response.ok) throw new Error(({401:'expired',403:'unavailable',409:'capacity',429:'rateLimit',503:'unavailable'})[response.status] || 'error');
+  if (!response.ok) throw new Error(({401:'expired',403:'unavailable',409:'capacity',410:'missingFile',429:'rateLimit',503:'unavailable'})[response.status] || 'error');
   return response;
 };
 function toast(key) { $('toast').textContent = t(key); $('toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(()=>$('toast').classList.remove('show'),4500); }
 function report(error) { toast(copy.en[error?.message] ? error.message : 'error'); }
 function liked(track) { return state.favorites.includes(track.id); }
-function trackById(id) { return [...state.tracks,...(state.recent || []),...(results || []),...localTracks.values()].find(s=>s.id===id); }
+function trackById(id) { return [...(current?[current]:[]),...state.tracks,...(state.recent || []),...(results || []),...localTracks.values(),...extraTracks.values()].find(s=>s.id===id); }
 function color(track) { return track.demo ?? [...track.id].reduce((n,c)=>n+c.charCodeAt(0),0)%6; }
 function art(track, small=false) {
   const index = color(track);
-  return small ? `<span class="mini-art art-${index}" aria-hidden="true">♪</span>` : `<span class="art art-${index}"><span class="art-corner">${e(track.artist || 'SwiDJ')}</span><span class="art-symbol" aria-hidden="true">${['◒','◓','∿','◌','◍','≋'][index]}</span><span class="card-play">${icon('play')}</span></span>`;
+  const cover = track.cover ? `<img class="cover-image" src="${e(track.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '';
+  return small ? `<span class="mini-art art-${index}" aria-hidden="true">${cover}♪</span>` : `<span class="art art-${index}">${cover}<span class="art-corner">${e(track.artist || 'SwiDJ')}</span><span class="art-symbol" aria-hidden="true">${['◒','◓','∿','◌','◍','≋'][index]}</span><span class="card-play">${icon('play')}</span></span>`;
 }
 function card(track) { return `<article class="music-card"><button class="art-button" data-track="${e(track.id)}" data-action="play" aria-label="${e(t('play')+' '+track.title)}">${art(track)}</button><span class="card-title">${e(track.title)}</span><div class="card-meta"><span class="card-artist">${e(track.artist)}</span><button class="icon-btn" data-track="${e(track.id)}" data-action="like" aria-label="${e(t('favorite'))}" aria-pressed="${liked(track)}">${icon('heart')}</button></div></article>`; }
 function row(track) { return `<article class="track-row ${current?.id===track.id?'current':''}"><button class="icon-btn" data-track="${e(track.id)}" data-action="play" aria-label="${e(t('play'))}">${art(track,true)}</button><button class="track-copy plain" data-track="${e(track.id)}" data-action="play"><strong>${e(track.title)}</strong><small>${e(track.artist)}</small></button><span class="track-time">${stamp(track.duration)}</span><button class="icon-btn" data-track="${e(track.id)}" data-action="like" aria-label="${e(t('favorite'))}" aria-pressed="${liked(track)}">${icon('heart')}</button><button class="icon-btn" data-track="${e(track.id)}" data-action="menu" aria-label="${e(t('more'))}">${icon('more')}</button></article>`; }
@@ -68,7 +79,7 @@ function home() {
   return `<section class="hero"><div class="hero-copy"><p class="eyebrow">${e(t('heroLabel'))}</p><h1>${e(t('hero1'))}<br><em>${e(t('hero2'))}</em></h1><p>${e(t('heroNote'))}</p><button class="btn" data-go="search">${icon('search')}${e(t('findMusic'))}</button></div><div class="hero-disc" aria-hidden="true"></div><span class="hero-tag"><i></i>${e(t('yourSound'))}</span></section><div class="section-head"><div><h2>${e(t(demo?'continue':'fresh'))}</h2><p>${e(t(demo?'continueNote':'freshNote'))}</p></div><button class="text-btn" data-go="library">${e(t('allMusic'))}</button></div>${tracks.length?`<div class="card-grid">${tracks.map(card).join('')}</div>`:empty('emptyLibrary','emptyLibraryNote')}<div class="quick-grid"><button class="quick-card" data-go="studio"><span class="quick-icon">${icon('studio')}</span><span><strong>${e(t('quickStudio'))}</strong><small>${e(t('quickStudioNote'))}</small></span>${icon('arrow').replace('<svg','<svg class="arrow"')}</button><button class="quick-card" data-go="library"><span class="quick-icon">${icon('library')}</span><span><strong>${e(t('quickLibrary'))}</strong><small>${e(t('quickLibraryNote'))}</small></span>${icon('arrow').replace('<svg','<svg class="arrow"')}</button></div>${note()}`;
 }
 function searchScreen() {
-  return heading('searchTitle','searchNote')+`<form id="search-form" class="search-form">${icon('search')}<input id="search-input" type="search" maxlength="120" minlength="2" placeholder="${e(t('searchPlaceholder'))}" aria-label="${e(t('searchPlaceholder'))}" required><button class="btn" ${searching?'disabled':''}>${e(t('searchButton'))}</button></form>${demo?`<p class="demo-note">${icon('info')}${e(t('demoSearch'))}</p>`:''}<div class="section-head"><h2>${e(t('results'))}</h2></div>${searching?`<div class="loading" role="status">${e(t('searching'))}</div>`:results===null?empty('searchEmpty','searchHint','search'):results.length?`<div class="track-list">${results.map(row).join('')}</div>`:empty('noResults','retrySearch','search')}`;
+  return heading('searchTitle','searchNote')+`<form id="search-form" class="search-form">${icon('search')}<input id="search-input" type="search" value="${e(searchQuery)}" maxlength="120" minlength="2" placeholder="${e(t('searchPlaceholder'))}" aria-label="${e(t('searchPlaceholder'))}" required><button class="btn" ${searching?'disabled':''}>${e(t('searchButton'))}</button></form>${demo?`<p class="demo-note">${icon('info')}${e(t('demoSearch'))}</p>`:''}<div class="section-head"><h2>${e(t('results'))}</h2></div>${searching?`<div class="loading" role="status">${e(t('searching'))}</div>`:results===null?empty('searchEmpty','searchHint','search'):results.length?`<div class="track-list">${results.map(row).join('')}</div>`:empty('noResults','retrySearch','search')}`;
 }
 function libraryScreen() {
   const selected = state.playlists.find(p=>p.id===playlist);
@@ -107,6 +118,7 @@ function render() {
   $('desktop-nav').innerHTML=nav; $('mobile-nav').innerHTML=nav;
   $('connection').textContent=t(demo?'demo':'connected'); $('language').textContent=language==='ru'?'EN':'RU';
   $('content').innerHTML=failed?empty('authError','authHint','info'):({home,search:searchScreen,library:libraryScreen,studio}[route])();
+  if(route==='studio'&&current?.local&&!failed)$('content').querySelector('.studio-source').insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" id="save-local-file">${icon('heart')}${e(t('saveToLibrary'))}</button>`);
   $('previous').innerHTML=icon('previous'); $('next').innerHTML=icon('next'); $('repeat').innerHTML=icon('repeat');
   $('volume-icon').innerHTML=icon('volume'); $('expand-studio').innerHTML=icon('studio');
   for (const [id,key] of [['previous','previous'],['next','next'],['repeat','repeat'],['seek','seek'],['volume','volume'],['language','language'],['player-art','nowPlaying'],['open-player','nowPlaying'],['expand-studio','openStudio'],['player-like','favorite']]) $(id).setAttribute('aria-label',t(key));
@@ -116,6 +128,7 @@ function render() {
 function updatePlayer() {
   $('now-title').textContent=current?.title || t('selectTrack'); $('now-artist').textContent=current?.artist || t('ready');
   $('player-art').className=`mini-art art-${current?color(current):0}`;
+  $('player-art').innerHTML=current?.cover?`<img class="cover-image" src="${e(current.cover)}" alt="" referrerpolicy="no-referrer">`:'<span>♪</span>';
   $('player-like').innerHTML=icon('heart'); $('player-like').setAttribute('aria-pressed',String(current?liked(current):false));
   $('play').innerHTML=icon(audio.paused?'play':'pause'); $('play').setAttribute('aria-label',t(audio.paused?'play':'pause'));
   const full=$('full-play');if(full){full.innerHTML=icon(audio.paused?'play':'pause');full.setAttribute('aria-label',t(audio.paused?'play':'pause'));}
@@ -148,9 +161,23 @@ async function mutate(payload) {
   render();
 }
 async function favorite(track) {
-  if(track.local)return toast('localSave');
+  if(track.local)return saveLocalTrack(track);
   if(!state.tracks.some(s=>s.id===track.id))state.tracks.push(track);
   await mutate({action:'favorite',track:track.id,value:!liked(track)});
+}
+async function saveLocalTrack(track) {
+  if(demo){toast('localSave');return null;}
+  if(preparation){toast('preparingOther');return null;}
+  const item={track,status:'upload',cancel:false,upload:true};preparation=item;showPreparation();
+  try {
+    const form=new FormData();form.append('file',track.blob,track.blob.name);
+    const response=await fetch('/api/upload',{method:'POST',headers:{'X-Telegram-Init-Data':initData},body:form,credentials:'omit'});
+    if(!response.ok)throw new Error(({413:'fileTooLarge',400:'invalidAudio',507:'storageFull',401:'expired',409:'capacity'})[response.status]||'error');
+    const result=await response.json(),oldId=track.id;
+    Object.assign(track,result.track,{local:false});delete track.blob;
+    localTracks.delete(oldId);extraTracks.set(track.id,track);state=result.library;
+    render();toast('saved');return track;
+  } finally {if(preparation===item)preparation=null;showPreparation();}
 }
 function dialog(title, body, actions='') { $('dialog-title').textContent=title;$('dialog-body').innerHTML=body;$('dialog-actions').innerHTML=actions;if(!$('dialog').open)$('dialog').showModal(); }
 function newPlaylist() {
@@ -166,6 +193,7 @@ function trackMenu(track) {
   dialog(track.title,`<button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="like">${icon('heart')}${e(t(liked(track)?'unsave':'save'))}</button><button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="playlist">${icon('plus')}${e(t('addPlaylist'))}</button><button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="studio">${icon('studio')}${e(t('openStudio'))}</button><button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="send">${icon('send')}${e(t('send'))}</button><button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="remove">${icon('trash')}${e(t('remove'))}</button>`);
   if(playlist&&state.playlists.find(p=>p.id===playlist)?.tracks.includes(track.id))
     $('dialog-body').insertAdjacentHTML('beforeend',`<button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="unlist">${icon('folder')}${e(t('removeFromPlaylist'))}</button>`);
+  $('dialog-body').insertAdjacentHTML('afterbegin',`<button type="button" class="dialog-option" data-track="${e(track.id)}" data-action="download">${icon('download')}${e(t('downloadTrack'))}</button>`);
 }
 function choosePlaylist(track) {
   dialog(t('addPlaylist'),state.playlists.map(p=>`<button type="button" class="dialog-option" data-add-playlist="${e(p.id)}" data-track="${e(track.id)}">${icon('folder')}${e(p.name)}</button>`).join('')+`<button type="button" class="dialog-option" id="new-playlist">${icon('plus')}${e(t('newPlaylist'))}</button>`);
@@ -196,19 +224,58 @@ function fullPlayer() {
   if(!current)return navigate('library');
   $('dialog-form').onsubmit=null;
   dialog(t('nowPlaying'),`<div class="full-player"><div class="full-player-art">${art(current)}</div><h3>${e(current.title)}</h3><p>${e(current.artist)}</p><input id="full-seek" type="range" min="0" max="1000" value="${$('seek').value}" aria-label="${e(t('seek'))}"><div class="full-times"><span id="full-elapsed">${stamp(audio.currentTime)}</span><span id="full-duration">${stamp(audio.duration)}</span></div><div class="full-controls"><button type="button" class="icon-btn" data-player="previous" aria-label="${e(t('previous'))}">${icon('previous')}</button><button type="button" id="full-play" class="play-main" data-player="play" aria-label="${e(t(audio.paused?'play':'pause'))}">${icon(audio.paused?'play':'pause')}</button><button type="button" class="icon-btn" data-player="next" aria-label="${e(t('next'))}">${icon('next')}</button></div><button type="button" class="btn secondary" data-track="${e(current.id)}" data-action="studio">${icon('studio')}${e(t('openStudio'))}</button></div>`);
+  $('dialog-body').querySelector('.full-player>.btn').insertAdjacentHTML('beforebegin',`<button type="button" class="btn" data-track="${e(current.id)}" data-action="download">${icon('download')}${e(t('downloadTrack'))}</button>`);
 }
 async function refreshLibrary() {
   if(demo||failed||refreshing)return;
   refreshing=true;
   try{state=await(await api('library')).json();render();}finally{refreshing=false;}
 }
+function showPreparation() {
+  $('activity').hidden=!preparation;
+  if(!preparation)return;
+  $('activity-title').textContent=preparation.track.title;
+  $('activity-label').textContent=t(preparation.upload?'savingFile':preparation.cancel?'cancelling':preparation.status==='queued'?'queued':'preparing');
+  $('cancel-prepare').textContent=t('cancel');
+  $('cancel-prepare').hidden=Boolean(preparation.upload);
+  $('cancel-prepare').disabled=preparation.cancel;
+}
+async function prepareTrack(track) {
+  if(preparation){toast('preparingOther');return null;}
+  const item={track,status:'queued',cancel:false,job:null};preparation=item;showPreparation();
+  try {
+    let info=await(await api('prepare',{track:track.id})).json();
+    if(info.status==='choices') {
+      for(const choice of info.tracks)extraTracks.set(choice.id,choice);
+      while(extraTracks.size>40)extraTracks.delete(extraTracks.keys().next().value);
+      $('dialog-form').onsubmit=null;
+      dialog(t('chooseVersion'),info.tracks.length?info.tracks.map(choice=>`<button type="button" class="dialog-option" data-track="${e(choice.id)}" data-action="play">${icon('play')}<span>${e(choice.title)}<small class="version-artist">${e(choice.artist)} · ${stamp(choice.duration)}</small></span></button>`).join(''):`<p class="dialog-copy">${e(t('noResults'))}</p>`);
+      return null;
+    }
+    item.job=info.job;
+    while(['queued','downloading','cancelling'].includes(info.status)) {
+      item.status=info.status;showPreparation();
+      if(item.cancel&&item.job)await api('jobs/'+item.job+'/cancel',{});
+      await new Promise(resolve=>setTimeout(resolve,900));
+      info=await(await api('jobs/'+item.job)).json();
+    }
+    if(info.status==='cancelled'||item.cancel){toast('cancelled');return null;}
+    if(info.status!=='ready')throw new Error('prepareFailed');
+    Object.assign(track,info.track);
+    extraTracks.set(track.id,track);
+    return track;
+  } finally {if(preparation===item)preparation=null;showPreparation();}
+}
 async function playTrack(track) {
-  if (!track.playable && !track.local) {
-    dialog(track.title,`<p class="dialog-copy">${e(t('sendNote'))}</p>`,`<button type="button" class="btn" data-track="${e(track.id)}" data-action="send">${icon('send')}${e(t('send'))}</button>`);
-    return false;
+  if(preparation){toast('preparingOther');return false;}
+  if(current?.id===track.id&&trackUrl){
+    if(previewUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setBass(engine.bass);engine.setSpeed(engine.speed);}
+    await engine.unlock();try{await audio.play();}catch{toast('readyToPlay');}return true;
   }
   const ticket=++loadingTrack;
   await engine.unlock();
+  if(!demo&&!track.local){const ready=await prepareTrack(track);if(!ready)return false;}
+  if($('dialog').open&&!$('full-play'))$('dialog').close();
   let blob;
   if(track.local)blob=localTracks.get(track.id)?.blob;
   else if(demo) {const response=await fetch(`/demo/${track.demo}.wav`);if(!response.ok)throw new Error('invalidAudio');blob=await response.blob();}
@@ -216,10 +283,12 @@ async function playTrack(track) {
   if(ticket!==loadingTrack)return false;
   audio.pause();if(trackUrl)URL.revokeObjectURL(trackUrl);if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=null;}
   trackBlob=blob;trackUrl=URL.createObjectURL(blob);audio.src=trackUrl;current=track;
-  engine.setBass(engine.bass);engine.setSpeed(engine.speed);await audio.play();sourceDuration=audio.duration;updatePlayer();if(route==='studio')render();if($('dialog').open&&$('full-play'))fullPlayer();return true;
+  engine.setBass(engine.bass);engine.setSpeed(engine.speed);
+  try{await audio.play();}catch(error){if(error.name==='NotAllowedError')toast('readyToPlay');else throw error;}
+  sourceDuration=audio.duration;updatePlayer();if(route==='studio')render();if($('dialog').open&&$('full-play'))fullPlayer();return true;
 }
 async function togglePlay() {
-  if(!audio.src) {const track=state.tracks.find(s=>s.playable);if(track)return playTrack(track);return navigate('search');}
+  if(!audio.src) {const track=state.tracks[0];if(track)return playTrack(track);return navigate('search');}
   await engine.unlock();if(audio.paused)await audio.play();else audio.pause();updatePlayer();
 }
 async function nextTrack(direction=1) {
@@ -228,13 +297,24 @@ async function nextTrack(direction=1) {
   if(route==='library'&&selected)tracks=selected.tracks.map(trackById).filter(Boolean);
   else if(route==='library'&&filter==='favorites')tracks=tracks.filter(liked);
   else if(route==='search'&&results)tracks=results;
-  const queue=tracks.filter(s=>s.playable);if(!queue.length)return;
+  const queue=tracks;if(!queue.length)return;
   const index=queue.findIndex(s=>s.id===current?.id);await playTrack(queue[(index+direction+queue.length)%queue.length]);
 }
 async function sendTrack(track) {
-  if(demo)return toast('demoSend');if(track.local)return toast('localSave');
+  if(demo)return toast('demoSend');if(track.local&&!await saveLocalTrack(track))return;
   await api('send',{track:track.id});$('dialog').close();toast('sent');
-  if(tg?.openTelegramLink&&state.bot)tg.openTelegramLink('https://t.me/'+state.bot);
+}
+async function downloadTrack(track) {
+  if(!await playTrack(track))return;
+  if(!demo&&!track.local&&typeof tg?.downloadFile==='function'&&tg.isVersionAtLeast?.('8.0')!==false) {
+    const ticket=await(await api('download',{track:track.id})).json();
+    tg.downloadFile({url:ticket.url,file_name:ticket.filename});
+    return;
+  }
+  const url=URL.createObjectURL(trackBlob),a=document.createElement('a');
+  const extension=trackBlob.type.includes('wav')||demo?'wav':track.local?(track.blob.name.split('.').pop()||'audio'):'mp3';
+  a.href=url;a.download=track.title.replace(/[\\/:*?"<>|]/g,'').slice(0,100)+'.'+extension;
+  a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 async function renderMix(preview) {
   if(renderBusy)return;
@@ -267,6 +347,8 @@ document.addEventListener('click',async event=>{
     if(button.dataset.playlist){playlist=button.dataset.playlist;return render();}
     if(button.id==='back-playlists'){playlist=null;filter='playlists';return render();}
     if(button.id==='new-playlist')return newPlaylist();
+    if(button.id==='save-local-file'&&current?.local)return await saveLocalTrack(current);
+    if(button.id==='cancel-prepare'&&preparation){preparation.cancel=true;showPreparation();return;}
     if(button.id==='playlist-settings')return playlistSettings();
     if(button.id==='rename-playlist')return renamePlaylist();
     if(button.id==='delete-playlist')return deletePlaylist();
@@ -274,11 +356,12 @@ document.addEventListener('click',async event=>{
     if(button.dataset.player==='play')return await togglePlay();
     if(button.dataset.player==='next')return await nextTrack();
     if(button.dataset.player==='previous')return await nextTrack(-1);
-    if(button.dataset.addPlaylist){const track=trackById(button.dataset.track);if(track?.local)return toast('localSave');await mutate({action:'playlist',track:button.dataset.track,playlist:button.dataset.addPlaylist});$('dialog').close();return toast('saved');}
+    if(button.dataset.addPlaylist){const track=trackById(button.dataset.track);if(!track)return;if(track.local&&!await saveLocalTrack(track))return;await mutate({action:'playlist',track:track.id,playlist:button.dataset.addPlaylist});$('dialog').close();return toast('saved');}
     if(button.dataset.action){
       const track=trackById(button.dataset.track);if(!track)return;
       const action=button.dataset.action;
       if(action==='play')return await playTrack(track);
+      if(action==='download'){$('dialog').close();return await downloadTrack(track);}
       if(action==='like'){$('dialog').close();return await favorite(track);}
       if(action==='menu')return trackMenu(track);
       if(action==='playlist')return choosePlaylist(track);
@@ -286,8 +369,8 @@ document.addEventListener('click',async event=>{
       if(action==='send')return await sendTrack(track);
       if(action==='studio'){$('dialog').close();if(await playTrack(track))navigate('studio');return;}
       if(action==='remove'){
-        dialog(t('remove'),`<p class="dialog-copy">${e(t('removeQuestion'))}</p>`,`<button class="btn secondary" value="cancel">${e(t('cancel'))}</button><button class="btn" value="remove">${e(t('remove'))}</button>`);
-        $('dialog-form').onsubmit=async event=>{if(event.submitter?.value!=='remove')return;event.preventDefault();try{await mutate({action:'remove',track:track.id});$('dialog').close();toast('removed');}catch(error){report(error);}};return;
+        dialog(t('remove'),`<p class="dialog-copy">${e(t(track.app_upload?'removeUploadQuestion':'removeQuestion'))}</p>`,`<button class="btn secondary" value="cancel">${e(t('cancel'))}</button><button class="btn" value="remove">${e(t('remove'))}</button>`);
+        $('dialog-form').onsubmit=async event=>{if(event.submitter?.value!=='remove')return;event.preventDefault();try{await mutate({action:'remove',track:track.id,delete_file:track.app_upload===true});$('dialog').close();toast('removed');}catch(error){report(error);}};return;
       }
     }
     if(button.dataset.bass!==undefined){if(previewUrl&&trackUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;}engine.setBass(Number(button.dataset.bass));engine.setSpeed(engine.speed);return render();}
@@ -316,6 +399,7 @@ document.addEventListener('submit',async event=>{
 });
 document.addEventListener('input',event=>{
   const node=event.target;
+  if(node.id==='search-input')searchQuery=node.value;
   if(node.id==='speed'){
     if(previewUrl&&trackUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setBass(engine.bass);}
     engine.setSpeed(Number(node.value));$('speed-value').textContent=engine.speed.toFixed(2)+'×';
@@ -335,6 +419,7 @@ audio.addEventListener('timeupdate',()=>{$('elapsed').textContent=stamp(audio.cu
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshLibrary().catch(report);});
 audio.addEventListener('play',updatePlayer);audio.addEventListener('pause',updatePlayer);
 audio.addEventListener('error',()=>toast('invalidAudio'));
+document.addEventListener('error',event=>{if(event.target.matches?.('.cover-image'))event.target.remove();},true);
 audio.addEventListener('ended',()=>{if(previewUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setBass(engine.bass);engine.setSpeed(engine.speed);updatePlayer();}else if(!audio.loop)nextTrack().catch(report);});
 window.addEventListener('keydown',event=>{if(event.code==='Space'&&!['INPUT','TEXTAREA','BUTTON'].includes(document.activeElement?.tagName)&&!$('dialog').open){event.preventDefault();togglePlay().catch(report);}});
 window.addEventListener('pagehide',()=>{if(trackUrl)URL.revokeObjectURL(trackUrl);if(previewUrl)URL.revokeObjectURL(previewUrl);});

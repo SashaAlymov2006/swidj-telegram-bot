@@ -50,10 +50,16 @@ class StateStore:
             db.execute('INSERT INTO named_state VALUES (?, ?, ?) ON CONFLICT(name, user_id) DO UPDATE SET value=excluded.value',
                        (name, user_id, json.dumps(value, ensure_ascii=False)))
 
-    def save_library(self, user_id, favorites, collections):
+    def save_library(self, user_id, favorites, collections, app_tracks=None, app_recent=None):
         """Commit saved tracks and playlist membership together; preserve search history."""
         with closing(self._connect()) as db, db:
             db.execute("INSERT INTO user_state VALUES (?, '[]', ?) ON CONFLICT(user_id) DO UPDATE SET favorites=excluded.favorites",
                        (user_id, json.dumps(favorites, ensure_ascii=False)))
             db.execute("INSERT INTO named_state VALUES ('music_collections', ?, ?) ON CONFLICT(name, user_id) DO UPDATE SET value=excluded.value",
                        (user_id, json.dumps(collections, ensure_ascii=False)))
+            if app_tracks is not None:
+                db.execute("INSERT INTO named_state VALUES ('miniapp_library', ?, ?) ON CONFLICT(name, user_id) DO UPDATE SET value=excluded.value",
+                           (user_id, json.dumps(app_tracks, ensure_ascii=False)))
+            if app_recent is not None:
+                db.execute("INSERT INTO named_state VALUES ('miniapp_recent', ?, ?) ON CONFLICT(name, user_id) DO UPDATE SET value=excluded.value",
+                           (user_id, json.dumps(app_recent, ensure_ascii=False)))

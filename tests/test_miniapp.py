@@ -2,16 +2,19 @@ import asyncio
 import hashlib
 import hmac
 import json
+import io
 import os
 from pathlib import Path
 import tempfile
 import time
 from types import SimpleNamespace
 import unittest
+import wave
 from unittest.mock import AsyncMock, patch
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from aiohttp.test_utils import TestClient, TestServer
+from aiohttp import FormData
 from miniapp_server import BotLibrary, create_app, verify_init_data, public_song, public_url
 from state_store import StateStore
 
@@ -41,12 +44,26 @@ class MiniAuthTests(unittest.TestCase):
                 '_library_audio': '/private/77/file', 'url': 'https://private.example'}
         payload = public_song(song)
         self.assertEqual(payload['id'], str(song['id']))
-        self.assertEqual(set(payload), {'id', 'title', 'artist', 'duration', 'kind', 'playable'})
+        self.assertEqual(set(payload), {'id', 'title', 'artist', 'duration', 'kind', 'playable', 'cover', 'app_upload'})
+        self.assertIsNone(public_song(dict(song,cover='https://127.0.0.1/private'))['cover'])
+        cover='https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg'
+        self.assertEqual(public_song(dict(song,cover=cover))['cover'],cover)
         with patch.dict(os.environ, {'MINIAPP_URL': 'http://localhost:8765'}):
             self.assertIsNone(public_url())
 
 
 class MiniApiTests(unittest.IsolatedAsyncioTestCase):
+    def upload_form(self, data=None):
+        if data is None:
+            buffer=io.BytesIO()
+            with wave.open(buffer,'wb') as audio:
+                audio.setparams((1,2,16000,0,'NONE','not compressed'))
+                audio.writeframes(b'\x01\x00'*64000)
+            data=buffer.getvalue()
+        form=FormData()
+        form.add_field('file',data,filename='My remix.wav',content_type='audio/wav')
+        return form
+
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -55,7 +72,7 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         self.favorites = {77: [dict(self.song)], 78: [{'id': 2, 'title': 'Private 78', 'artist': 'Private'}]}
         application = SimpleNamespace(user_data={77:{},78:{}}, bot_data={},
                                       bot=SimpleNamespace(username='offline_bot', send_message=AsyncMock()))
-        self.bridge = BotLibrary(application, self.store, self.favorites, {}, frozenset())
+        self.bridge = BotLibrary(application, self.store, self.favorites, {}, frozenset(), cache_root=Path(self.tmp.name)/'app-cache')
         self.client = TestClient(TestServer(create_app(token=TOKEN, bridge=self.bridge)))
         await self.client.start_server()
         self.addAsyncCleanup(self.client.close)
@@ -160,3 +177,155 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('filesystem',await response.text())
         self.assertEqual(self.favorites[77][0]['id'],1)
         self.assertEqual(self.bridge.data(77)['music_collections']['night']['songs'][0]['id'],1)
+
+    async def test_app_prepares_and_plays_audio_without_chat_or_chat_session_changes(self):
+        source=Path(self.tmp.name)/'download.mp3'
+        source.write_bytes(b'offline full audio fixture')
+        calls=[]
+        def download(url):
+            calls.append(url)
+            return str(source), {'title':'Found'}
+        self.bridge.audio_jobs.downloader=download
+        self.song['url']='https://www.youtube.com/watch?v=abcdefghijk'
+        self.favorites[77]=[dict(self.song)]
+        self.bridge.data(77)['downloaded_song']={'id':99,'title':'Chat track'}
+        self.bridge.data(77)['last_audio_path']='chat-audio-do-not-change'
+        response=await self.client.post('/api/prepare',headers=self.headers,json={'track':'1','url':'http://127.0.0.1/private','user_id':78})
+        info=await response.json()
+        job=self.bridge.audio_jobs.get(77,info['job'])
+        await job.task
+        response=await self.client.get('/api/jobs/'+job.token,headers=self.headers)
+        self.assertEqual((await response.json())['status'],'ready')
+        response=await self.client.get('/api/audio/1',headers=self.headers)
+        self.assertEqual(await response.read(),source.read_bytes())
+        self.assertEqual(calls,['https://www.youtube.com/watch?v=abcdefghijk'])
+        self.bridge.application.bot.send_message.assert_not_awaited()
+        self.assertEqual(self.bridge.data(77)['downloaded_song']['id'],99)
+        self.assertEqual(self.bridge.data(77)['last_audio_path'],'chat-audio-do-not-change')
+        self.assertNotIn(77,self.store.load_named('sessions'))
+        self.assertEqual(self.store.load_named('miniapp_recent')[77][0]['id'],1)
+        response=await self.client.post('/api/prepare',headers=self.headers,json={'track':'1'})
+        self.assertEqual((await response.json())['status'],'ready')
+        self.assertEqual(len(calls),1)
+
+    async def test_app_job_is_private_and_cancellable(self):
+        from operations import checkpoint
+        def download(_):
+            for _ in range(100):
+                time.sleep(.01)
+                checkpoint()
+            raise AssertionError('Cancellation did not arrive')
+        self.bridge.audio_jobs.downloader=download
+        self.favorites[77][0]['url']='https://www.youtube.com/watch?v=abcdefghijk'
+        response=await self.client.post('/api/prepare',headers=self.headers,json={'track':'1'})
+        token=(await response.json())['job']
+        other={'X-Telegram-Init-Data':signed(78)}
+        self.assertEqual((await self.client.get('/api/jobs/'+token,headers=other)).status,404)
+        self.assertEqual((await self.client.get('/api/audio/1',headers=other)).status,404)
+        await self.client.post('/api/jobs/'+token+'/cancel',headers=self.headers,json={})
+        await self.bridge.audio_jobs.get(77,token).task
+        response=await self.client.get('/api/jobs/'+token,headers=self.headers)
+        self.assertEqual((await response.json())['status'],'cancelled')
+        self.assertIsNone(self.bridge.audio_jobs.path(77,1))
+        self.bridge.application.bot.send_message.assert_not_awaited()
+
+    async def test_catalog_recording_choices_stay_inside_app(self):
+        with patch('versions.find_versions',return_value=[{'url':'https://www.youtube.com/watch?v=abcdefghijk','title':'Recording','artist':'A'}]):
+            response=await self.client.post('/api/prepare',headers=self.headers,json={'track':'1'})
+        payload=await response.json()
+        self.assertEqual(payload['status'],'choices')
+        self.assertEqual(payload['tracks'][0]['title'],'Recording')
+        self.bridge.application.bot.send_message.assert_not_awaited()
+
+    async def test_failed_audio_job_does_not_expose_provider_error(self):
+        def download(_):
+            raise ValueError('private provider token and path')
+        self.bridge.audio_jobs.downloader=download
+        self.favorites[77][0]['url']='https://www.youtube.com/watch?v=abcdefghijk'
+        response=await self.client.post('/api/prepare',headers=self.headers,json={'track':'1'})
+        token=(await response.json())['job']
+        await self.bridge.audio_jobs.get(77,token).task
+        response=await self.client.get('/api/jobs/'+token,headers=self.headers)
+        text=await response.text()
+        self.assertEqual(json.loads(text)['status'],'failed')
+        self.assertNotIn('provider token',text)
+        self.assertNotIn('path',text)
+
+    async def test_native_download_links_are_private_scoped_and_expire(self):
+        source=Path(self.tmp.name)/'audio.mp3';source.write_bytes(b'private audio')
+        self.bridge.audio_jobs.retain(77,1,source)
+        with patch.dict(os.environ,{'MINIAPP_URL':'https://preview.example.test'}):
+            response=await self.client.post('/api/download',headers=self.headers,json={'track':'1'})
+        ticket=await response.json()
+        path=urlsplit(ticket['url']).path
+        response=await self.client.get(path)
+        self.assertEqual(await response.read(),b'private audio')
+        self.assertIn('attachment',response.headers['Content-Disposition'])
+        other={'X-Telegram-Init-Data':signed(78)}
+        with patch.dict(os.environ,{'MINIAPP_URL':'https://preview.example.test'}):
+            self.assertEqual((await self.client.post('/api/download',headers=other,json={'track':'1'})).status,404)
+        self.assertEqual((await self.client.get('/download/'+'x'*32)).status,404)
+        self.bridge.download_tickets[path.rsplit('/',1)[-1]]['expires']=0
+        self.assertEqual((await self.client.get(path)).status,404)
+
+    async def test_upload_saves_own_audio_inside_app_without_chat(self):
+        with patch.dict(os.environ,{'AUDIO_CACHE_DIR':str(Path(self.tmp.name)/'audio')}):
+            response=await self.client.post('/api/upload',headers=self.headers,data=self.upload_form())
+            self.assertEqual(response.status,200,await response.text())
+            result=await response.json();identifier=result['track']['id']
+            self.assertEqual(result['track']['kind'],'upload')
+            self.assertTrue(result['track']['playable'])
+            self.assertIsInstance(identifier,str)
+            self.assertNotIn('_library_audio',json.dumps(result))
+            response=await self.client.get('/api/audio/'+identifier,headers=self.headers)
+            self.assertEqual(response.status,200)
+            self.assertTrue((await response.read()).startswith(b'RIFF'))
+            self.assertIn('audio/',response.headers['Content-Type'])
+            self.assertEqual((await self.client.get('/api/audio/'+identifier,headers={'X-Telegram-Init-Data':signed(78)})).status,404)
+            await self.client.post('/api/upload',headers=self.headers,data=self.upload_form())
+            self.assertEqual(len(self.favorites[77]),2)
+            self.bridge.application.bot.send_message.assert_not_awaited()
+
+    async def test_invalid_upload_is_rejected_without_library_changes(self):
+        with patch.dict(os.environ,{'AUDIO_CACHE_DIR':str(Path(self.tmp.name)/'audio')}):
+            response=await self.client.post('/api/upload',headers=self.headers,data=self.upload_form(b'not an audio file'))
+        self.assertEqual(response.status,400)
+        self.assertEqual(len(self.favorites[77]),1)
+        self.bridge.application.bot.send_message.assert_not_awaited()
+
+    async def test_upload_capacity_guard_preserves_library(self):
+        with patch.dict(os.environ,{'AUDIO_CACHE_DIR':str(Path(self.tmp.name)/'audio')}),patch('app_uploads.MAX_USER_BYTES',1):
+            response=await self.client.post('/api/upload',headers=self.headers,data=self.upload_form())
+        self.assertEqual(response.status,507)
+        self.assertEqual(len(self.favorites[77]),1)
+
+    async def test_unfavoriting_does_not_delete_app_library_track(self):
+        self.bridge.searches[77]=[{'id':100,'title':'App track','artist':'A','url':'https://www.youtube.com/watch?v=abcdefghijk'}]
+        await self.client.post('/api/library',headers=self.headers,json={'action':'favorite','track':'100','value':True})
+        response=await self.client.post('/api/library',headers=self.headers,json={'action':'favorite','track':'100','value':False})
+        result=await response.json()
+        self.assertNotIn('100',result['favorites'])
+        self.assertIn('100',[s['id'] for s in result['tracks']])
+        self.assertEqual(self.store.load_named('miniapp_library')[77][0]['id'],100)
+
+    async def test_explicit_uploaded_file_deletion_reclaims_storage(self):
+        with patch.dict(os.environ,{'AUDIO_CACHE_DIR':str(Path(self.tmp.name)/'audio')}):
+            response=await self.client.post('/api/upload',headers=self.headers,data=self.upload_form())
+            identifier=(await response.json())['track']['id']
+            metadata=self.store.load_named('miniapp_library')[77][0]
+            path=Path(metadata['_library_audio'])
+            self.assertTrue(path.is_file())
+            await self.client.post('/api/prepare',headers=self.headers,json={'track':identifier})
+            await self.client.post('/api/library',headers=self.headers,json={'action':'favorite','track':identifier,'value':False})
+            self.assertTrue(path.is_file())
+            await self.client.post('/api/library',headers=self.headers,json={'action':'remove','track':identifier,'delete_file':True})
+            self.assertFalse(path.exists())
+            self.assertEqual(self.store.load_named('miniapp_library')[77],[])
+            self.assertEqual(self.store.load_named('miniapp_recent')[77],[])
+
+    async def test_missing_own_file_is_never_replaced_by_catalog_search(self):
+        self.favorites[77]=[{'id':-999,'title':'My private remix','artist':'','kind':'upload'}]
+        with patch('versions.find_versions') as finder:
+            response=await self.client.post('/api/prepare',headers=self.headers,json={'track':'-999'})
+        self.assertEqual(response.status,410)
+        finder.assert_not_called()

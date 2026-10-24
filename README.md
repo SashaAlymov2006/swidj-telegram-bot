@@ -64,7 +64,7 @@ Keep `.env`, cookies, user databases and backups private. Persistent data and mo
 
 ## Verification
 
-The current source passed **174 offline tests**, including Telegram SDK flows, language isolation, playlists, cancellation, recovery and media cleanup. This is functional test coverage, not a large-scale performance benchmark.
+The current source passed **185 offline tests**, including Telegram SDK flows, language isolation, playlists, cancellation, recovery and media cleanup. This is functional test coverage, not a large-scale performance benchmark.
 
 ```sh
 docker build -t swidj:test .
@@ -91,3 +91,5 @@ See [architecture and engineering decisions](docs/ARCHITECTURE.md) and the [demo
 ## Optional Mini App
 
 A local-first RU/EN web interface now complements the bot: persistent player, search, shared library/playlists and browser audio studio. After local Docker startup, open http://127.0.0.1:8765 for the demo. Real library access requires signed Telegram initData and an HTTPS deployment; a free temporary Telegram HTTPS preview can be started with `python miniapp_tunnel.py start`. Permanent hosting is not configured. See [Mini App setup and limits](MINIAPP.md).
+
+The normal Telegram command menu remains available. Mini App search, recording choices, preparation, playback, device downloads and own-file saving run in the app without automatically messaging or navigating to chat. The app has its own library/recent history and bounded media preparation workers. An explicit Send to chat action remains optional.

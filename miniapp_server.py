@@ -12,12 +12,15 @@ import hmac
 import io
 import json
 import math
+import mimetypes
 import os
+import re
 from pathlib import Path
 import secrets
 import struct
+import tempfile
 import time
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl, urlsplit, quote
 import wave
 
 from aiohttp import web
@@ -49,10 +52,14 @@ def verify_init_data(raw, token, *, now=None):
 
 def public_song(song, playable=False):
     # IDs are strings: upload identities can exceed JavaScript's integer range.
+    cover = song.get('cover')
+    if not isinstance(cover, str) or not re.fullmatch(r'https://i\.ytimg\.com/vi/[A-Za-z0-9_-]{11}/(?:hqdefault|mqdefault|default)\.jpg', cover):
+        cover = None
     return {'id': str(song['id']), 'title': str(song.get('title') or 'Audio')[:180],
             'artist': str(song.get('artist') or '')[:120],
             'duration': song.get('duration') if isinstance(song.get('duration'), (int, float)) else None,
-            'kind': 'upload' if song.get('kind') == 'upload' else 'track', 'playable': playable}
+            'kind': 'upload' if song.get('kind') == 'upload' else 'track', 'playable': playable, 'cover':cover,
+            'app_upload':song.get('app_upload') is True}
 
 
 @lru_cache(maxsize=6)
@@ -79,13 +86,17 @@ def demo_audio(number):
 
 
 class BotLibrary:
-    def __init__(self, application, store, favorites, saved_sessions, owner_ids):
+    def __init__(self, application, store, favorites, saved_sessions, owner_ids, downloader=None, cache_root=None):
         self.application, self.store, self.favorites = application, store, favorites
         self.saved_sessions, self.owner_ids = saved_sessions, owner_ids
         self.searches = {}
         self.search_times = {}
         self.send_times = {}
         self.search_slots = asyncio.Semaphore(2)
+        self.upload_slots = asyncio.Semaphore(2)
+        from miniapp_jobs import AudioJobs
+        self.audio_jobs = AudioJobs(downloader, cache_root)
+        self.download_tickets = {}
 
     def data(self, uid):
         data = self.application.user_data[uid]
@@ -116,9 +127,19 @@ class BotLibrary:
 
     async def songs(self, uid):
         from library_ui import all_saved
-        return all_saved(uid, self.favorites, await self.folders(uid))
+        songs = list(await self.app_library(uid)) + all_saved(uid, self.favorites, await self.folders(uid))
+        return list({song['id']:song for song in songs}.values())
+
+    async def app_library(self, uid):
+        data = self.data(uid)
+        if 'miniapp_library' not in data:
+            data['miniapp_library'] = (await asyncio.to_thread(self.store.load_named, 'miniapp_library')).get(uid, [])
+        return data['miniapp_library']
 
     def audio_path(self, uid, song):
+        cached = self.audio_jobs.touch(uid, song['id'])
+        if cached:
+            return cached
         from uploaded_media import owned_path
         path = owned_path(song.get('_library_audio'), uid)
         if path:
@@ -130,14 +151,26 @@ class BotLibrary:
 
     async def snapshot(self, uid):
         songs = await self.songs(uid)
-        active = self.data(uid).get('downloaded_song')
+        recent = await self.app_history(uid)
         return {'tracks': [public_song(song, bool(self.audio_path(uid, song))) for song in songs],
-                'recent': [public_song(active, bool(self.audio_path(uid, active)))] if active else [],
+                'recent': [public_song(song, bool(self.audio_path(uid, song))) for song in recent[:8]],
                 'favorites': [str(song['id']) for song in self.favorites.get(uid, [])],
                 'playlists': [{'id': key, 'name': value['name'], 'tracks': [str(s['id']) for s in value['songs']]}
                               for key, value in (await self.folders(uid)).items()],
                 'language': self.data(uid).get('language', 'ru'),
                 'bot': self.application.bot.username}
+
+    async def app_history(self, uid):
+        data = self.data(uid)
+        if 'miniapp_recent' not in data:
+            data['miniapp_recent'] = (await asyncio.to_thread(self.store.load_named, 'miniapp_recent')).get(uid, [])
+        return data['miniapp_recent']
+
+    async def remember_app_track(self, uid, song):
+        recent = [dict(song)] + [s for s in await self.app_history(uid) if s['id'] != song['id']]
+        recent = recent[:20]
+        await asyncio.to_thread(self.store.save_named, 'miniapp_recent', uid, recent)
+        self.data(uid)['miniapp_recent'] = recent
 
     async def find(self, uid, identifier):
         sources = await self.songs(uid)
@@ -145,6 +178,8 @@ class BotLibrary:
         if active:
             sources.append(active)
         sources.extend(self.searches.get(uid, []))
+        sources.extend(await self.app_history(uid))
+        sources.extend(job.song for job in self.audio_jobs.jobs.values() if job.uid == uid)
         song = next((s for s in sources if str(s['id']) == identifier), None)
         if not song:
             raise web.HTTPNotFound()
@@ -167,10 +202,53 @@ class BotLibrary:
         self.searches[uid] = result
         return {'tracks': [public_song(s) for s in result]}
 
+    def job_payload(self, job):
+        return {'job': job.token, 'status': job.state,
+                'track': public_song(job.song, job.state == 'ready')}
+
+    async def prepare(self, uid, identifier):
+        self.allowed(uid, 'downloads')
+        song = await self.find(uid, identifier)
+        if self.audio_path(uid, song):
+            await self.remember_app_track(uid, song)
+            return {'status':'ready', 'track':public_song(song, True)}
+        if song.get('kind') == 'upload':
+            raise web.HTTPGone()
+        if not re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', song.get('url', '')):
+            self.allowed(uid, 'search')
+            from versions import find_versions
+            async with self.search_slots:
+                candidates = await asyncio.to_thread(find_versions, song['title']+' '+song.get('artist', ''))
+            for item in candidates:
+                item['id'] = 10**15 + int.from_bytes(hashlib.sha256(item['url'].encode()).digest()[:6], 'big')
+            self.searches[uid] = candidates
+            return {'status':'choices', 'tracks':[public_song(item) for item in candidates]}
+        try:
+            return self.job_payload(self.audio_jobs.start(uid, song))
+        except ValueError:
+            raise web.HTTPTooManyRequests() from None
+
+    async def download_ticket(self, uid, identifier):
+        self.allowed(uid, 'downloads')
+        song = await self.find(uid, identifier)
+        if not self.audio_path(uid, song) or not public_url():
+            raise web.HTTPConflict()
+        now = time.monotonic()
+        self.download_tickets = {key:item for key,item in self.download_tickets.items() if item['expires'] > now}
+        if len(self.download_tickets) >= 256:
+            raise web.HTTPTooManyRequests()
+        token = secrets.token_urlsafe(24)
+        name = song.get('original_filename') if song.get('kind') == 'upload' else str(song.get('title') or 'SwiDJ')+'.mp3'
+        name = re.sub(r'[\x00-\x1f\x7f/\\:*?"<>|]', '', name or 'SwiDJ.audio')[:150]
+        self.download_tickets[token] = {'uid':uid, 'song':dict(song), 'expires':now+120, 'filename':name}
+        return {'url':public_url().rstrip('/')+'/download/'+token, 'filename':name}
+
     async def change(self, uid, payload):
         from library_ui import clean_name, MAX_TRACKS
         folders = deepcopy(await self.folders(uid))
         favorites = deepcopy(self.favorites.get(uid, []))
+        app_tracks = deepcopy(await self.app_library(uid))
+        removed_upload = None
         action = payload.get('action')
         if action == 'language':
             if payload.get('language') not in ('ru', 'en'):
@@ -208,6 +286,11 @@ class BotLibrary:
                     folder['songs'] = [s for s in folder['songs'] if str(s['id']) != str(payload.get('track', ''))]
         elif action in ('favorite', 'playlist', 'remove'):
             song = await self.find(uid, str(payload.get('track', '')))
+            if action == 'playlist' or (action == 'favorite' and payload.get('value') is True):
+                if not any(s['id'] == song['id'] for s in app_tracks):
+                    if len(app_tracks) >= 200:
+                        raise web.HTTPConflict()
+                    app_tracks.append(dict(song))
             if action == 'favorite':
                 present = any(s['id'] == song['id'] for s in favorites)
                 if payload.get('value') is True and not present:
@@ -225,14 +308,29 @@ class BotLibrary:
                 if not any(s['id'] == song['id'] for s in folder['songs']):
                     folder['songs'].append(dict(song))
             else:
+                app_tracks = [s for s in app_tracks if s['id'] != song['id']]
+                if payload.get('delete_file') is True and song.get('app_upload') is True:
+                    removed_upload = song
                 favorites = [s for s in favorites if s['id'] != song['id']]
                 for folder in folders.values():
                     folder['songs'] = [s for s in folder['songs'] if s['id'] != song['id']]
         else:
             raise web.HTTPBadRequest()
-        await asyncio.to_thread(self.store.save_library, uid, favorites, folders)
+        app_recent = [s for s in await self.app_history(uid) if s['id'] != removed_upload['id']] if removed_upload else None
+        await asyncio.to_thread(self.store.save_library, uid, favorites, folders, app_tracks, app_recent)
         self.favorites[uid] = favorites
         self.data(uid)['music_collections'] = folders
+        self.data(uid)['miniapp_library'] = app_tracks
+        if app_recent is not None:
+            self.data(uid)['miniapp_recent'] = app_recent
+        if removed_upload:
+            from uploaded_media import owned_path
+            path = owned_path(removed_upload.get('_library_audio'), uid)
+            if path and re.fullmatch(r'app-[a-f0-9]{24}\.(mp3|wav|ogg|flac|m4a)', path.name):
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
         return await self.snapshot(uid)
 
     async def send(self, uid, identifier):
@@ -305,7 +403,7 @@ def create_app(*, token='', bridge=None):
             response = web.json_response({'error': 500}, status=500)
         response.headers.update({'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
                                  'Referrer-Policy': 'no-referrer',
-                                 'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'"})
+                                 'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https://i.ytimg.com data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'"})
         return response
 
     app = web.Application(middlewares=[boundary], client_max_size=16*1024)
@@ -341,16 +439,110 @@ def create_app(*, token='', bridge=None):
         path = bridge.audio_path(uid, song)
         if not path or path.stat().st_size > 49*1024**2:
             raise web.HTTPNotFound()
-        return web.FileResponse(path)
+        headers = {}
+        if song.get('kind') == 'upload':
+            headers['Content-Type'] = mimetypes.guess_type(song.get('original_filename') or '')[0] or 'audio/mpeg'
+        return web.FileResponse(path, headers=headers)
+    async def upload(request):
+        if bridge.upload_slots.locked():
+            raise web.HTTPTooManyRequests()
+        async with bridge.upload_slots:
+            return await upload_inner(request)
+    async def upload_inner(request):
+        uid = request['user']['id']
+        bridge.allowed(uid, 'downloads')
+        from app_uploads import retain, MAX_FILE_BYTES, StorageFull
+        from scratch import scratch_root
+        if request.content_length and request.content_length > MAX_FILE_BYTES+4096:
+            raise web.HTTPRequestEntityTooLarge(max_size=MAX_FILE_BYTES, actual_size=request.content_length)
+        reader = await request.multipart()
+        part = await reader.next()
+        if not part or part.name != 'file' or not part.filename:
+            raise web.HTTPBadRequest()
+        with tempfile.NamedTemporaryFile(dir=scratch_root(),suffix='.audio',delete=False) as stream:
+            path = Path(stream.name)
+            try:
+                total = 0
+                while chunk := await part.read_chunk(65536):
+                    total += len(chunk)
+                    if total > MAX_FILE_BYTES:
+                        raise web.HTTPRequestEntityTooLarge(max_size=MAX_FILE_BYTES,actual_size=total)
+                    stream.write(chunk)
+                stream.close()
+                try:
+                    song = await asyncio.to_thread(retain,path,uid,part.filename)
+                except StorageFull:
+                    raise web.HTTPInsufficientStorage() from None
+                except Exception:
+                    raise web.HTTPBadRequest() from None
+                favorites = deepcopy(bridge.favorites.get(uid, []))
+                app_tracks = deepcopy(await bridge.app_library(uid))
+                if not any(s['id'] == song['id'] for s in app_tracks):
+                    if len(app_tracks) >= 200:
+                        raise web.HTTPConflict()
+                    app_tracks.append(song)
+                if not any(s['id'] == song['id'] for s in favorites):
+                    if len(favorites) >= 60:
+                        raise web.HTTPConflict()
+                    favorites.append(song)
+                folders = await bridge.folders(uid)
+                await asyncio.to_thread(bridge.store.save_library,uid,favorites,folders,app_tracks)
+                bridge.favorites[uid] = favorites
+                bridge.data(uid)['miniapp_library'] = app_tracks
+                return web.json_response({'track':public_song(song,True),'library':await bridge.snapshot(uid)})
+            finally:
+                stream.close()
+                path.unlink(missing_ok=True)
     async def send(request):
         payload = await request.json()
         if not isinstance(payload, dict):
             raise web.HTTPBadRequest()
         return web.json_response(await bridge.send(request['user']['id'], str(payload.get('track', ''))))
+    async def prepare(request):
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise web.HTTPBadRequest()
+        return web.json_response(await bridge.prepare(request['user']['id'], str(payload.get('track', ''))))
+    async def job_status(request):
+        uid = request['user']['id']
+        bridge.allowed(uid, 'downloads')
+        job = bridge.audio_jobs.get(uid, request.match_info['job'])
+        if not job:
+            raise web.HTTPNotFound()
+        if request.method == 'POST':
+            bridge.audio_jobs.cancel(uid, job.token)
+        elif job.state == 'ready' and not getattr(job, 'remembered', False):
+            await bridge.remember_app_track(uid, job.song)
+            job.remembered = True
+        return web.json_response(bridge.job_payload(job))
+    async def download_ticket(request):
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise web.HTTPBadRequest()
+        return web.json_response(await bridge.download_ticket(request['user']['id'], str(payload.get('track', ''))))
+    async def download_file(request):
+        item = bridge.download_tickets.get(request.match_info['ticket']) if bridge else None
+        if not item or item['expires'] <= time.monotonic():
+            raise web.HTTPNotFound()
+        bridge.allowed(item['uid'], 'downloads')
+        path = bridge.audio_path(item['uid'], item['song'])
+        if not path or path.stat().st_size > 49*1024**2:
+            raise web.HTTPNotFound()
+        return web.FileResponse(path, headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote(item['filename'],safe='')})
+    async def close_jobs(_):
+        if bridge:
+            await bridge.audio_jobs.close()
+    app.on_cleanup.append(close_jobs)
     app.add_routes([web.get('/', asset), web.get('/assets/{name}', asset),
                     web.get('/demo/{number:\\d}.wav', demo), web.get('/api/library', library),
                     web.post('/api/library', mutate), web.get('/api/search', search),
-                    web.get('/api/audio/{track:-?\\d{1,20}}', audio), web.post('/api/send', send)])
+                    web.get('/api/audio/{track:-?\\d{1,20}}', audio), web.post('/api/send', send),
+                    web.post('/api/prepare', prepare),
+                    web.post('/api/download', download_ticket),
+                    web.post('/api/upload', upload),
+                    web.get('/download/{ticket:[A-Za-z0-9_-]{32}}', download_file),
+                    web.get('/api/jobs/{job:[a-f0-9]{24}}', job_status),
+                    web.post('/api/jobs/{job:[a-f0-9]{24}}/cancel', job_status)])
     return app
 
 
@@ -360,10 +552,10 @@ def public_url():
     return value if parsed.scheme == 'https' and parsed.hostname and not parsed.username and not parsed.password and not parsed.fragment else None
 
 
-async def start_for_bot(application, store, favorites, sessions, owner_ids):
+async def start_for_bot(application, store, favorites, sessions, owner_ids, downloader=None):
     if os.getenv('MINIAPP_ENABLED', '').lower() not in ('1', 'true'):
         return
-    bridge = BotLibrary(application, store, favorites, sessions, owner_ids)
+    bridge = BotLibrary(application, store, favorites, sessions, owner_ids, downloader)
     runner = web.AppRunner(create_app(token=application.bot.token, bridge=bridge), access_log=None)
     await runner.setup()
     try:

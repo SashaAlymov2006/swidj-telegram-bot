@@ -88,7 +88,7 @@ def main():
         raise RuntimeError('HTTPS preview did not become ready. Do not use an old URL; retry start.')
     save_url(url)
     run(cli, 'up', '-d', '--no-build', '--no-deps', 'bot')
-    print(json.dumps({'url': url, 'telegram': 'Open your bot and use the SwiDJ menu button or /app.',
+    print(json.dumps({'url': url, 'telegram': 'Open the bot and use /app or its separate Open app button. The normal command menu is preserved.',
                       'temporary': True, 'requires_laptop_online': True}, ensure_ascii=False))
 
 
