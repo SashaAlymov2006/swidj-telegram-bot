@@ -543,6 +543,8 @@ def create_app(*, token='', bridge=None):
                     web.get('/download/{ticket:[A-Za-z0-9_-]{32}}', download_file),
                     web.get('/api/jobs/{job:[a-f0-9]{24}}', job_status),
                     web.post('/api/jobs/{job:[a-f0-9]{24}}/cancel', job_status)])
+    from miniapp_studio import register
+    register(app, bridge)
     return app
 
 

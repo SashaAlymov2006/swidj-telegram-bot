@@ -55,8 +55,8 @@ export class AudioEngine {
   setBypass(value){this.bypass=value;this.applyTone();this.setSpeed(this.speed);}
   setSpeed(value) {
     this.speed = value; this.element.playbackRate = this.bypass?1:value;
-    // Match offline export: changing speed also changes pitch.
-    this.element.preservesPitch = false;
+    // Keep live tempo independent of pitch, matching server exports.
+    this.element.preservesPitch = true;
   }
   async render(blob, preview = false, sourceDuration = this.element.duration) {
     const bass = this.bypass?0:this.bass, treble=this.bypass?0:this.treble, speed = this.bypass?1:this.speed;

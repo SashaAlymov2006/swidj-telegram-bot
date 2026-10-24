@@ -15,7 +15,7 @@ async def run():
     output.mkdir(exist_ok=True)
     errors = []
     async with async_playwright() as p:
-        browser = await p.chromium.launch(args=['--autoplay-policy=no-user-gesture-required'])
+        browser = await p.chromium.launch(args=['--autoplay-policy=no-user-gesture-required','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'])
         context = await browser.new_context(viewport={'width':1440,'height':1050}, reduced_motion='reduce', accept_downloads=True)
         await context.route('https://telegram.org/**', lambda route: route.fulfill(status=200,body=''))
         page = await context.new_page()
@@ -191,6 +191,12 @@ async def run():
                 uploaded={'id':'-20000000000000001','title':'My uploaded remix','artist':'','kind':'upload','app_upload':True,'duration':24,'playable':True,'cover':None}
                 calls['upload']=uploaded
                 result={'track':uploaded,'library':{'tracks':[uploaded],'recent':[],'favorites':[uploaded['id']],'playlists':[],'language':'en','bot':'offline_bot'}}
+            elif path=='studio':
+                assert route.request.headers['content-type'].startswith('multipart/form-data')
+                return await route.fulfill(status=200,body=audio_fixture,content_type='audio/mpeg')
+            elif path=='voice':
+                assert route.request.headers['content-type'].startswith('multipart/form-data')
+                result={'text':'Never gonna give you up'}
             elif path=='send':calls['send']+=1;result={'ok':True}
             else:raise AssertionError('Unexpected app API path: '+path)
             await route.fulfill(status=200,body=json.dumps(result),content_type='application/json')
@@ -198,12 +204,30 @@ async def run():
         app_page=await live.new_page()
         app_page.on('pageerror',lambda error:errors.append(str(error)))
         await app_page.goto('http://127.0.0.1:8765/#search')
+        await app_page.locator('.voice-panel summary').click()
+        await app_page.locator('#record-voice').click()
+        await app_page.get_by_role('button',name='Stop recording',exact=True).wait_for()
+        await app_page.wait_for_timeout(700)
+        await app_page.locator('#record-voice').click()
+        await app_page.locator('#transcribe-voice').wait_for()
+        await app_page.locator('#transcribe-voice').click()
+        await app_page.wait_for_function("() => document.querySelector('#search-input').value==='Never gonna give you up'")
+        assert await app_page.locator('.track-row').count()==0
         await app_page.locator('#search-input').fill('recording')
         await app_page.locator('#search-form .btn').click()
         await app_page.locator('.track-row').first.locator('[data-action=play]').first.click()
         await app_page.locator('#activity:not([hidden])').wait_for()
         await app_page.locator('#play[aria-label=Pause]').wait_for()
         assert await app_page.locator('#now-title').inner_text()=='App recording 1'
+        await app_page.locator('#mobile-nav [data-go=studio]').click()
+        await app_page.locator('#mix-format').select_option('mp3')
+        await app_page.locator('#mix-effect').select_option('reverb')
+        await app_page.locator('#mix-pitch').fill('2')
+        async with app_page.expect_download() as mp3_download:
+            await app_page.locator('#export-mix').click()
+        assert (await mp3_download.value).suggested_filename.endswith('.mp3')
+        await app_page.screenshot(path=str(output/'miniapp-expanded-studio.png'))
+        await app_page.locator('#mobile-nav [data-go=search]').click()
         assert calls['send']==0
         assert await app_page.evaluate('window.chatOpens')==0
         await app_page.locator('.track-row').first.locator('[data-action=menu]').click()
