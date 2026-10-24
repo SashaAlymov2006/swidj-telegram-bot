@@ -15,6 +15,17 @@ from state_store import StateStore
 from tests.test_miniapp import signed,TOKEN
 
 class LinkValidationTests(unittest.TestCase):
+    def test_empty_optional_cookie_file_does_not_break_completed_search_audio(self):
+        import yt_dlp
+        from app_media import fetch
+        with tempfile.TemporaryDirectory() as directory:
+            source=Path(directory)/'source.webm';source.write_bytes(b'fixture')
+            # Keep the real YoutubeDL context manager: its exit used to save cookies to ''.
+            with patch.dict('os.environ',{'YTDLP_COOKIE_FILE':''}),patch.object(yt_dlp.YoutubeDL,'extract_info',return_value={'title':'Recording','uploader':'Artist'}):
+                result=fetch({'url':'https://youtu.be/abcdefghijk','mode':'audio'},directory)
+            self.assertEqual(result['path'],str(source))
+            self.assertEqual(result['title'],'Recording')
+
     def test_only_supported_links_and_explicit_modes_are_accepted(self):
         for payload in [{'url':'http://127.0.0.1/private'}, {'url':'file:///etc/passwd'}, {'url':'https://youtube.com.evil.test/watch?v=abcdefghijk'}, {'url':'https://www.youtube.com/watch?v=bad'}, {'url':'https://soundcloud.com/a/b','mode':'video'}, {'url':'https://youtu.be/abcdefghijk','height':True}]:
             with self.subTest(payload=payload),self.assertRaises(ValueError):validate(payload)

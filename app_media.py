@@ -160,7 +160,7 @@ def fetch(payload,directory):
              'progress_hooks':[progress],'match_filter':match,'restrictfilenames':True,
              'format':'bestaudio/best' if mode=='audio' else f'bv*[height<={height}][vcodec^=avc]+ba[acodec^=mp4a]/b[height<={height}][ext=mp4]/bv*[height<={height}]+ba/b[height<={height}]',
              'merge_output_format':'mp4','allowed_extractors':['youtube.*','soundcloud.*','tiktok.*','instagram.*','vimeo.*','bandcamp.*'],
-             'cookiefile':os.getenv('YTDLP_COOKIE_FILE') if platform=='youtube' else None}
+             'cookiefile':(os.getenv('YTDLP_COOKIE_FILE') or None) if platform=='youtube' else None}
     with yt_dlp.YoutubeDL(options) as downloader:info=downloader.extract_info(url,download=True)
     if isinstance(info,dict) and 'entries' in info:info=next((item for item in info['entries'] if item),None)
     if not isinstance(info,dict):raise ValueError('No media')
