@@ -238,6 +238,7 @@ async def run():
         await app_page.locator('#mix-format').select_option('mp3')
         await app_page.locator('[data-effect=reverb]').click()
         await app_page.locator('[data-effect=lofi]').click()
+        await app_page.locator('.extra-effects summary').click()
         await app_page.locator('[data-effect=compressor]').click()
         await app_page.wait_for_function("() => document.querySelectorAll('.effect-tile[aria-pressed=true]').length===3")
         assert await app_page.evaluate('!document.querySelector("#audio").paused')
@@ -249,6 +250,11 @@ async def run():
         await app_page.locator('#compare-fx').click()
         assert await app_page.evaluate('!document.querySelector("#audio").paused')
         await app_page.locator('#mix-pitch').fill('2')
+        await app_page.locator('#mix-pitch').dispatch_event('change')
+        await app_page.locator('#toast').filter(has_text='Playing your processed mix').wait_for()
+        assert calls['studioSettings']['pitch']==2
+        assert calls['studioSettings']['linked'] is False
+        assert await app_page.evaluate('document.querySelector("#audio").playbackRate===1')
         await app_page.evaluate("window.Telegram.WebApp.downloadFile=(value)=>{window.nativeExport=value};window.Telegram.WebApp.isVersionAtLeast=()=>true")
         await app_page.locator('#export-mix').click()
         await app_page.locator('#native-export').click()
@@ -340,9 +346,14 @@ async def run():
         await app_page.locator('[data-linked=false]').click()
         await app_page.locator('[data-speed-preset="1.25"]').click()
         await app_page.locator('[data-tone-preset="2"]').click()
+        if not await app_page.locator('.extra-effects').evaluate('(el)=>el.open'):await app_page.locator('.extra-effects summary').click()
         for effect in ['equalizer','stereo','distortion','tremolo']:
             await app_page.locator('[data-effect='+effect+']').click()
         await app_page.locator('.dsp-panel summary').click()
+        await app_page.locator('[data-easy-effect=equalizer][data-strength="0"]').click()
+        assert await app_page.locator('[data-easy-effect=equalizer][data-strength="0"]').get_attribute('aria-pressed')=='true'
+        await app_page.locator('.dsp-panel summary').click()
+        assert await app_page.locator('#param-eq60').input_value()=='1'
         await app_page.locator('#param-eq60').fill('6')
         await app_page.locator('#param-comp_ratio').fill('6')
         await app_page.locator('#param-stereo_width').fill('1.5')

@@ -61,6 +61,10 @@ Object.assign(copy.en,{needsTelegram:'Open the app from Telegram to use server p
 Object.assign(copy.ru,{needsTelegram:'Открой приложение из Telegram для обработки на сервере.',processingNote:'Пример и экспорт обрабатывают аудио на твоём сервере. В библиотеке файл остаётся только после нажатия Сохранить.',speed:'Скорость',export:'Скачать микс',studioFine:'MP3: исходник и результат до 30 минут. WAV до 96 МБ. Проверь эффекты в примере перед сохранением.',long:'Для длинных треков открой приложение из Telegram.',fileTooLarge:'Выбери аудио до 49 МБ.',format:'Формат',pitch:'Тон - полутоны',effect:'Эффект',none:'Без доп. эффекта',reverb:'Реверберация',echo:'Эхо',lofi:'Lo-fi',normalize:'Ровная громкость',compressor:'Компрессор',voiceSearch:'Поиск голосом',recordVoice:'Записать голос',stopVoice:'Остановить',transcribeVoice:'Распознать слова',voiceNote:'Назови артиста, трек или напой слова. Запись отправится на твой сервер для распознавания слов. Поиск по мелодии без слов не поддерживается.',voiceFile:'Выбрать запись',voiceBusy:'Распознаю слова...',voiceDenied:'Микрофон недоступен. Разреши доступ или выбери запись.',voiceEmpty:'Не удалось разобрать слова. Попробуй ещё раз.',voiceLimit:'Запись до 30 секунд и 8 МБ.',studioSize:'Файл слишком большой. Выбери MP3 или укороти фрагмент.',voiceDemo:'Голосовой поиск доступен в Telegram.',serverProcessing:'Обработка на твоём сервере',pitchNote:'Тон и доп. эффекты слышны в примере, экспорте и сохранённом миксе.',studioTimeout:'Обработка заняла слишком много времени. Выбери фрагмент покороче.',effectPreview:'Пример эффектов - 15 сек'});
 let exportFormat=demo?'wav':'mp3',studioPitch=0,studioEffects=[];
 let recorder=null,recordStream=null,voiceBlob=null,voiceUrl=null,voiceBusy=false,recordTimer=null,recordPending=false;
+Object.assign(copy.en,{"pitch": "Tone", "pitchNote": "Separate: release the slider to hear the new tone after processing. Speed stays unchanged.", "independent": "Separate", "fineTune": "More controls", "simpleEffects": "Everyday effects", "moreEffects": "More effects", "tonePending": "Applying tone...", "resetEffectControls": "Reset effect controls", "compressor": "Even out loud sounds", "highpass": "Less rumble", "lowpass": "Softer highs", "pro_reverb": "Large room", "distortion": "Warm distortion", "tremolo": "Pulsing volume", "stereo": "Wider sound", "comp_threshold": "Start reducing loud sounds - dB", "comp_ratio": "How strongly to reduce", "comp_attack": "Response time - ms", "comp_release": "Return to normal - ms"});
+Object.assign(copy.ru,{"pitch": "\u0422\u043e\u043d", "pitchNote": "\u041e\u0442\u0434\u0435\u043b\u044c\u043d\u043e: \u043e\u0442\u043f\u0443\u0441\u0442\u0438 \u043f\u043e\u043b\u0437\u0443\u043d\u043e\u043a \u0438 \u0434\u043e\u0436\u0434\u0438\u0441\u044c \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0438. \u0421\u043a\u043e\u0440\u043e\u0441\u0442\u044c \u043e\u0441\u0442\u0430\u043d\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u0436\u043d\u0435\u0439.", "independent": "\u041e\u0442\u0434\u0435\u043b\u044c\u043d\u043e", "fineTune": "\u0411\u043e\u043b\u044c\u0448\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043a", "simpleEffects": "\u041f\u043e\u043f\u0443\u043b\u044f\u0440\u043d\u044b\u0435 \u044d\u0444\u0444\u0435\u043a\u0442\u044b", "moreEffects": "\u0414\u0440\u0443\u0433\u0438\u0435 \u044d\u0444\u0444\u0435\u043a\u0442\u044b", "tonePending": "\u041c\u0435\u043d\u044f\u044e \u0442\u043e\u043d...", "resetEffectControls": "\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u044d\u0444\u0444\u0435\u043a\u0442\u043e\u0432", "compressor": "\u0421\u043c\u044f\u0433\u0447\u0438\u0442\u044c \u0433\u0440\u043e\u043c\u043a\u0438\u0435 \u0437\u0432\u0443\u043a\u0438", "highpass": "\u0423\u0431\u0440\u0430\u0442\u044c \u0433\u0443\u043b", "lowpass": "\u0421\u043c\u044f\u0433\u0447\u0438\u0442\u044c \u0432\u0435\u0440\u0445\u0438", "pro_reverb": "\u0411\u043e\u043b\u044c\u0448\u043e\u0439 \u0437\u0430\u043b", "distortion": "\u041b\u0451\u0433\u043a\u0438\u0439 \u043f\u0435\u0440\u0435\u0433\u0440\u0443\u0437", "tremolo": "\u041f\u0443\u043b\u044c\u0441\u0430\u0446\u0438\u044f \u0433\u0440\u043e\u043c\u043a\u043e\u0441\u0442\u0438", "stereo": "\u041e\u0431\u044a\u0451\u043c\u043d\u043e\u0435 \u0441\u0442\u0435\u0440\u0435\u043e"});
+Object.assign(copy.en,{"gentleFx": "Gentle", "balancedFx": "Balanced", "strongFx": "Strong", "effectStrength": "Effect strength"});
+Object.assign(copy.ru,{"gentleFx": "\u041c\u044f\u0433\u043a\u043e", "balancedFx": "\u0423\u043c\u0435\u0440\u0435\u043d\u043d\u043e", "strongFx": "\u0421\u0438\u043b\u044c\u043d\u043e", "effectStrength": "\u0421\u0438\u043b\u0430 \u044d\u0444\u0444\u0435\u043a\u0442\u0430"});
 const demos = [
   ['Velvet hours','SwiDJ Originals'],['Sunset circuit','SwiDJ Originals'],['After the rain','SwiDJ Originals'],
   ['Blue distance','SwiDJ Originals'],['Soft focus','SwiDJ Originals'],['Golden hour','SwiDJ Originals']
@@ -72,7 +76,7 @@ let renderBusy = false, refreshing = false, sourceDuration = 0;
 let preparation = null, searchQuery = '';
 let lastRendered=null;
 function studioSignature(){return JSON.stringify([loadingTrack,engine.bass,engine.speed,engine.treble,studioPitch,studioEffects,engine.trimStart,engine.trimEnd,engine.fade,engine.ambience,engine.linked,engine.params]);}
-function invalidateMix(){lastRendered=null;engine.setProcessed(false);if(previewUrl&&trackUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setProcessed(false);engine.setBass(engine.bass);engine.setSpeed(engine.speed);}}
+function invalidateMix(){const resume=audio.currentTime*(engine.processed?engine.speed:1);lastRendered=null;engine.setProcessed(false);if(previewUrl&&trackUrl){audio.src=trackUrl;audio.currentTime=resume;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setProcessed(false);engine.setBass(engine.bass);engine.setSpeed(engine.speed);}}
 let playQueue=[], playHistory=[], restoredTracks=[], resumeState=null, lastPositionSave=0;
 const sessionKey='swidj-session-v1-'+(demo?'demo':String(tg?.initDataUnsafe?.user?.id||'unknown'));
 try {const saved=JSON.parse(localStorage.getItem(sessionKey)||'null');if(saved){resumeState=saved.resume;restoredTracks=Array.isArray(saved.tracks)?saved.tracks.slice(0,101):[];playQueue=Array.isArray(saved.queue)?saved.queue.filter(x=>typeof x==='string').slice(0,100):[];}}catch{}
@@ -162,7 +166,12 @@ function render() {
     const speed=$('speed'),speedLabel=speed.previousElementSibling,steps=speed.nextElementSibling,rangeLabels=steps.nextElementSibling;
     const tone=$('mix-pitch').closest('label'),toneNote=tone.nextElementSibling;
     tempo.append(speedLabel,speed,steps,rangeLabels,tone,toneNote);document.querySelector('.studio-controls').prepend(tempo);syncTempo();
-    if(studioEffects.length)document.querySelector('.effect-rack').insertAdjacentHTML('afterend',dspControls());
+    const grid=document.querySelector('.effect-grid'),extra=document.createElement('details');extra.className='extra-effects';
+    extra.innerHTML=`<summary>${e(t('moreEffects'))}</summary><div class="effect-grid"></div>`;
+    const everyday=new Set(['reverb','echo','lofi','equalizer','stereo','normalize']);
+    for(const tile of [...grid.children])if(!everyday.has(tile.dataset.effect))extra.querySelector('.effect-grid').append(tile);
+    extra.open=studioEffects.some(f=>!everyday.has(f));grid.after(extra);
+    if(studioEffects.length)document.querySelector('.effect-rack').insertAdjacentHTML('afterend',easyEffectControls()+dspControls());
     const actions=document.createElement('div');actions.className='studio-actions';
     for(const id of ['apply-mix','compare-fx','export-mix','save-mix','preview-mix'])actions.append($(id));
     document.querySelector('.effect-rack').after(actions);
@@ -378,6 +387,17 @@ async function downloadTrack(track) {
   a.href=url;a.download=track.title.replace(/[\\/:*?"<>|]/g,'').slice(0,100)+'.'+extension;
   a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
+let toneTimer=null,toneRevision=0;
+function scheduleTone(){
+  clearTimeout(toneTimer);const revision=++toneRevision,track=loadingTrack;
+  if(engine.linked||demo||!trackBlob)return;
+  const run=async()=>{
+    if(revision!==toneRevision||track!==loadingTrack||engine.linked||route!=='studio')return;
+    if(renderBusy){toneTimer=setTimeout(run,350);return;}
+    toast('tonePending');await renderMix('apply',true);
+  };
+  toneTimer=setTimeout(run,550);
+}
 let activeRenderJob=null;
 async function processMix(preview=false,delivery=false) {
   if(demo){if(exportFormat==='mp3'||studioPitch||studioEffects.length)throw new Error('needsTelegram');return engine.render(trackBlob,preview,sourceDuration);}
@@ -426,7 +446,20 @@ function setStudioPitch(value){studioPitch=Math.max(-12,Math.min(12,value));if(e
 function syncTempo(){if($('speed')){$('speed').value=engine.speed;$('speed-value').textContent=engine.speed.toFixed(2)+'\u00d7';}if($('mix-pitch')){$('mix-pitch').value=studioPitch;$('pitch-value').textContent=Number(studioPitch.toFixed(2));}}
 const paramGroups={equalizer:['eq60','eq250','eq1000','eq4000','eq12000'],reverb:['room_s'],pro_reverb:['room_s'],echo:['delay_ms','feedback'],delay:['delay_ms','feedback'],lofi:['lofi_hz'],highpass:['highpass_hz'],lowpass:['lowpass_hz'],compressor:['comp_threshold','comp_ratio','comp_attack','comp_release'],stereo:['stereo_width'],tremolo:['tremolo_rate','tremolo_depth'],distortion:['drive']};
 const paramRanges={eq60:[-12,12,1],eq250:[-12,12,1],eq1000:[-12,12,1],eq4000:[-12,12,1],eq12000:[-12,12,1],room_s:[.2,3,.1],delay_ms:[60,1000,10],feedback:[0,.65,.05],lofi_hz:[500,3500,100],highpass_hz:[20,6000,20],lowpass_hz:[100,20000,100],comp_threshold:[-48,-6,1],comp_ratio:[1,12,.5],comp_attack:[1,100,1],comp_release:[20,1000,10],stereo_width:[0,2,.1],tremolo_rate:[.5,12,.5],tremolo_depth:[0,1,.05],drive:[1,8,.5]};
-function dspControls(){const seen=new Set();return `<details class="dsp-panel"><summary>${e(t('fineTune'))}</summary>${studioEffects.map(f=>{const keys=(paramGroups[f]||[]).filter(k=>!seen.has(k));keys.forEach(k=>seen.add(k));return keys.length?`<section><h3>${e(t(f))}</h3>${keys.map(k=>`<label for="param-${k}">${e(t(k))}<output id="value-${k}">${engine.params[k]}</output></label><input id="param-${k}" data-param="${k}" type="range" min="${paramRanges[k][0]}" max="${paramRanges[k][1]}" step="${paramRanges[k][2]}" value="${engine.params[k]}">`).join('')}</section>`:'';}).join('')}</details>`;}
+const easyEffectSettings={
+  reverb:[{room_s:.4},{room_s:1.1},{room_s:2.2}],pro_reverb:[{room_s:.5},{room_s:1.2},{room_s:2.4}],
+  echo:[{delay_ms:180,feedback:.1},{delay_ms:280,feedback:.3},{delay_ms:420,feedback:.5}],
+  delay:[{delay_ms:120,feedback:.1},{delay_ms:250,feedback:.25},{delay_ms:500,feedback:.5}],
+  lofi:[{lofi_hz:3500},{lofi_hz:2000},{lofi_hz:900}],
+  compressor:[{comp_threshold:-18,comp_ratio:2},{comp_threshold:-26,comp_ratio:4},{comp_threshold:-32,comp_ratio:8}],
+  equalizer:[{eq60:1,eq250:1,eq1000:0,eq4000:1,eq12000:1},{eq60:3,eq250:1,eq1000:0,eq4000:2,eq12000:2},{eq60:5,eq250:2,eq1000:0,eq4000:3,eq12000:3}],
+  highpass:[{highpass_hz:60},{highpass_hz:180},{highpass_hz:600}],lowpass:[{lowpass_hz:12000},{lowpass_hz:6000},{lowpass_hz:2000}],
+  stereo:[{stereo_width:1.15},{stereo_width:1.5},{stereo_width:1.9}],
+  tremolo:[{tremolo_rate:3,tremolo_depth:.15},{tremolo_rate:5,tremolo_depth:.4},{tremolo_rate:7,tremolo_depth:.75}],
+  distortion:[{drive:1.3},{drive:2.5},{drive:5}]
+};
+function easyEffectControls(){return `<section class="easy-effect-controls"><h3>${e(t('effectStrength'))}</h3>${studioEffects.filter(f=>easyEffectSettings[f]).map(f=>`<div class="easy-effect-row"><strong>${e(t(f))}</strong><div class="touch-stepper">${['gentleFx','balancedFx','strongFx'].map((key,i)=>`<button type="button" data-easy-effect="${f}" data-strength="${i}" aria-pressed="${Object.entries(easyEffectSettings[f][i]).every(([k,v])=>engine.params[k]===v)}">${e(t(key))}</button>`).join('')}</div></div>`).join('')}</section>`;}
+function dspControls(){const seen=new Set();return `<details class="dsp-panel"><summary>${e(t('fineTune'))}</summary><button type="button" class="text-btn" id="reset-effect-controls">${e(t('resetEffectControls'))}</button>${studioEffects.map(f=>{const keys=(paramGroups[f]||[]).filter(k=>!seen.has(k));keys.forEach(k=>seen.add(k));return keys.length?`<section><h3>${e(t(f))}</h3>${keys.map(k=>`<label for="param-${k}">${e(t(k))}<output id="value-${k}">${engine.params[k]}</output></label><input id="param-${k}" data-param="${k}" type="range" min="${paramRanges[k][0]}" max="${paramRanges[k][1]}" step="${paramRanges[k][2]}" value="${engine.params[k]}">`).join('')}</section>`:'';}).join('')}</details>`;}
 let lyricMatches=[];
 async function showLyrics(track){
   if(demo)return toast('needsTelegram');
@@ -478,13 +511,15 @@ async function transcribeVoice(){
     searchQuery=data.text.slice(0,120);
   }finally{voiceBusy=false;if(route==='search'){render();$('search-input').focus();}}
 }
-async function renderMix(preview) {
+async function renderMix(preview,keepPosition=false) {
   if(renderBusy)return;
+  clearTimeout(toneTimer);toneRevision++;
   if(!trackBlob)return toast('chooseFirst');
   engine.setBypass(false);
   const ticket=loadingTrack,bass=engine.bass,speed=engine.speed,treble=engine.treble,bypass=engine.bypass,format=exportFormat,pitch=studioPitch,effect=JSON.stringify(studioEffects),signature=studioSignature();
   renderBusy=true;
   const applying=preview==='apply';
+  const resumeAt=keepPosition?audio.currentTime/(engine.processed?1:engine.speed):0;
   const button=$(applying?'apply-mix':preview?'preview-mix':'export-mix');button.disabled=true;button.textContent=t('rendering');
   try {
     const nativeExport=!preview&&!demo;
@@ -498,6 +533,7 @@ async function renderMix(preview) {
       audio.src=previewUrl;audio.playbackRate=1;
       // Rendered audio already includes settings: do not apply the live chain twice.
       engine.setProcessed(true);
+      if(keepPosition)audio.currentTime=Math.max(0,resumeAt);
       await audio.play();toast(applying?'mixApplied':'previewReady');
     } else if(nativeExport){
       showExportDownload(blob);
@@ -514,7 +550,9 @@ document.addEventListener('click',async event=>{
   const button=event.target.closest('button,a,label');if(!button)return;
   try {
     if(button.id==='cancel-mix'&&activeRenderJob){await api('studio/jobs/'+activeRenderJob+'/cancel',{});return;}
-    if(button.dataset.linked!==undefined){const playing=!audio.paused;invalidateMix();engine.setLinked(button.dataset.linked==='true');if(engine.linked)studioPitch=12*Math.log2(engine.speed);render();if(playing)await audio.play();return;}
+    if(button.dataset.easyEffect){const values=easyEffectSettings[button.dataset.easyEffect]?.[Number(button.dataset.strength)];if(values){const playing=!audio.paused;invalidateMix();engine.setBypass(false);engine.setParams({...values});render();if(playing)await audio.play();}return;}
+    if(button.id==='reset-effect-controls'){invalidateMix();engine.setParams({...dspDefaults});return render();}
+    if(button.dataset.linked!==undefined){const playing=!audio.paused;invalidateMix();engine.setLinked(button.dataset.linked==='true');if(engine.linked)studioPitch=12*Math.log2(engine.speed);render();if(playing)await audio.play();if(!engine.linked&&studioPitch!==0)scheduleTone();return;}
     if(button.dataset.openLinks!==undefined){linkMode=true;return navigate('search');}
     if(button.dataset.searchTab){linkMode=button.dataset.searchTab==='links';return render();}
     if(button.id==='prepare-link')return await importLink();
@@ -523,7 +561,7 @@ document.addEventListener('click',async event=>{
     if(button.id==='download-link'&&linkResult){showExportDownload(linkResult);nativeExportDownload();return;}
     if(button.id==='studio-link'&&linkResult){const response=await fetch(linkResult.url,{credentials:'omit'});if(!response.ok)throw new Error('linkExpired');const blob=await response.blob();const track={id:'local:'+crypto.randomUUID(),title:linkResult.title,artist:linkResult.artist||'',kind:'upload',playable:true,local:true,serverTicket:new URL(linkResult.url).pathname.split('/').pop(),blob:new File([blob],linkResult.filename,{type:blob.type})};localTracks.set(track.id,track);await playTrack(track);return navigate('studio');}
     if(button.dataset.speedPreset!==undefined||button.dataset.speedStep!==undefined){const playing=!audio.paused;invalidateMix();engine.setBypass(false);const value=button.dataset.speedPreset!==undefined?Number(button.dataset.speedPreset):engine.speed+Number(button.dataset.speedStep);setStudioSpeed(Math.round(value*100)/100);render();if(playing)await audio.play();return;}
-    if(button.dataset.tonePreset!==undefined||button.dataset.toneStep!==undefined){invalidateMix();engine.setBypass(false);setStudioPitch(button.dataset.tonePreset!==undefined?Number(button.dataset.tonePreset):studioPitch+Number(button.dataset.toneStep));return render();}
+    if(button.dataset.tonePreset!==undefined||button.dataset.toneStep!==undefined){invalidateMix();engine.setBypass(false);setStudioPitch(button.dataset.tonePreset!==undefined?Number(button.dataset.tonePreset):studioPitch+Number(button.dataset.toneStep));render();scheduleTone();return;}
     if(button.matches('.export-link')&&typeof tg?.openLink==='function'){event.preventDefault();tg.openLink(button.href);return;}
     if(button.dataset.lyric!==undefined)return readLyrics(Number(button.dataset.lyric));
     if(button.id==='native-export')return nativeExportDownload();
@@ -585,7 +623,7 @@ document.addEventListener('click',async event=>{
       }
     }
     if(button.dataset.bass!==undefined){invalidateMix();engine.setBypass(false);if(previewUrl&&trackUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;}engine.setBass(Number(button.dataset.bass));engine.setSpeed(engine.speed);return render();}
-    if(button.id==='reset-fx'){invalidateMix();studioPitch=0;studioEffects=[];engine.setEffects([]);engine.setLinked(false);engine.setParams({...dspDefaults});engine.setProcessed(false);engine.trimStart=0;engine.trimEnd=0;engine.fade=0;engine.setBass(0);engine.setTreble(0);engine.setBypass(false);engine.setSpeed(1);if(trackUrl)audio.src=trackUrl;return render();}
+    if(button.id==='reset-fx'){clearTimeout(toneTimer);toneRevision++;invalidateMix();studioPitch=0;studioEffects=[];engine.setEffects([]);engine.setLinked(false);engine.setParams({...dspDefaults});engine.setProcessed(false);engine.trimStart=0;engine.trimEnd=0;engine.fade=0;engine.setBass(0);engine.setTreble(0);engine.setBypass(false);engine.setSpeed(1);if(trackUrl)audio.src=trackUrl;return render();}
     if(button.id==='preview-mix')return await renderMix(true);
     if(button.id==='export-mix')return await renderMix(false);
     if(button.id==='play')return await togglePlay();
@@ -611,7 +649,7 @@ document.addEventListener('submit',async event=>{
 document.addEventListener('input',event=>{
   const node=event.target;
   if(node.matches('[data-edit],#speed,#treble,#mix-pitch')){invalidateMix();engine.setBypass(false);}
-  if(node.id==='mix-pitch'){setStudioPitch(Number(node.value));syncTempo();}
+  if(node.id==='mix-pitch'){clearTimeout(toneTimer);toneRevision++;setStudioPitch(Number(node.value));syncTempo();}
   if(node.dataset.edit){engine[node.dataset.edit]=Math.max(0,Math.min(node.dataset.edit==='fade'?10:7200,Number(node.value)||0));}
   if(node.dataset.param){const playing=!audio.paused;invalidateMix();engine.setBypass(false);engine.setParams({[node.dataset.param]:Number(node.value)});$('value-'+node.dataset.param).textContent=node.value;if(playing)audio.play().catch(report);}
   if(node.id==='link-url')linkUrl=node.value;
@@ -619,13 +657,14 @@ document.addEventListener('input',event=>{
   if(node.id==='search-input')searchQuery=node.value;
   if(node.id==='speed'){
     if(previewUrl&&trackUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setProcessed(false);engine.setBass(engine.bass);}
-    engine.setSpeed(Number(node.value));$('speed-value').textContent=engine.speed.toFixed(2)+'×';
+    setStudioSpeed(Number(node.value));syncTempo();
   }
   if(node.id==='treble'){if(previewUrl){audio.src=trackUrl;URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setSpeed(engine.speed);}engine.setTreble(Number(node.value));node.previousElementSibling.querySelector('output').textContent=engine.treble+' dB';}
   if(node.id==='volume')audio.volume=Number(node.value);
   if(['seek','full-seek'].includes(node.id)&&Number.isFinite(audio.duration))audio.currentTime=audio.duration*Number(node.value)/1000;
 });
 document.addEventListener('change',async event=>{
+  if(event.target.id==='mix-pitch'||(event.target.id==='speed'&&studioPitch!==0)){scheduleTone();return;}
   if(event.target.name==='link-type'){linkType=event.target.value;return render();}
   if(event.target.id==='link-quality'){linkQuality=Number(event.target.value);return;}
   if(event.target.id==='mix-format'){exportFormat=event.target.value;return;}

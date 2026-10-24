@@ -143,13 +143,14 @@ class AppStudioTests(unittest.IsolatedAsyncioTestCase):
             audio.setparams((1,2,16000,0,'NONE','not compressed'))
             audio.writeframes(b''.join(struct.pack('<h',int(10000*math.sin(2*math.pi*440*i/16000))) for i in range(32000)))
         peaks=[]
-        for linked in [False,True]:
-            response=await self.client.post('/api/studio',headers=self.headers,data=form(buffer.getvalue(),{'format':'wav','speed':2,'linked':linked}))
+        for linked,speed,pitch in [(False,2,0),(True,2,0),(False,1,12)]:
+            response=await self.client.post('/api/studio',headers=self.headers,data=form(buffer.getvalue(),{'format':'wav','speed':speed,'pitch':pitch,'linked':linked}))
             self.assertEqual(response.status,200)
             with wave.open(io.BytesIO(await response.read())) as audio:
+                self.assertAlmostEqual(audio.getnframes()/audio.getframerate(),2/speed,delta=.12)
                 samples=np.frombuffer(audio.readframes(audio.getnframes()),dtype='<i2')[::2].astype(float)
                 peaks.append(np.argmax(abs(np.fft.rfft(samples)))*audio.getframerate()/len(samples))
-        self.assertAlmostEqual(peaks[0],440,delta=5);self.assertAlmostEqual(peaks[1],880,delta=5)
+        self.assertAlmostEqual(peaks[0],440,delta=5);self.assertAlmostEqual(peaks[1],880,delta=5);self.assertAlmostEqual(peaks[2],880,delta=5)
 
     async def test_tunable_filters_render_and_invalid_parameters_are_rejected(self):
         settings={'format':'wav','effects':['equalizer','compressor','stereo','tremolo','distortion'],
