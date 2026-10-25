@@ -543,7 +543,7 @@ async function renderMix(preview,keepPosition=false) {
     if(preview) {
       if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=streamFile?blob.url:URL.createObjectURL(blob);
       if(!bypass&&!tonePreview)lastRendered=streamFile?{url:blob.url,key:studioSignature()}:{blob,key:studioSignature()};
-      
+
       previewStart=tonePreview?auditionStart:engine.trimStart;
       audio.src=previewUrl;audio.playbackRate=1;
       // Rendered audio already includes settings: do not apply the live chain twice.
