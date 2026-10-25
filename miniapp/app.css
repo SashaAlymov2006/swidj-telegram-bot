@@ -68,3 +68,16 @@ dialog[open]{animation:sheet-enter .2s ease-out}dialog::backdrop{background:#050
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .effect-tile strong{font-size:12px;line-height:1.35}.effect-mode{font-size:10px}.mobile-nav button{min-height:48px}.mobile-nav button span{font-size:11px}@media(max-width:480px){.effect-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.effect-tile{min-height:96px;padding:14px}.tempo-panel{padding:16px}}
+
+/* Phone player: full-width metadata, separate transport row, usable touch targets. */
+@media(max-width:720px){
+ :root{--player:116px}
+ main{padding-inline:clamp(12px,4vw,20px)}
+ .workspace,.studio-layout,.studio-controls,.studio-source,.track-list,.track-copy,.card-grid,.player,.now-playing,.transport{min-width:0;max-width:100%}
+ .player{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:48px 36px;gap:8px;height:var(--player);padding:10px max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left));bottom:calc(62px + env(safe-area-inset-bottom))}
+ .now-playing{display:flex;width:100%;gap:12px}.now-playing .mini-art{width:44px;height:44px;flex:0 0 44px}.now-copy{min-width:0;flex:1;text-align:left}.now-copy strong{font-size:14px;line-height:1.3}.now-copy>span{font-size:11px}.now-playing .icon-btn{width:44px;height:44px;flex:0 0 44px}
+ .transport{width:100%;display:grid;grid-template-columns:120px minmax(0,1fr);align-items:center;gap:12px}.transport-buttons{justify-content:space-between;gap:4px}.transport-buttons .play-main{width:36px;height:36px;flex:0 0 36px}.transport-buttons #next,.transport-buttons #open-queue{width:36px;height:36px;flex:0 0 36px}.timeline{position:static;display:flex;width:100%;height:32px;margin:0;gap:7px}.timeline span{display:block;font-size:10px}.timeline input{height:28px;min-width:30px;opacity:1;flex:1;width:0}
+ .shell{padding-bottom:calc(var(--player) + 80px + env(safe-area-inset-bottom))}.toast,.activity{bottom:calc(var(--player) + 78px + env(safe-area-inset-bottom))}
+ .track-row{gap:8px;min-height:64px}.track-copy{flex:1}.track-copy strong{font-size:14px}.track-copy small{font-size:11px}.track-row .icon-btn{width:38px;height:44px;flex-shrink:0}.studio-source{grid-template-columns:56px minmax(0,1fr);column-gap:12px}.studio-source .art{width:56px}.studio-source h2{overflow-wrap:anywhere}.studio-source .btn{max-width:100%;white-space:normal}.studio-controls{padding:clamp(12px,4vw,23px)}
+}
+@media(max-width:360px){.transport{grid-template-columns:112px minmax(0,1fr);gap:8px}.timeline span{font-size:9px}.timeline{gap:4px}.hero-copy{max-width:100%}.hero h1{font-size:31px}.top-actions{gap:7px}.quick-grid{grid-template-columns:1fr}.touch-stepper button{font-size:11px}}

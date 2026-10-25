@@ -25,14 +25,7 @@ async def run():
         await page.locator('.music-card').first.wait_for()
         assert await page.locator('.music-card').count() == 4
         await page.screenshot(path=str(output/'miniapp-desktop.png'),full_page=True)
-        assert await page.locator('.mood-card').count()==4
-        assert await page.locator('.hero-disc').evaluate("el=>getComputedStyle(el).animationName")=='none'
-        await page.locator('[data-mood="0"]').click()
-        await page.locator('.track-row').first.wait_for()
-        assert await page.locator('#search-input').input_value()=='Velvet'
-        await page.locator('#desktop-nav [data-go=home]').click()
-        await page.locator('.music-card').first.wait_for()
-
+        assert await page.locator('.mood-card').count()==0
         await page.locator('.music-card [data-action=play]').first.click()
         await page.locator('#play[aria-label="Пауза"]').wait_for()
         await asyncio.sleep(.2)
@@ -151,6 +144,14 @@ async def run():
         await page.locator('.hero').wait_for()
         await page.locator('.toast.show').wait_for(state='hidden')
         assert await page.locator('.resume-card').count()<=1
+        for width in [320,360,390,430,540,720]:
+            await page.set_viewport_size({'width':width,'height':844})
+            assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            for selector in ['#open-player','#play','#next','#open-queue','#seek']:
+                box=await page.locator(selector).bounding_box()
+                assert box and box['x']>=0 and box['x']+box['width']<=width+1,(width,selector,box)
+            assert (await page.locator('#open-player').bounding_box())['width']>=120
+        await page.set_viewport_size({'width':390,'height':844})
         await page.screenshot(path=str(output/'miniapp-mobile.png'))
         assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         player = await page.locator('.player').bounding_box()
@@ -260,7 +261,8 @@ async def run():
         assert await app_page.evaluate('!document.querySelector("#audio").paused')
         await app_page.locator('#mix-pitch').fill('2')
         await app_page.locator('#mix-pitch').dispatch_event('change')
-        await app_page.locator('#toast').filter(has_text='Playing your processed mix').wait_for()
+        await app_page.locator('#toast').filter(has_text='Preview ready').wait_for()
+        assert calls['studioSettings']['preview'] is True
         assert calls['studioSettings']['pitch']==2
         assert calls['studioSettings']['linked'] is False
         assert await app_page.evaluate('document.querySelector("#audio").playbackRate===1')
