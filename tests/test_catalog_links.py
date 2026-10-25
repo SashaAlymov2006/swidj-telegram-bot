@@ -1,19 +1,7 @@
 import unittest
 from unittest.mock import Mock, patch
-from catalog_links import classify, extract_links, apple_metadata, public_metadata, youtube_metadata
+from catalog_links import classify, extract_links, apple_metadata, public_metadata
 class CatalogLinksTests(unittest.TestCase):
-    def test_youtube_link_metadata_drops_playlist_and_does_not_invent_artist(self):
-        response=Mock(status_code=200)
-        response.json.return_value={'title':'Artist - Song', 'author_name':'Unrelated channel'}
-        with patch('catalog_links.requests.get',return_value=response) as get:
-            result=youtube_metadata('https://www.youtube.com/watch?v=liRLUgaUwh4&list=RD7DVM7DYJX1c&index=3')
-        self.assertEqual(result['query'],'Artist - Song')
-        self.assertEqual(result['artist'],'')
-        self.assertEqual(get.call_args.kwargs['params']['url'],'https://www.youtube.com/watch?v=liRLUgaUwh4')
-        with patch('catalog_links.requests.get') as get:
-            with self.assertRaises(ValueError):youtube_metadata('https://youtube.com.evil.test/watch?v=liRLUgaUwh4')
-            get.assert_not_called()
-
     def test_selected_platform_urls_only_and_deduplication(self):
         cases={"https://music.yandex.ru/album/1/track/2?utm_source=x":"yandex",
                "https://music.yandex.kz/track/12":"yandex",

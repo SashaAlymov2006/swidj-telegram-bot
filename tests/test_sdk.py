@@ -1427,22 +1427,6 @@ asyncio.run(run())'''
             for platform in ("Apple Music","Yandex Music" if language=="en" else "Яндекс Музыка","Spotify","SoundCloud","YouTube","TikTok","Instagram"):
                 self.assertIn(platform,self.texts()[-1])
 
-    async def test_new_youtube_audio_link_resolves_public_metadata_to_soundcloud_choices(self):
-        url='https://www.youtube.com/watch?v=liRLUgaUwh4&list=RD7DVM7DYJX1c&index=3'
-        recording='https://soundcloud.com/artist/recording'
-        metadata={'title':'Artist - Song','artist':'','query':'Artist - Song','url':'https://www.youtube.com/watch?v=liRLUgaUwh4'}
-        await self.app.process_update(self.message(url))
-        link_token=next(reversed(self.app.user_data[77]['dl_requests']))
-        path=Path(self.local_files.name)/'full.mp3';path.write_bytes(b'full-recording-fixture')
-        with patch.dict(os.environ,SEARCH_RECORDING_SOURCE='soundcloud'), patch('catalog_links.youtube_metadata',return_value=metadata), patch('versions.find_versions',return_value=[{'url':recording,'title':'Artist - Song','artist':'Artist','source':'SoundCloud'}]), patch.object(self.bot,'download_youtube_audio',return_value=(str(path),{'title':'Song','artist':'Artist'})) as download:
-            await self.app.process_update(self.callback('dl_audio|'+link_token))
-            download.assert_not_called()
-            self.assertIn('Источник записи: SoundCloud',self.texts()[-1])
-            token=next(reversed(self.app.user_data[77]['version_requests']))
-            await self.app.process_update(self.callback('ver:pick:'+token+':0'))
-            download.assert_called_once_with(recording)
-        self.assertEqual(sum(op=='sendAudio' for op,_ in self.request.calls),1)
-
     async def test_catalog_link_downloads_automatically_when_title_and_artist_match(self):
         url="https://music.apple.com/us/song/1632632842"
         def download(source):

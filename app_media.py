@@ -136,10 +136,6 @@ def register(app,bridge):
 
 def fetch(payload,directory):
     url,mode,height,platform=validate(payload)
-    if platform == 'youtube' and mode == 'audio' and os.getenv('SEARCH_RECORDING_SOURCE') == 'soundcloud':
-        from catalog_links import youtube_metadata
-        metadata = youtube_metadata(url)
-        return {'kind':'search', 'query':metadata['query'][:120]}
     if platform in ('apple','yandex'):
         from catalog_links import catalog_metadata
         metadata=catalog_metadata(platform,url)
