@@ -1,5 +1,6 @@
 import asyncio
 import time
+import json
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -20,6 +21,33 @@ def fixture():
 
 
 class ChartDataTests(unittest.IsolatedAsyncioTestCase):
+    async def test_restart_preserves_country_rank_and_stale_fallback(self):
+        with tempfile.TemporaryDirectory() as folder:
+            service=Charts(cache_root=folder);value=clean_feed(fixture(),'de')
+            with patch.object(service,'fetch',new_callable=AsyncMock,return_value=value):
+                await service.get('de')
+            path=Path(folder)/'de.json';stored=json.loads(path.read_text())
+            stored['fetched_at']-=TTL+10;path.write_text(json.dumps(stored))
+            restarted=Charts(cache_root=folder)
+            with patch.object(restarted,'fetch',side_effect=asyncio.TimeoutError()):
+                result=await restarted.get('de')
+            self.assertTrue(result['stale'])
+            self.assertEqual([row['rank'] for row in result['tracks']],[1,3])
+            self.assertEqual(result['country'],'de')
+            with patch.object(restarted,'fetch',side_effect=asyncio.TimeoutError()):
+                from aiohttp import web
+                with self.assertRaises(web.HTTPServiceUnavailable):await restarted.get('us')
+
+    def test_disk_cache_rejects_expired_or_corrupt_data(self):
+        with tempfile.TemporaryDirectory() as folder:
+            service=Charts(cache_root=folder);value=clean_feed(fixture(),'de')
+            service.save_disk('de',value)
+            path=Path(folder)/'de.json';stored=json.loads(path.read_text())
+            stored['fetched_at']-=8*86400;path.write_text(json.dumps(stored))
+            self.assertIsNone(service.load_disk('de'))
+            path.write_text('{broken')
+            self.assertIsNone(service.load_disk('de'))
+
     def test_provider_order_is_preserved_and_artwork_is_validated(self):
         value=clean_feed(fixture(),'de')
         self.assertEqual([item['rank'] for item in value['tracks']],[1,3])

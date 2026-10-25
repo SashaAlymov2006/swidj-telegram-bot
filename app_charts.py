@@ -4,6 +4,11 @@ import time
 import hashlib
 import re
 import unicodedata
+import os
+import json
+import math
+import tempfile
+from pathlib import Path
 from urllib.parse import urlsplit
 import aiohttp
 from aiohttp import web
@@ -57,7 +62,47 @@ def matching_versions(item,recordings):
     return sorted(result,key=lambda r:('official' in words(r['title']),full_artist<=words(r['title']+' '+r.get('artist',''))),reverse=True)
 
 class Charts:
-    def __init__(self):self.cache={};self.lock=asyncio.Lock();self.recordings={};self.resolve_lock=asyncio.Lock()
+    def __init__(self, cache_root=None):
+        self.cache={};self.lock=asyncio.Lock();self.recordings={};self.resolve_lock=asyncio.Lock()
+        root=cache_root or os.getenv('MINIAPP_CHART_CACHE_DIR')
+        self.cache_root=Path(root) if root else None
+
+    def load_disk(self,country):
+        if self.cache_root is None:return None
+        try:
+            path=self.cache_root/(country+'.json')
+            if path.is_symlink() or path.stat().st_size>1024**2:return None
+            stored=json.loads(path.read_text(encoding='utf-8'))
+            age=time.time()-stored['fetched_at']
+            if not math.isfinite(age) or not -30<=age<=7*86400:return None
+            value=stored['chart']
+            if value['country']!=country:return None
+            rows=value['tracks']
+            if not isinstance(rows,list) or not rows or len(rows)>50:return None
+            ranks=[row['rank'] for row in rows]
+            if any(type(rank) is not int or not 1<=rank<=50 for rank in ranks) or ranks!=sorted(set(ranks)):return None
+            validated=clean_feed({'feed':{'updated':value['updated'],'results':[
+                {'id':row['id'],'name':row['title'],'artistName':row['artist'],'artworkUrl100':row.get('artwork','')} for row in rows]}},country)
+            if len(validated['tracks'])!=len(rows):return None
+            for track,rank in zip(validated['tracks'],ranks):track['rank']=rank
+            return time.monotonic()-max(0,age),validated
+        except (OSError,ValueError,TypeError,KeyError):return None
+
+    def save_disk(self,country,value):
+        if self.cache_root is None:return
+        pending=None
+        try:
+            self.cache_root.mkdir(parents=True,exist_ok=True)
+            raw=json.dumps({'fetched_at':time.time(),'chart':value},ensure_ascii=False)
+            if len(raw.encode('utf-8'))>1024**2:return
+            with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=self.cache_root,prefix='.'+country+'-',delete=False) as stream:
+                pending=Path(stream.name);stream.write(raw)
+            os.replace(pending,self.cache_root/(country+'.json'))
+        except OSError:pass
+        finally:
+            try:
+                if pending:pending.unlink(missing_ok=True)
+            except OSError:pass
     async def fetch(self,country):
         for attempt in range(2):
             try:return await self.fetch_once(country)
@@ -81,10 +126,14 @@ class Charts:
         if entry and time.monotonic()-entry[0]<TTL:return dict(entry[1],stale=False)
         async with self.lock:
             entry=self.cache.get(country)
+            if not entry:
+                entry=await asyncio.to_thread(self.load_disk,country)
+                if entry:self.cache[country]=entry
             if entry and time.monotonic()-entry[0]<TTL:return dict(entry[1],stale=False)
             try:
                 value=await self.fetch(country)
                 self.cache[country]=(time.monotonic(),value)
+                await asyncio.to_thread(self.save_disk,country,value)
                 return dict(value,stale=False)
             except (aiohttp.ClientError,asyncio.TimeoutError,ValueError,TypeError,KeyError):
                 if entry and time.monotonic()-entry[0]<7*86400:return dict(entry[1],stale=True)
