@@ -217,11 +217,16 @@ async def download_selected(update, context, token, request, index, downloader, 
         if request.get("mode") not in ("listen", "queue"):
             await studio(update, context)
         return True
-    except Exception:
+    except Exception as error:
         if sent:
             await update.effective_message.reply_text("Трек отправлен, но студию открыть не удалось.",
                 reply_markup=Markup([[Button("🎛 Открыть студию", callback_data="studio:home")]]))
         else:
+            from diagnostics import source_access_blocked, SOURCE_ACCESS_MESSAGE
+            if source_access_blocked(error):
+                await version_screen(update, context, SOURCE_ACCESS_MESSAGE,
+                    Markup(queue_recovery(request) + [[Button("← Поиск", callback_data="ui:search")]]))
+                return False
             await version_screen(update, context, "Не удалось скачать трек. Попробуй ещё раз или выбери другую версию.",
                 Markup(queue_recovery(request) + [
                     [Button("🔄 Повторить", callback_data=f"ver:pick:{token}:{index}", style="primary")],

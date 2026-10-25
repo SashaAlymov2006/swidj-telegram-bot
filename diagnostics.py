@@ -1,4 +1,15 @@
 """Closed error categories: never put provider messages or credentials in logs."""
+
+SOURCE_ACCESS_MESSAGE = "YouTube ограничил доступ к этой записи с сервера. Повторная попытка сейчас может не помочь. Можно прислать аудиофайл или ссылку на SoundCloud."
+
+
+def source_access_blocked(error):
+    message = str(error).lower()
+    return any(phrase in message for phrase in (
+        "sign in to confirm", "confirm you're not a bot", "confirm you’re not a bot",
+        "youtube временно ограничил доступ",
+    ))
+
 def classify_error(error):
     if type(error).__name__ != 'BadRequest':
         return 'unexpected'

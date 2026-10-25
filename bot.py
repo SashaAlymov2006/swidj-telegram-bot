@@ -644,6 +644,11 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.message.reply_text("Аудио отправлено, но студию открыть не удалось.",
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎛 Открыть студию", callback_data="studio:home")]]))
             else:
+                from diagnostics import source_access_blocked, SOURCE_ACCESS_MESSAGE
+                if source_access_blocked(e):
+                    await query.message.reply_text(SOURCE_ACCESS_MESSAGE,
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("← Меню", callback_data="ui:home")]]))
+                    return
                 await query.message.reply_text("Не удалось скачать аудио. Можно повторить попытку.",
                     reply_markup=InlineKeyboardMarkup([
                         [InlineKeyboardButton("🔄 Повторить", callback_data=f"dl_audio|{token}", style="primary")],
@@ -682,6 +687,11 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from track_card import retire_download_menus
             await retire_download_menus(update,context)
         except Exception as e:
+            from diagnostics import source_access_blocked, SOURCE_ACCESS_MESSAGE
+            if source_access_blocked(e):
+                await query.message.reply_text(SOURCE_ACCESS_MESSAGE,
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("← Меню", callback_data="ui:home")]]))
+                return
             await query.message.reply_text(
                 "Не удалось скачать видео Instagram. Проверь, что публикация открыта, и повтори." if platform == "instagram" else "Не удалось скачать видео. Повтори попытку или выбери другое качество.",
                 reply_markup=InlineKeyboardMarkup([
