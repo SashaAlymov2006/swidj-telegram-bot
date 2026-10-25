@@ -43,8 +43,18 @@ class Recognition:
     async def lookup(self,source):
         key=os.getenv('ACOUSTID_API_KEY','').strip()
         if not key:raise web.HTTPServiceUnavailable()
-        duration=await probe(source)
-        if not 12<=duration<=21600:raise ValueError('Use a recording of at least12 seconds')
+        duration=await probe(source,allow_unknown=True)
+        if not duration:
+            # MediaRecorder WebM/fragmented MP4 often omits the duration header.
+            # Decode the bounded recording to measure samples, not header metadata.
+            with tempfile.TemporaryDirectory(dir=Path(source).parent,prefix='measured-') as folder:
+                measured=Path(folder)/'recording.wav'
+                await process(['ffmpeg','-nostdin','-v','error','-y','-threads','2','-protocol_whitelist','file,pipe',
+                               '-format_whitelist','mp3,wav,ogg,flac,mov,matroska,webm','-i',str(source),
+                               '-t','121','-vn','-ar','11025','-ac','1',str(measured)],45)
+                duration=await probe(measured)
+        if duration<12:raise ValueError('recognitionTooShort')
+        if duration>21600:raise ValueError('recognitionInvalidAudio')
         raw=await process(['ffmpeg','-nostdin','-v','error','-threads','2','-protocol_whitelist','file,pipe',
                            '-format_whitelist','mp3,wav,ogg,flac,mov,matroska,webm','-i',str(source),
                            '-t','120','-vn','-ac','1','-ar','11025','-f','chromaprint','-fp_format','base64','pipe:1'],60)
@@ -96,7 +106,9 @@ class Recognition:
                     else:await read_upload(request,source,MAX_UPLOAD)
                     return web.json_response({'matches':await self.lookup(source),'provider':'AcoustID'})
                 except OverflowError:raise web.HTTPRequestEntityTooLarge(max_size=MAX_UPLOAD,actual_size=MAX_UPLOAD+1) from None
-                except (ValueError,KeyError,TypeError):raise web.HTTPBadRequest() from None
+                except (ValueError,KeyError,TypeError) as error:
+                    reason=str(error) if str(error) in ('recognitionTooShort','recognitionInvalidAudio') else 'recognitionInvalidAudio'
+                    return web.json_response({'reason':reason},status=400)
                 except asyncio.TimeoutError:raise web.HTTPGatewayTimeout() from None
                 except aiohttp.ClientError:raise web.HTTPServiceUnavailable() from None
 

@@ -50,6 +50,23 @@ class RecognitionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(received[0]['duration'],'15');self.assertTrue(received[0]['fingerprint'])
         self.bridge.application.bot.send_message.assert_not_called()
 
+    async def test_microphone_webm_without_duration_is_decoded_before_lookup(self):
+        from miniapp_studio import process,probe
+        raw=await process(['ffmpeg','-v','error','-f','lavfi','-i','sine=frequency=440:duration=21',
+                           '-c:a','libopus','-f','webm','pipe:1'],20)
+        source=self.root/'mic.webm';source.write_bytes(raw)
+        self.assertEqual(await probe(source,allow_unknown=True),0)
+        received=[]
+        async def provider(request):
+            received.append(dict(await request.post()))
+            return web.json_response({'status':'ok','results':[]})
+        app=web.Application();app.router.add_post('/lookup',provider);server=TestServer(app);await server.start_server();self.addAsyncCleanup(server.close)
+        with patch.dict(os.environ,{'ACOUSTID_API_KEY':'fixture'}),patch('app_recognition.LOOKUP_URL',str(server.make_url('/lookup'))):
+            response=await self.client.post('/api/recognize',headers=self.headers,data=upload(raw))
+        self.assertEqual(response.status,200,await response.text())
+        self.assertEqual(received[0]['duration'],'21')
+        self.assertEqual((await response.json())['matches'],[])
+
     async def test_cached_source_owner_is_checked_before_lookup(self):
         source=self.root/'source.wav';source.write_bytes(audio_bytes(15));exports=self.client.server.app['studio_worker'].exports
         token,_=exports.retain(77,source)

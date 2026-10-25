@@ -302,6 +302,12 @@ async def run():
         await app_page.locator('.recognition-ready').wait_for()
         assert await app_page.locator('.recognition-ready [data-action=download]').inner_text()=='Download audio MP3'
         assert calls['recognition']==1 and calls['send']==0
+        await app_page.locator('#record-music').click()
+        await asyncio.sleep(.4)
+        await app_page.locator('#record-music').click()
+        await app_page.wait_for_function("() => !!document.querySelector('.recognition-ready')")
+        assert calls['recognition']==2 and calls['send']==0
+
         await app_page.locator('.recognition-panel').scroll_into_view_if_needed()
         await app_page.screenshot(path=str(output/'miniapp-recognition-beta.png'))
 
