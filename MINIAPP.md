@@ -200,3 +200,8 @@ Video choices:144p,240p,360p,480p,720p,1080p,Original. Requested output is reduc
 
 
 2026-10-25 video interface: MP4 and MP3 downloads now have format-specific labels in results and native download dialogs. Extracted audio remains alongside the original video; both stay downloadable. Homepage shortcuts, expand-video/new-link actions and an indeterminate preparation indicator added. Recognition APIs and humming remain future work; no new service was enabled.
+
+
+2026-10-25 Identify music (Beta): separate app search panel records music or accepts an audio file. Free non-commercial AcoustID matching uses server-side ACOUSTID_API_KEY; only a Chromaprint fingerprint and duration are sent to the service. Existing FFmpeg provides the fingerprint muxer. No paid API was enabled. Register your own application key; keys are excluded from source archives.
+After a strong match, the app searches for a recording matching artist/title and prepares full audio automatically. Download or explicitly send it to chat from the result. Existing voice-to-words search remains separate. This is recorded-audio identification, not query-by-humming or a guarantee for noisy microphone recordings. Non-commercial service terms and rate limit: https://acoustid.org/webservice .
+220 offline tests and Chromium/WebKit UI passed; real Rick Astley recording was identified and a full matching MP3 prepared with byte-range playback.

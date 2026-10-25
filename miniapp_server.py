@@ -393,7 +393,7 @@ def create_app(*, token='', bridge=None):
                 uid = user['id']
                 bridge.allowed(uid)
                 from dispatch import user_lock
-                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio'):
+                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize'):
                     response=await handler(request)
                 else:
                     async with user_lock(uid):
@@ -549,6 +549,8 @@ def create_app(*, token='', bridge=None):
                     web.post('/api/jobs/{job:[a-f0-9]{24}}/cancel', job_status)])
     from miniapp_studio import register
     register(app, bridge)
+    from app_recognition import register as register_recognition
+    register_recognition(app)
     from app_lyrics import register as register_lyrics
     register_lyrics(app, bridge)
     from app_media import register as register_media

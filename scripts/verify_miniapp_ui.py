@@ -216,6 +216,10 @@ async def run():
                 mode=payload['mode'];calls['link']=payload
                 result={'kind':mode,'title':'Linked fixture','artist':'Fixture','filename':'Linked fixture.'+('mp4' if mode=='video' else 'mp3'),'duration':2,'has_audio':True,'poster':None,'url':'http://127.0.0.1:8765/studio-file/'+('c' if mode=='video' else 'd')*32}
             elif path=='link/audio':result={'kind':'audio','title':'Linked fixture','artist':'Fixture','filename':'Linked fixture.mp3','duration':24,'url':'http://127.0.0.1:8765/studio-file/'+'d'*32}
+            elif path=='recognize':
+                assert route.request.headers['content-type'].startswith('multipart/form-data')
+                calls['recognition']=calls.get('recognition',0)+1
+                result={'matches':[{'title':'App recording 1','artist':'Offline artist','query':'Offline artist App recording 1'}],'provider':'AcoustID'}
             elif path=='voice':
                 assert route.request.headers['content-type'].startswith('multipart/form-data')
                 result={'text':'Never gonna give you up'}
@@ -291,6 +295,16 @@ async def run():
             await app_page.locator('#dialog [data-action=download]').click()
         await (await prepared_download.value).save_as(str(output/'app-full-audio.wav'))
         assert (output/'app-full-audio.wav').read_bytes()[:4]==b'RIFF'
+        await app_page.locator('.recognition-panel summary').click()
+        assert 'Beta' in await app_page.locator('.recognition-panel summary').inner_text()
+        await app_page.locator('#recognition-file').set_input_files(str(output/'app-full-audio.wav'))
+        await app_page.locator('#recognize-music').click()
+        await app_page.locator('.recognition-ready').wait_for()
+        assert await app_page.locator('.recognition-ready [data-action=download]').inner_text()=='Download audio MP3'
+        assert calls['recognition']==1 and calls['send']==0
+        await app_page.locator('.recognition-panel').scroll_into_view_if_needed()
+        await app_page.screenshot(path=str(output/'miniapp-recognition-beta.png'))
+
         await app_page.evaluate("window.Telegram.WebApp.downloadFile=(value)=>{window.nativeDownload=value};window.Telegram.WebApp.isVersionAtLeast=()=>true")
         await app_page.locator('#player-art').click()
         await app_page.locator('#dialog [data-action=download]').click()
