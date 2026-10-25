@@ -2,6 +2,7 @@ import {AudioEngine, stamp} from './audio.js';
 import {liveEffects,dspDefaults} from './live.js';
 
 const paths = {
+  charts:'M4 20v-8M10 20V4M16 20V8M2 20h20',
   home:'M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z',
   search:'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
   library:'M4 4v16M9 4v16M14 4v16M18 4l3 16',
@@ -83,6 +84,8 @@ Object.assign(copy.en,{"recognitionNote": "Record music or choose an audio file.
 Object.assign(copy.ru,{"recognitionNote": "\u0417\u0430\u043f\u0438\u0448\u0438 \u043c\u0443\u0437\u044b\u043a\u0443 \u0438\u043b\u0438 \u0432\u044b\u0431\u0435\u0440\u0438 \u0430\u0443\u0434\u0438\u043e\u0444\u0430\u0439\u043b."});
 Object.assign(copy.en,{"recognitionTooShort": "The recording is too short. Record at least12 seconds.", "recognitionInvalidAudio": "Could not read this recording. Please record again.", "recognitionLimit": "The audio file is larger than32 MB."});
 Object.assign(copy.ru,{"recognitionTooShort": "\u0417\u0430\u043f\u0438\u0441\u044c \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u043a\u043e\u0440\u043e\u0442\u043a\u0430\u044f. \u0417\u0430\u043f\u0438\u0448\u0438 \u043d\u0435 \u043c\u0435\u043d\u0435\u0435 12 \u0441\u0435\u043a\u0443\u043d\u0434.", "recognitionInvalidAudio": "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u0442\u044c \u0437\u0430\u043f\u0438\u0441\u044c. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 \u0437\u0430\u043f\u0438\u0441\u0430\u0442\u044c \u0435\u0449\u0451 \u0440\u0430\u0437.", "recognitionLimit": "\u0410\u0443\u0434\u0438\u043e\u0444\u0430\u0439\u043b \u0431\u043e\u043b\u044c\u0448\u0435 32 \u041c\u0411."});
+Object.assign(copy.en,{"charts": "Charts", "chartsTitle": "Popular. Right now.", "chartsNote": "Top 50 songs by country.", "chartSource": "Apple Music Top 50", "chartCountry": "Country", "chartFilter": "Find a song in this chart", "chartUnavailable": "Could not load this chart. Please try again.", "chartNoMatches": "No songs match your filter.", "chartUpdated": "Updated", "chartCached": "Saved chart", "chartOpenSource": "View on Apple Music", "chartHome": "Explore the charts", "chartHomeNote": "The Top50. Choose your country.", "countryDE": "Germany", "countryUS": "United States", "countryGB": "United Kingdom", "countryFR": "France", "countryUA": "Ukraine", "countryRU": "Russia"});
+Object.assign(copy.ru,{"charts": "\u0427\u0430\u0440\u0442\u044b", "chartsTitle": "\u0422\u043e, \u0447\u0442\u043e \u0441\u043b\u0443\u0448\u0430\u044e\u0442 \u0441\u0435\u0439\u0447\u0430\u0441.", "chartsNote": "50 \u043f\u043e\u043f\u0443\u043b\u044f\u0440\u043d\u044b\u0445 \u043f\u0435\u0441\u0435\u043d \u043f\u043e \u0441\u0442\u0440\u0430\u043d\u0430\u043c.", "chartSource": "Apple Music Top 50", "chartCountry": "\u0421\u0442\u0440\u0430\u043d\u0430", "chartFilter": "\u041d\u0430\u0439\u0442\u0438 \u043f\u0435\u0441\u043d\u044e \u0432 \u0447\u0430\u0440\u0442\u0435", "chartUnavailable": "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0447\u0430\u0440\u0442. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 \u0435\u0449\u0451 \u0440\u0430\u0437.", "chartNoMatches": "\u041f\u043e \u044d\u0442\u043e\u043c\u0443 \u0444\u0438\u043b\u044c\u0442\u0440\u0443 \u043f\u0435\u0441\u0435\u043d \u043d\u0435\u0442.", "chartUpdated": "\u041e\u0431\u043d\u043e\u0432\u043b\u0451\u043d", "chartCached": "\u0421\u043e\u0445\u0440\u0430\u043d\u0451\u043d\u043d\u044b\u0439 \u0447\u0430\u0440\u0442", "chartOpenSource": "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0447\u0430\u0440\u0442 \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u0430", "chartHome": "\u041e\u0442\u043a\u0440\u043e\u0439 \u0447\u0430\u0440\u0442\u044b", "chartHomeNote": "\u0422\u043e\u043f 50. \u0412\u044b\u0431\u0435\u0440\u0438 \u0441\u0442\u0440\u0430\u043d\u0443.", "countryDE": "\u0413\u0435\u0440\u043c\u0430\u043d\u0438\u044f", "countryUS": "\u0421\u0428\u0410", "countryGB": "\u0412\u0435\u043b\u0438\u043a\u043e\u0431\u0440\u0438\u0442\u0430\u043d\u0438\u044f", "countryFR": "\u0424\u0440\u0430\u043d\u0446\u0438\u044f", "countryUA": "\u0423\u043a\u0440\u0430\u0438\u043d\u0430", "countryRU": "\u0420\u043e\u0441\u0441\u0438\u044f"});
 const demos = [
   ['Velvet hours','SwiDJ Originals'],['Sunset circuit','SwiDJ Originals'],['After the rain','SwiDJ Originals'],
   ['Blue distance','SwiDJ Originals'],['Soft focus','SwiDJ Originals'],['Golden hour','SwiDJ Originals']
@@ -129,9 +132,40 @@ function empty(title, note, name='music') { return `<div class="empty">${icon(na
 function heading(title, note) { return `<div class="page-heading"><p class="eyebrow">${e(t(route))}</p><h1>${e(t(title))}</h1><p>${e(t(note))}</p></div>`; }
 function note() { return demo ? `<p class="demo-note">${icon('info')}${e(t('demoNote'))}</p>` : ''; }
 function mediaShortcuts(){return `<div class="media-shortcuts">${['video','audio'].map(mode=>`<button type="button" class="media-shortcut" data-media-mode="${mode}">${icon(mode==='video'?'play':'download')}<span><strong>${e(t(mode==='video'?'videoShortcut':'audioShortcut'))}</strong><small>${e(t('downloadShortcutNote'))}</small></span></button>`).join('')}</div>`;}
+let chartCountry='de',chartData=null,chartsLoading=false,chartsError=false,chartFilter='',chartRequest=0,chartBusy=null;
+const chartResolved=new Map(),chartCountries=['de','us','gb','fr','ua','ru'];
+try{const saved=localStorage.getItem('swidj-chart-country');if(chartCountries.includes(saved))chartCountry=saved;}catch{}
+function chartKey(item){return chartCountry+':'+item.id;}
+function chartRows(){
+ const filter=chartFilter.toLocaleLowerCase().trim();
+ const entries=(chartData?.tracks||[]).map((track,index)=>({track,index})).filter(({track})=>(track.title+' '+track.artist).toLocaleLowerCase().includes(filter));
+ return entries.length?entries.map(({track,index})=>{const key=chartKey(track),ready=chartResolved.get(key);return `<article class="chart-row ${current?.id===ready?.id?'current':''}"><span class="chart-rank">${track.rank}</span><button type="button" class="chart-song plain" data-chart-play="${index}"><span class="chart-art">${track.artwork?`<img class="cover-image" src="${e(track.artwork)}" alt="" loading="lazy" decoding="async">`:icon('music')}</span><span><strong>${e(track.title)}</strong><small>${e(track.artist)}</small></span></button><button type="button" class="icon-btn" data-chart-play="${index}" aria-label="${e(t('play')+' '+track.title)}" ${chartBusy?'disabled':''}>${chartBusy===key?'<span class="activity-spinner"></span>':icon('play')}</button>${ready?`<button type="button" class="icon-btn" data-track="${e(ready.id)}" data-action="menu" aria-label="${e(t('more'))}">${icon('more')}</button>`:''}</article>`;}).join(''):`<p class="chart-empty">${e(t('chartNoMatches'))}</p>`;
+}
+function chartsScreen(){
+ const date=new Date(chartData?.updated||'');
+ return `<section class="chart-hero"><p class="eyebrow">SWIDJ / TOP 50</p><h1>${e(t('chartsTitle'))}</h1><p>${e(t('chartsNote'))}</p><span class="chart-hero-mark" aria-hidden="true">50</span></section><div class="chart-toolbar"><label>${e(t('chartCountry'))}<select id="chart-country">${chartCountries.map(country=>`<option value="${country}" ${chartCountry===country?'selected':''}>${e(t('country'+country.toUpperCase()))}</option>`).join('')}</select></label><button type="button" class="btn secondary" id="refresh-charts" ${chartsLoading?'disabled':''}>${icon('repeat')}${e(t('refresh'))}</button></div>${demo?`<p class="chart-empty">${e(t('needsTelegram'))}</p>`:chartsLoading?`<div class="loading" role="status">${e(t('loading'))}</div>`:chartsError?`<p class="chart-empty" role="status">${e(t('chartUnavailable'))}</p>`:chartData?`<div class="chart-source"><strong>${e(t('chartSource'))}</strong><span>${Number.isFinite(date.getTime())?e(t('chartUpdated')+' '+date.toLocaleDateString(language==='ru'?'ru-RU':'en-GB')):''}${chartData.stale?' / '+e(t('chartCached')):''}</span></div><input id="chart-filter" type="search" maxlength="80" value="${e(chartFilter)}" placeholder="${e(t('chartFilter'))}" aria-label="${e(t('chartFilter'))}"><section id="chart-tracks" class="chart-list">${chartRows()}</section><a class="chart-credit" href="${e(chartData.source_url)}" target="_blank" rel="noopener noreferrer">${e(t('chartOpenSource'))} &#8599;</a>`:''}`;
+}
+async function loadCharts(){
+ if(demo)return;const request=++chartRequest,country=chartCountry;chartsLoading=true;chartsError=false;if(route==='charts')render();
+ try{const response=await api('charts?country='+country);const data=await response.json();if(request===chartRequest)chartData=data;}
+ catch{if(request===chartRequest){chartsError=true;chartData=null;}}
+ finally{if(request===chartRequest){chartsLoading=false;if(route==='charts')render();}}
+}
+async function playChart(index){
+ if(chartBusy)return;const item=chartData?.tracks[Number(index)];if(!item)return;
+ const key=chartKey(item);chartBusy=key;render();
+ try{
+  let recording=chartResolved.get(key);
+  if(!recording){const tracks=(await(await api('search?q='+encodeURIComponent(item.query))).json()).tracks||[];recording=matchingRecording(item,tracks);
+   if(!recording){searchQuery=item.query;results=tracks;linkMode=false;navigate('search');return;}
+   extraTracks.set(recording.id,recording);
+  }
+  if(await playTrack(recording))chartResolved.set(key,recording);
+ }catch(error){report(error);}finally{chartBusy=null;if(route==='charts')render();}
+}
 function home() {
   const tracks = [...new Map([...(state.recent || []),...state.tracks].map(s=>[s.id,s])).values()].slice(0,4);
-  return `<section class="hero"><div class="hero-copy"><p class="eyebrow">${e(t('heroLabel'))}</p><h1>${e(t('hero1'))}<br><em>${e(t('hero2'))}</em></h1><p>${e(t('heroNote'))}</p><button class="btn" data-go="search">${icon('search')}${e(t('findMusic'))}</button><button type="button" class="text-btn hero-link" data-open-links>${e(t('links'))} &#8599;</button></div><div class="hero-disc" aria-hidden="true"></div><span class="hero-tag"><i></i>${e(t('yourSound'))}</span></section>${mediaShortcuts()}<div class="section-head"><div><h2>${e(t(demo?'continue':'fresh'))}</h2><p>${e(t(demo?'continueNote':'freshNote'))}</p></div><button class="text-btn" data-go="library">${e(t('allMusic'))}</button></div>${tracks.length?`<div class="card-grid">${tracks.map(card).join('')}</div>`:empty('emptyLibrary','emptyLibraryNote')}<div class="quick-grid"><button class="quick-card" data-go="studio"><span class="quick-icon">${icon('studio')}</span><span><strong>${e(t('quickStudio'))}</strong><small>${e(t('quickStudioNote'))}</small></span>${icon('arrow').replace('<svg','<svg class="arrow"')}</button><button class="quick-card" data-go="library"><span class="quick-icon">${icon('library')}</span><span><strong>${e(t('quickLibrary'))}</strong><small>${e(t('quickLibraryNote'))}</small></span>${icon('arrow').replace('<svg','<svg class="arrow"')}</button></div>${note()}`;
+  return `<section class="hero"><div class="hero-copy"><p class="eyebrow">${e(t('heroLabel'))}</p><h1>${e(t('hero1'))}<br><em>${e(t('hero2'))}</em></h1><p>${e(t('heroNote'))}</p><button class="btn" data-go="search">${icon('search')}${e(t('findMusic'))}</button><button type="button" class="text-btn hero-link" data-open-links>${e(t('links'))} &#8599;</button></div><div class="hero-disc" aria-hidden="true"></div><span class="hero-tag"><i></i>${e(t('yourSound'))}</span></section><button type="button" class="chart-spotlight" data-go="charts">${icon('charts')}<span><strong>${e(t('chartHome'))}</strong><small>${e(t('chartHomeNote'))}</small></span><b aria-hidden="true">50 &#8599;</b></button>${mediaShortcuts()}<div class="section-head"><div><h2>${e(t(demo?'continue':'fresh'))}</h2><p>${e(t(demo?'continueNote':'freshNote'))}</p></div><button class="text-btn" data-go="library">${e(t('allMusic'))}</button></div>${tracks.length?`<div class="card-grid">${tracks.map(card).join('')}</div>`:empty('emptyLibrary','emptyLibraryNote')}<div class="quick-grid"><button class="quick-card" data-go="studio"><span class="quick-icon">${icon('studio')}</span><span><strong>${e(t('quickStudio'))}</strong><small>${e(t('quickStudioNote'))}</small></span>${icon('arrow').replace('<svg','<svg class="arrow"')}</button><button class="quick-card" data-go="library"><span class="quick-icon">${icon('library')}</span><span><strong>${e(t('quickLibrary'))}</strong><small>${e(t('quickLibraryNote'))}</small></span>${icon('arrow').replace('<svg','<svg class="arrow"')}</button></div>${note()}`;
 }
 let recognitionBlob=null,recognitionUrl=null,recognitionBusy=false,recognitionMatches=null,recognitionTrack=null;
 function setRecognition(blob){recognitionBlob=blob;recognitionMatches=null;recognitionTrack=null;if(recognitionUrl)URL.revokeObjectURL(recognitionUrl);recognitionUrl=URL.createObjectURL(blob);}
@@ -193,10 +227,10 @@ function studio() {
 function render() {
   document.documentElement.lang = language;document.body.classList.toggle('studio-open',route==='studio');
   document.querySelectorAll('[data-i18n]').forEach(node=>node.textContent=t(node.dataset.i18n));
-  const nav = ['home','search','library','studio'].map(key=>`<button class="${route===key?'active':''}" data-go="${key}" ${route===key?'aria-current="page"':''}>${icon(key)}<span>${e(t(key))}</span></button>`).join('');
+  const nav = ['home','search','charts','library','studio'].map(key=>`<button class="${route===key?'active':''}" data-go="${key}" ${route===key?'aria-current="page"':''}>${icon(key)}<span>${e(t(key))}</span></button>`).join('');
   $('desktop-nav').innerHTML=nav; $('mobile-nav').innerHTML=nav;
   $('connection').textContent=t(demo?'demo':'connected'); $('language').textContent=language==='ru'?'EN':'RU';
-  $('content').innerHTML=failed?empty('authError','authHint','info'):({home,search:searchScreen,library:libraryScreen,studio}[route])();
+  $('content').innerHTML=failed?empty('authError','authHint','info'):({home,search:searchScreen,charts:chartsScreen,library:libraryScreen,studio}[route])();
   if(route==='home'&&resumeState&&trackById(resumeState.id))$('content').insertAdjacentHTML('afterbegin',`<button class="resume-card" id="resume-track">${icon('play')}<span><strong>${e(t('resume'))}</strong><small>${e(trackById(resumeState.id).title)} &middot; ${stamp(resumeState.position)}</small></span></button>`);
   if(route==='studio')$('content').querySelector('.studio-controls').insertAdjacentHTML('afterbegin',`<div class="studio-recipes"><h3>${e(t('presets'))}</h3><div class="recipe-grid">${['clean','warm','night','bright'].map(key=>`<button type="button" class="chip" data-recipe="${key}">${e(t(key))}</button>`).join('')}</div><div class="control-label"><label for="treble">${e(t('treble'))}</label><output>${engine.treble} dB</output></div><input id="treble" class="control-range" type="range" min="-6" max="6" step="1" value="${engine.treble}"><button type="button" class="btn secondary" id="compare-fx" aria-pressed="${engine.bypass}">${e(t(engine.bypass?'dry':'compare'))}</button><div class="studio-advanced"><label>${e(t('format'))}<select id="mix-format">${['mp3','wav'].map(f=>`<option value="${f}" ${f===exportFormat?'selected':''}>${f.toUpperCase()}</option>`).join('')}</select></label><section class="effect-rack"><div class="rack-heading"><h3>${e(t('effectRack'))}</h3><span>${studioEffects.length}/8</span></div><p class="fineprint">${e(t('liveNote'))}</p><div class="effect-grid">${['reverb','echo','delay','lofi','normalize','compressor','equalizer','mastering','pro_reverb','highpass','lowpass','reverse','tremolo','distortion','stereo'].map((f,i)=>`<button type="button" class="effect-tile ${studioEffects.includes(f)?'selected':''}" data-effect="${f}" aria-pressed="${studioEffects.includes(f)}" ${studioEffects.length>=8&&!studioEffects.includes(f)?'disabled':''}><span class="effect-glyph">${['~','&#9678;','///','&#9682;','=','&#8779;','&#9783;','&#10022;','&#8734;','&#8599;','&#8600;','&#8630;','&#8779;','&#9889;','&#8646;'][i]}</span><strong>${e(t(f))}</strong><span class="effect-mode">${e(t(liveEffects.has(f)?'live':'renderOnly'))}</span><small>${studioEffects.includes(f)?'&#10003;':''}</small></button>`).join('')}</div><div class="effect-chain">${studioEffects.length?studioEffects.map((f,i)=>`<span>${i+1}. ${e(t(f))}</span>`).join(''):e(t('none'))}</div></section><label>${e(t('pitch'))}<input id="mix-pitch" type="range" min="-12" max="12" step="0.1" value="${studioPitch}"><output id="pitch-value">${studioPitch}</output></label><p class="fineprint">${e(t('pitchNote'))}</p></div><div class="trim-grid">${['trimStart','trimEnd','fade'].map(key=>`<label>${e(t(key))}<input class="studio-number" type="number" min="0" max="${key==='fade'?10:7200}" step="0.1" data-edit="${key}" value="${engine[key]}"></label>`).join('')}</div><button type="button" class="btn secondary" id="save-mix" ${!trackBlob?'disabled':''}>${e(t('saveMix'))}</button></div>`);
   if(route==='studio'){
@@ -224,6 +258,7 @@ function render() {
   for (const [id,key] of [['previous','previous'],['next','next'],['repeat','repeat'],['seek','seek'],['volume','volume'],['language','language'],['player-art','nowPlaying'],['open-player','nowPlaying'],['expand-studio','openStudio'],['player-like','favorite']]) $(id).setAttribute('aria-label',t(key));
   if(renderBusy) for(const id of ['preview-mix','export-mix','save-mix','apply-mix']) if($(id))$(id).disabled=true;
   updatePlayer();
+  if(route==='charts'&&!chartData&&!chartsLoading&&!chartsError&&!demo)queueMicrotask(loadCharts);
 }
 function updatePlayer() {
   document.body.classList.toggle('is-playing',!audio.paused);
@@ -236,10 +271,10 @@ function updatePlayer() {
 }
 function navigate(value) {
   if(value!=='search'&&recorder?.state==='recording')recorder.stop();
-  route=['home','search','library','studio'].includes(value)?value:'home';
+  route=['home','search','charts','library','studio'].includes(value)?value:'home';
   if (location.hash !== '#'+route) location.hash=route; else render();
 }
-window.addEventListener('hashchange',()=>{route=location.hash.slice(1);if(!['home','search','library','studio'].includes(route))route='home';render();window.scrollTo(0,0);if(!matchMedia('(prefers-reduced-motion: reduce)').matches)$('content').animate([{opacity:0,transform:'translateY(10px)'},{opacity:1,transform:'translateY(0)'}],{duration:240,easing:'ease-out'});});
+window.addEventListener('hashchange',()=>{route=location.hash.slice(1);if(!['home','search','charts','library','studio'].includes(route))route='home';render();window.scrollTo(0,0);if(!matchMedia('(prefers-reduced-motion: reduce)').matches)$('content').animate([{opacity:0,transform:'translateY(10px)'},{opacity:1,transform:'translateY(0)'}],{duration:240,easing:'ease-out'});});
 
 async function runSearch(query){
   if(searching)return;searchQuery=query;searching=true;render();
@@ -611,6 +646,8 @@ document.addEventListener('click',async event=>{
     if(button.id==='record-music')return await recordVoice('music');
     if(button.id==='recognize-music')return await identifyMusic();
     if(button.dataset.recognitionMatch!==undefined){const match=recognitionMatches?.[Number(button.dataset.recognitionMatch)];if(match)await runSearch(match.query);return;}
+    if(button.id==='refresh-charts')return await loadCharts();
+    if(button.dataset.chartPlay!==undefined)return await playChart(button.dataset.chartPlay);
     if(button.id==='cancel-mix'&&activeRenderJob){await api('studio/jobs/'+activeRenderJob+'/cancel',{});return;}
     if(button.dataset.easyEffect){const values=easyEffectSettings[button.dataset.easyEffect]?.[Number(button.dataset.strength)];if(values){const playing=!audio.paused;invalidateMix();engine.setBypass(false);engine.setParams({...values});render();if(playing)await audio.play();}return;}
     if(button.id==='reset-effect-controls'){invalidateMix();engine.setParams({...dspDefaults});return render();}
@@ -712,6 +749,7 @@ document.addEventListener('input',event=>{
   if(node.id==='mix-pitch'){clearTimeout(toneTimer);toneRevision++;setStudioPitch(Number(node.value));syncTempo();if(engine.linked&&wasPlaying)audio.play().catch(report);}
   if(node.dataset.edit){engine[node.dataset.edit]=Math.max(0,Math.min(node.dataset.edit==='fade'?10:7200,Number(node.value)||0));}
   if(node.dataset.param){const playing=!audio.paused;invalidateMix();engine.setBypass(false);engine.setParams({[node.dataset.param]:Number(node.value)});$('value-'+node.dataset.param).textContent=node.value;if(playing)audio.play().catch(report);}
+  if(node.id==='chart-filter'){chartFilter=node.value;if($('chart-tracks'))$('chart-tracks').innerHTML=chartRows();}
   if(node.id==='link-url')linkUrl=node.value;
   if(node.id==='ambience'){const playing=!audio.paused;invalidateMix();engine.setBypass(false);if(playing)audio.play().catch(report);engine.setAmbience(Number(node.value));$('ambience-value').textContent=engine.ambience+'%';}
   if(node.id==='search-input')searchQuery=node.value;
@@ -724,6 +762,7 @@ document.addEventListener('input',event=>{
   if(['seek','full-seek'].includes(node.id)&&Number.isFinite(audio.duration))audio.currentTime=audio.duration*Number(node.value)/1000;
 });
 document.addEventListener('change',async event=>{
+  if(event.target.id==='chart-country'){chartCountry=event.target.value;chartFilter='';try{localStorage.setItem('swidj-chart-country',chartCountry);}catch{}await loadCharts();return;}
   if(event.target.id==='mix-pitch'||(event.target.id==='speed'&&studioPitch!==0)){scheduleTone();return;}
   if(event.target.name==='link-type'){linkType=event.target.value;return render();}
   if(event.target.id==='link-quality'){linkQuality=Number(event.target.value);return;}
@@ -749,7 +788,7 @@ window.addEventListener('pagehide',()=>{clearTimeout(recordTimer);if(recorder?.s
 
 async function start() {
   if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#101116');tg.setBackgroundColor?.('#101116');}
-  route=['home','search','library','studio'].includes(location.hash.slice(1))?location.hash.slice(1):'home';
+  route=['home','search','charts','library','studio'].includes(location.hash.slice(1))?location.hash.slice(1):'home';
   $('content').innerHTML=`<div class="loading">${e(t('loading'))}</div>`;
   if(demo) {
     // Only admit expected demo IDs; malformed local storage cannot become a media URL.

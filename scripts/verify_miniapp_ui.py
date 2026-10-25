@@ -186,7 +186,13 @@ async def run():
                     calls['upload']=None
                 result={'tracks':[calls['upload']] if calls['upload'] else [],'recent':[],
                         'favorites':[calls['upload']['id']] if calls['upload'] else [],'playlists':[],'language':'en','bot':'offline_bot'}
-            elif path=='search':result={'tracks':tracks}
+            elif path=='search':
+                calls['search_count']=calls.get('search_count',0)+1;result={'tracks':tracks}
+            elif path=='charts':
+                from urllib.parse import urlsplit,parse_qs
+                country=parse_qs(urlsplit(route.request.url).query).get('country',['de'])[0]
+                calls['chart_country']=country
+                result={'source':'Apple Music','country':country,'updated':'2026-10-25T00:00:00Z','stale':False,'source_url':'https://music.apple.com/'+country+'/browse/top-charts/songs','tracks':[{'id':str(101+i),'rank':i+1,'title':t['title'],'artist':t['artist'],'artwork':'','query':t['artist']+' '+t['title']} for i,t in enumerate(tracks)]}
             elif path=='prepare':
                 calls['track']=route.request.post_data_json['track'];calls['poll']=0;calls['cancel']=False
                 result={'job':'a'*24,'status':'queued','track':tracks[int(calls['track'])-1]}
@@ -415,6 +421,28 @@ async def run():
         await app_page.locator('.tempo-panel').scroll_into_view_if_needed()
         await app_page.screenshot(path=str(output/'miniapp-remix-controls.png'))
         assert await app_page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+
+        await app_page.locator('#mobile-nav [data-go=charts]').click()
+        await app_page.locator('.chart-row').first.wait_for()
+        assert await app_page.locator('.chart-row').count()==2
+        assert await app_page.locator('.chart-rank').all_inner_texts()==['1','2']
+        search_count=calls['search_count']
+        await app_page.locator('#chart-filter').fill('recording 1')
+        assert await app_page.locator('.chart-row').count()==1
+        assert calls['search_count']==search_count
+        await app_page.locator('#chart-country').select_option('us')
+        await app_page.locator('.chart-row').nth(1).wait_for()
+        assert calls['chart_country']=='us' and calls['search_count']==search_count
+        await app_page.locator('.chart-song').first.click()
+        await app_page.wait_for_function("() => document.querySelector('.chart-row.current')")
+        assert await app_page.locator('#now-title').inner_text()=='App recording 1'
+        assert await app_page.locator('.chart-rank').all_inner_texts()==['1','2']
+        assert calls['send']==0
+        for width in [320,390,540,720]:
+            await app_page.set_viewport_size({'width':width,'height':844})
+            assert await app_page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        await app_page.set_viewport_size({'width':390,'height':844})
+        await app_page.screenshot(path=str(output/'miniapp-charts-mobile.png'))
         # Verify the live audio graph changes actual samples, not just selected cards.
         ratio=await page.evaluate('''async () => {
           const {connectLive}=await import('/assets/live.js');

@@ -393,7 +393,7 @@ def create_app(*, token='', bridge=None):
                 uid = user['id']
                 bridge.allowed(uid)
                 from dispatch import user_lock
-                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize'):
+                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts'):
                     response=await handler(request)
                 else:
                     async with user_lock(uid):
@@ -407,7 +407,7 @@ def create_app(*, token='', bridge=None):
             response = web.json_response({'error': 500}, status=500)
         response.headers.update({'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
                                  'Referrer-Policy': 'no-referrer',
-                                 'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https://i.ytimg.com data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'"})
+                                 'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https://i.ytimg.com https://*.mzstatic.com data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'"})
         return response
 
     app = web.Application(middlewares=[boundary], client_max_size=16*1024)
@@ -551,6 +551,8 @@ def create_app(*, token='', bridge=None):
     register(app, bridge)
     from app_recognition import register as register_recognition
     register_recognition(app)
+    from app_charts import register as register_charts
+    register_charts(app,bridge)
     from app_lyrics import register as register_lyrics
     register_lyrics(app, bridge)
     from app_media import register as register_media

@@ -208,3 +208,6 @@ After a strong match, the app searches for a recording matching artist/title and
 
 
 2026-10-25 microphone fix: streaming WebM recordings without duration headers are decoded briefly to measure actual sample duration before AcoustID lookup. Size, too-short, and invalid-format errors are separate. Stopping the music recorder automatically starts identification; existing voice-to-words recording is unchanged. Real21-second streaming-WebM regression passed. This fixes input handling; provider matching limitations remain.
+
+
+2026-10-25 Charts: independent Apple Music Top50 lists for Germany, USA, UK, France, Ukraine and Russia. Dedicated navigation and home shortcut; country, source date, artwork and local filter. Rankings come from the provider feed, not app search history. Selecting one song resolves a recording using existing search/preparation; uncertain matches open recording choices. Cached30minutes, with explicit stale-country data during temporary provider failure. No new paid service, account or key required. Source: https://rss.marketingtools.apple.com/ . Provider metadata does not provide subscription audio.
