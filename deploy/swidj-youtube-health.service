@@ -1,0 +1,12 @@
+[Unit]
+Description=SwiDJ YouTube availability and authorization monitor
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/swidj/youtube_health.py run --root /opt/swidj
+TimeoutStartSec=100
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true

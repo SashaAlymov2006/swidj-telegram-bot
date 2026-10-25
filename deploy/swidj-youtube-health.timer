@@ -1,0 +1,12 @@
+[Unit]
+Description=Check SwiDJ YouTube access every 30 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+RandomizedDelaySec=90s
+AccuracySec=30s
+Unit=swidj-youtube-health.service
+
+[Install]
+WantedBy=timers.target
