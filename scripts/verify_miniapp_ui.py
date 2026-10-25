@@ -25,6 +25,14 @@ async def run():
         await page.locator('.music-card').first.wait_for()
         assert await page.locator('.music-card').count() == 4
         await page.screenshot(path=str(output/'miniapp-desktop.png'),full_page=True)
+        assert await page.locator('.mood-card').count()==4
+        assert await page.locator('.hero-disc').evaluate("el=>getComputedStyle(el).animationName")=='none'
+        await page.locator('[data-mood="0"]').click()
+        await page.locator('.track-row').first.wait_for()
+        assert await page.locator('#search-input').input_value()=='Velvet'
+        await page.locator('#desktop-nav [data-go=home]').click()
+        await page.locator('.music-card').first.wait_for()
+
         await page.locator('.music-card [data-action=play]').first.click()
         await page.locator('#play[aria-label="Пауза"]').wait_for()
         await asyncio.sleep(.2)
@@ -142,6 +150,7 @@ async def run():
         await page.locator('#mobile-nav [data-go=home]').click()
         await page.locator('.hero').wait_for()
         await page.locator('.toast.show').wait_for(state='hidden')
+        assert await page.locator('.resume-card').count()<=1
         await page.screenshot(path=str(output/'miniapp-mobile.png'))
         assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         player = await page.locator('.player').bounding_box()
@@ -242,7 +251,7 @@ async def run():
         await app_page.locator('[data-effect=compressor]').click()
         await app_page.wait_for_function("() => document.querySelectorAll('.effect-tile[aria-pressed=true]').length===3")
         assert await app_page.evaluate('!document.querySelector("#audio").paused')
-        assert await app_page.evaluate('document.querySelector("#audio").currentTime>0')
+        await app_page.wait_for_function('document.querySelector("#audio").currentTime>0')
         await app_page.locator('#apply-mix').click()
         await app_page.locator('#toast').filter(has_text='Playing your processed mix').wait_for()
         await app_page.locator('#compare-fx').click()
