@@ -6,7 +6,7 @@ import secrets
 import shutil
 import time
 from media_store import MediaStore
-from app_limits import STUDIO_OUTPUT_BYTES,TEMP_CACHE_BYTES
+from app_limits import STUDIO_OUTPUT_BYTES,TEMP_CACHE_BYTES,DISK_RESERVE_BYTES
 
 FILE_NAME=re.compile(r'[A-Za-z0-9_-]{32}\.(?:mp3|wav|mp4|jpg)')
 
@@ -17,7 +17,7 @@ class ExportFiles:
         self.ttl,self.budget=ttl,budget
         self.items={}
 
-    def prune(self,incoming=0):
+    def prune(self,incoming=0,large=False):
         if self.root.is_symlink():raise ValueError('Invalid export storage')
         now=time.time();files=[]
         deadlines={value['path']:value['expires'] for value in self.items.values()}
@@ -29,18 +29,21 @@ class ExportFiles:
                     stat=path.stat()
                     if now>deadlines.get(path,stat.st_mtime+self.ttl):path.unlink(missing_ok=True)
                     else:files.append((stat.st_mtime,stat.st_size,path))
+        budget=max(self.budget,incoming) if large else max(self.budget,max((x[1] for x in files),default=0)) if not incoming else self.budget
         total=sum(x[1] for x in files)
         for _,size,path in sorted(files):
-            if total+incoming<=self.budget:break
+            if total+incoming<=budget:break
             path.unlink(missing_ok=True);total-=size
         self.items={k:v for k,v in self.items.items() if v['expires']>now and v['path'].is_file()}
-        if incoming>self.budget:raise ValueError('Export too large')
+        if incoming>budget:raise ValueError('Export too large')
 
     def retain(self,uid,source,title='SwiDJ mix',feature='studio',ttl=None):
         source=Path(source)
-        if source.suffix not in ('.mp3','.wav','.mp4','.jpg') or source.is_symlink() or not 0<source.stat().st_size<=STUDIO_OUTPUT_BYTES:
+        if source.suffix not in ('.mp3','.wav','.mp4','.jpg') or source.is_symlink() or not (source.stat().st_size>0 and (feature=='downloads' or source.stat().st_size<=STUDIO_OUTPUT_BYTES)):
             raise ValueError('Invalid export')
-        self.prune(source.stat().st_size)
+        self.prune(source.stat().st_size,large=feature=='downloads')
+        self.root.mkdir(parents=True,exist_ok=True)
+        if feature=='downloads' and shutil.disk_usage(self.root).free<source.stat().st_size+DISK_RESERVE_BYTES:raise OSError('Not enough disk space')
         while len(self.items)>=128:
             oldest=next(iter(self.items));self.items.pop(oldest)['path'].unlink(missing_ok=True)
         token=secrets.token_urlsafe(24)

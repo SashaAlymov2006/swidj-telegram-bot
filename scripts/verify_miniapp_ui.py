@@ -328,6 +328,9 @@ async def run():
         await app_page.locator('[data-search-tab=links]').click()
         await app_page.locator('#link-url').fill('https://www.instagram.com/reel/fixture/')
         await app_page.locator('input[name=link-type][value=video]').check()
+        assert await app_page.locator('#link-quality option').count()==7
+        await app_page.locator('#link-quality').select_option('1080')
+        await app_page.locator('#link-quality').select_option('0')
         await app_page.locator('#prepare-link').click()
         await app_page.locator('#link-video').wait_for()
         assert await app_page.locator('#link-video').get_attribute('playsinline') is not None

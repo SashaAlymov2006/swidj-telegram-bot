@@ -32,6 +32,8 @@ class LinkValidationTests(unittest.TestCase):
         formats=[{'format_id':'social','url':'https://media.example.test/file.mp4','ext':'mp4',
                   'height':1080,'width':1920,'vcodec':'h264','acodec':'aac','protocol':'https'}]
         def extract(downloader,url,download=True):
+            self.assertIn('TikTokVM',downloader._ies)
+            self.assertIsNone(downloader.params['match_filter']({'duration':12*3600,'is_live':False}))
             selected=list(downloader.build_format_selector(downloader.params['format'])({'formats':formats,'has_merged_format':True,'incomplete_formats':False}))
             self.assertEqual(len(selected),1)
             self.assertEqual(selected[0]['format_id'],'social')
@@ -52,6 +54,8 @@ class LinkValidationTests(unittest.TestCase):
         self.assertEqual(validate({'url':duplicated})[0],'https://www.youtube.com/watch?v=7DVM7DYJX1c')
         self.assertEqual(validate({'url':'https://artist.bandcamp.com/track/song'})[3],'bandcamp')
         self.assertEqual(validate({'url':'https://vimeo.com/12345','mode':'video'})[3],'vimeo')
+        for height in [0,144,240,360,480,720,1080]:
+            self.assertEqual(validate({'url':'https://vm.tiktok.com/ABC12/','height':height})[2],height)
 
 class AppMediaTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

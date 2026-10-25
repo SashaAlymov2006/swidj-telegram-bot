@@ -13,15 +13,15 @@ from urllib.parse import urlsplit,urlunsplit,parse_qs,urlencode
 from aiohttp import web
 from miniapp_studio import process,probe
 
-from app_limits import MEDIA_BYTES,MEDIA_SECONDS
-MAX_BYTES=MEDIA_BYTES
+from app_limits import LINK_MAX_BYTES,LINK_MAX_SECONDS,LINK_QUALITIES,link_budget
+MAX_BYTES=LINK_MAX_BYTES
 DIRECT={'youtube','soundcloud','tiktok','instagram','vimeo','bandcamp'}
 
 def validate(payload):
     from catalog_links import classify
     if not isinstance(payload,dict):raise ValueError('Invalid link')
     text=payload.get('url','');mode=payload.get('mode','audio');height=payload.get('height',360)
-    if not isinstance(text,str) or not 1<len(text)<=4096 or mode not in ('audio','video') or type(height) is not int or height not in (360,720):raise ValueError('Invalid options')
+    if not isinstance(text,str) or not 1<len(text)<=4096 or mode not in ('audio','video') or type(height) is not int or height not in LINK_QUALITIES:raise ValueError('Invalid options')
     matches=re.findall(r'https?://[^\s<>]*?(?=https?://|\s|$)',text.strip(),flags=re.I)
     if not matches:raise ValueError('Invalid link')
     url=matches[0].rstrip('.,;!?)"')
@@ -38,7 +38,8 @@ def validate(payload):
     if mode=='video' and platform not in {'youtube','tiktok','instagram','vimeo'}:raise ValueError('No video on this platform')
     return url,mode,height,platform
 
-async def normalize(source,target,mode):
+async def normalize(source,target,mode,height=0):
+    budget=link_budget(Path(target).parent)
     if mode=='video':
         raw=await process(['ffprobe','-v','error','-protocol_whitelist','file,pipe','-format_whitelist','mov,matroska,webm',
                            '-select_streams','v:0','-show_entries','stream=codec_name,pix_fmt,width,height:format=duration','-of','json',str(source)],15)
@@ -47,17 +48,19 @@ async def normalize(source,target,mode):
         duration=float(info['format']['duration'])
         if not math.isfinite(duration) or duration<=0:raise ValueError('Invalid video')
     else:duration=await probe(source)
-    if duration>MEDIA_SECONDS:raise ValueError('Media too long')
+    if LINK_MAX_SECONDS and duration>LINK_MAX_SECONDS:raise ValueError('Media too long')
     command=['ffmpeg','-nostdin','-v','error','-y','-threads','2','-protocol_whitelist','file,pipe',
              '-format_whitelist','mp3,wav,ogg,flac,mov,matroska,webm','-i',str(source),'-map_metadata','-1']
     if mode=='audio':command+=['-vn','-c:a','libmp3lame','-b:a','192k']
-    elif info['streams'][0].get('codec_name')=='h264' and info['streams'][0].get('pix_fmt')=='yuv420p' and max(info['streams'][0].get('width',0),info['streams'][0].get('height',0))<=1920:
+    elif info['streams'][0].get('codec_name')=='h264' and info['streams'][0].get('pix_fmt')=='yuv420p' and (not height or max(info['streams'][0].get('width',0),info['streams'][0].get('height',0))<=height*16/9):
         streams=json.loads(await process(['ffprobe','-v','error','-select_streams','a:0','-show_entries','stream=codec_name','-of','json',str(source)],15))
         command+=['-c:v','copy','-c:a','copy' if not streams.get('streams') or streams['streams'][0].get('codec_name')=='aac' else 'aac','-movflags','+faststart']
-    else:command+=['-vf','scale=w=min(1280\,iw):h=min(720\,ih):force_original_aspect_ratio=decrease:force_divisible_by=2',
+    else:
+        bound=round(height*16/9) if height else 100000
+        command+=['-vf',fr'scale=w=min({bound}\,iw):h=min({bound}\,ih):force_original_aspect_ratio=decrease:force_divisible_by=2',
                   '-c:v','libx264','-preset','veryfast','-crf','25','-pix_fmt','yuv420p','-c:a','aac','-b:a','128k','-movflags','+faststart']
-    await process(command+['-threads','2','-fs',str(MAX_BYTES+1024*1024),str(target)],600)
-    if not 0<target.stat().st_size<=MAX_BYTES:raise ValueError('Media too large')
+    await process(command+['-threads','2','-fs',str(budget),str(target)],600)
+    if not 0<target.stat().st_size<budget:raise OSError('Not enough disk space')
     return duration
 
 def register(app,bridge):
@@ -80,9 +83,9 @@ def register(app,bridge):
                     if result.get('kind')=='search':return web.json_response(result)
                     if result.get('error'):return web.json_response({'reason':result['error']},status=502)
                     source=Path(result['path'])
-                    if source.is_symlink() or source.resolve().parent!=Path(directory).resolve() or not 0<source.stat().st_size<=MAX_BYTES:raise ValueError('Invalid output')
+                    if source.is_symlink() or source.resolve().parent!=Path(directory).resolve() or not source.stat().st_size>0:raise ValueError('Invalid output')
                     target=Path(directory)/('ready.mp4' if mode=='video' else 'ready.mp3')
-                    duration=await normalize(source,target,mode)
+                    duration=await normalize(source,target,mode,height)
                     token,item=app['studio_worker'].exports.retain(uid,target,result.get('title','SwiDJ'),feature='downloads',ttl=max(3600,duration+600))
                     poster=None;has_audio=True
                     if mode=='video':
@@ -100,7 +103,7 @@ def register(app,bridge):
                 except asyncio.TimeoutError:raise web.HTTPGatewayTimeout() from None
                 except (ValueError,KeyError,TypeError,OSError) as error:
                     message=str(error).lower()
-                    reason='mediaTooLong' if 'too long' in message else 'mediaTooLarge' if 'too large' in message else 'sourceUnavailable'
+                    reason='diskSpace' if 'disk space' in message else 'mediaTooLong' if 'too long' in message else 'mediaTooLarge' if 'too large' in message else 'sourceUnavailable'
                     return web.json_response({'reason':reason},status=502)
                 finally:running.pop(uid,None)
     async def cancel(request):
@@ -142,6 +145,7 @@ def fetch(payload,directory):
         response=requests.get('https://open.spotify.com/oembed',params={'url':url},timeout=12)
         response.raise_for_status();metadata=response.json()
         return {'kind':'search','query':(str(metadata['title'])+' '+str(metadata.get('author_name') or ''))[:120]}
+    budget=link_budget(directory)
     import yt_dlp
     class Quiet:
         def debug(self,*args):pass
@@ -150,17 +154,20 @@ def fetch(payload,directory):
     def progress(info):
         from operations import checkpoint
         checkpoint()
-        if info.get('downloaded_bytes',0)>MAX_BYTES:raise ValueError('File too large')
+        if info.get('downloaded_bytes',0)>budget:raise OSError('Not enough disk space')
     def match(info,**kwargs):
         duration=info.get('duration')
-        if info.get('is_live') or isinstance(duration,(int,float)) and (not math.isfinite(duration) or duration>MEDIA_SECONDS):raise ValueError('Media too long')
+        if info.get('is_live'):raise ValueError('Live broadcast')
+        if isinstance(duration,(int,float)) and (not math.isfinite(duration) or LINK_MAX_SECONDS and duration>LINK_MAX_SECONDS):raise ValueError('Media too long')
     options={'outtmpl':str(Path(directory)/'source.%(ext)s'),'noplaylist':True,'playlist_items':'1',
              'socket_timeout':12,'retries':1,'fragment_retries':1,'extractor_retries':1,
-             'quiet':True,'no_warnings':True,'logger':Quiet(),'max_filesize':MAX_BYTES,
+             'quiet':True,'no_warnings':True,'logger':Quiet(),'max_filesize':budget,
              'progress_hooks':[progress],'match_filter':match,'restrictfilenames':True,
              'format':'bestaudio/best' if mode=='audio' else f'bv*[height<={height}][vcodec^=avc]+ba[acodec^=mp4a]/b[height<={height}][ext=mp4]/bv*[height<={height}]+ba/b[height<={height}]',
-             'merge_output_format':'mp4','allowed_extractors':['youtube.*','soundcloud.*','tiktok.*','instagram.*','vimeo.*','bandcamp.*'],
+             'merge_output_format':'mp4','allowed_extractors':['youtube.*','soundcloud.*','tiktok.*',r'vm\.tiktok','instagram.*','vimeo.*','bandcamp.*'],
              'cookiefile':(os.getenv('YTDLP_COOKIE_FILE') or None) if platform=='youtube' else None}
+    if mode=='video' and not height:options['format']='bv*[vcodec^=avc]+ba[acodec^=mp4a]/b[ext=mp4]/bv*+ba/b'
+    elif mode=='video':options['format']+='/b[ext=mp4]/b'
     if platform in ('tiktok','instagram'):
         # Social clips commonly expose one combined MP4 above the selected YouTube height.
         # Match the working chat downloader; normalize handles phone-compatible output.
@@ -182,7 +189,9 @@ if __name__=='__main__':
     except Exception as error:
         message=str(error).lower()
         reason='sourceUnavailable'
-        if 'too large' in message or 'max-filesize' in message:reason='mediaTooLarge'
+        if 'disk space' in message:reason='diskSpace'
+        elif 'too large' in message or 'max-filesize' in message:reason='mediaTooLarge'
+        elif 'live broadcast' in message:reason='sourceLive'
         elif 'duration' in message or 'too long' in message:reason='mediaTooLong'
         elif 'sign in' in message or 'login' in message or 'not a bot' in message:reason='sourceLogin'
         elif '429' in message:reason='sourceRateLimit'

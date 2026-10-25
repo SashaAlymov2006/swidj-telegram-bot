@@ -20,6 +20,14 @@ class ExportRetentionTests(unittest.TestCase):
             self.assertIsNone(cache.get(b));self.assertFalse(second['path'].exists())
             self.assertTrue(protected.exists())
 
+    def test_link_export_can_exceed_cache_target_and_remains_downloadable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'large.mp4';source.write_bytes(b'x'*80)
+            cache=ExportFiles(root/'exports',budget=40)
+            token,item=cache.retain(77,source,'Clip',feature='downloads')
+            self.assertIsNotNone(cache.get(token))
+            self.assertEqual(item['path'].stat().st_size,80)
+
     def test_filenames_are_safe_and_tokens_are_not_paths(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);source=root/'input.mp3';source.write_bytes(b'x')
