@@ -26,6 +26,7 @@ async def run():
         assert await page.locator('.music-card').count() == 4
         await page.screenshot(path=str(output/'miniapp-desktop.png'),full_page=True)
         assert await page.locator('.mood-card').count()==0
+        assert await page.locator('[data-media-mode=video]').count()==1
         await page.locator('.music-card [data-action=play]').first.click()
         await page.locator('#play[aria-label="Пауза"]').wait_for()
         await asyncio.sleep(.2)
@@ -336,10 +337,22 @@ async def run():
         assert await app_page.locator('#link-video').get_attribute('playsinline') is not None
         assert await app_page.locator('#link-video').get_attribute('controls') is not None
         await app_page.screenshot(path=str(output/'miniapp-video-links.png'))
+        assert await app_page.locator('#download-link').inner_text()=='Download video MP4'
         await app_page.locator('#download-link').click()
+        assert await app_page.locator('#native-export').inner_text()=='Download video MP4'
         assert await app_page.evaluate('window.nativeDownload.file_name.endsWith(".mp4")')
         await app_page.locator('#dialog .dialog-head button').click()
         await app_page.locator('#extract-link-audio').click()
+        await app_page.locator('#download-extracted').wait_for()
+        assert await app_page.locator('#link-video').count()==1
+        assert await app_page.locator('#download-link').inner_text()=='Download video MP4'
+        assert await app_page.locator('#download-extracted').inner_text()=='Download audio MP3'
+        await app_page.locator('#download-link').click()
+        assert await app_page.evaluate('window.nativeDownload.file_name.endsWith(".mp4")')
+        await app_page.locator('#dialog .dialog-head button').click()
+        await app_page.locator('#download-extracted').click()
+        assert await app_page.evaluate('window.nativeDownload.file_name.endsWith(".mp3")')
+        await app_page.locator('#dialog .dialog-head button').click()
         await app_page.locator('#studio-link').click()
         await app_page.locator('[data-speed-preset="1.25"]').click()
         await app_page.locator('[data-tone-preset="0"]').click()
