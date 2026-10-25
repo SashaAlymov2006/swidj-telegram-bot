@@ -155,14 +155,29 @@ async function playChart(index){
  if(chartBusy)return;const item=chartData?.tracks[Number(index)];if(!item)return;
  const key=chartKey(item);chartBusy=key;render();
  try{
-  let recording=chartResolved.get(key);
-  if(!recording){const tracks=(await(await api('search?q='+encodeURIComponent(item.query))).json()).tracks||[];recording=matchingRecording(item,tracks);
-   if(!recording){searchQuery=item.query;results=tracks;linkMode=false;navigate('search');return;}
-   extraTracks.set(recording.id,recording);
+  // Unlock audio during the original tap, before waiting for search/network.
+  await engine.unlock();
+  const cached=chartResolved.get(key);let candidates=cached?[cached]:null;
+  if(!candidates){
+   let response;
+   try{response=await api('search?q='+encodeURIComponent(item.query));}
+   catch(error){if(error.message!=='rateLimit')throw error;await new Promise(resolve=>setTimeout(resolve,3200));response=await api('search?q='+encodeURIComponent(item.query));}
+   const tracks=(await response.json()).tracks||[];candidates=matchingRecordings(item,tracks).slice(0,2);
+   if(!candidates.length){searchQuery=item.query;results=tracks;linkMode=false;navigate('search');return;}
   }
-  if(await playTrack(recording))chartResolved.set(key,recording);
+  let lastError;
+  for(const recording of candidates){
+   extraTracks.set(recording.id,recording);
+   try{if(await playTrack(recording))chartResolved.set(key,recording);return;}
+   catch(error){
+    lastError=error;chartResolved.delete(key);
+    if(!['prepareFailed','sourceUnavailable','sourceLogin','sourceRateLimit','invalidAudio'].includes(error.message)&&error.name!=='NotSupportedError')throw error;
+   }
+  }
+  if(lastError)throw lastError;
  }catch(error){report(error);}finally{chartBusy=null;if(route==='charts')render();}
 }
+
 function home() {
   const tracks = [...new Map([...(state.recent || []),...state.tracks].map(s=>[s.id,s])).values()].slice(0,4);
   return `<section class="hero"><div class="hero-copy"><p class="eyebrow">${e(t('heroLabel'))}</p><h1>${e(t('hero1'))}<br><em>${e(t('hero2'))}</em></h1><p>${e(t('heroNote'))}</p><button class="btn" data-go="search">${icon('search')}${e(t('findMusic'))}</button><button type="button" class="text-btn hero-link" data-open-links>${e(t('links'))} &#8599;</button></div><div class="hero-disc" aria-hidden="true"></div><span class="hero-tag"><i></i>${e(t('yourSound'))}</span></section><button type="button" class="chart-spotlight" data-go="charts">${icon('charts')}<span><strong>${e(t('chartHome'))}</strong><small>${e(t('chartHomeNote'))}</small></span><b aria-hidden="true">50 &#8599;</b></button>${mediaShortcuts()}<div class="section-head"><div><h2>${e(t(demo?'continue':'fresh'))}</h2><p>${e(t(demo?'continueNote':'freshNote'))}</p></div><button class="text-btn" data-go="library">${e(t('allMusic'))}</button></div>${tracks.length?`<div class="card-grid">${tracks.map(card).join('')}</div>`:empty('emptyLibrary','emptyLibraryNote')}<div class="quick-grid"><button class="quick-card" data-go="studio"><span class="quick-icon">${icon('studio')}</span><span><strong>${e(t('quickStudio'))}</strong><small>${e(t('quickStudioNote'))}</small></span>${icon('arrow').replace('<svg','<svg class="arrow"')}</button><button class="quick-card" data-go="library"><span class="quick-icon">${icon('library')}</span><span><strong>${e(t('quickLibrary'))}</strong><small>${e(t('quickLibraryNote'))}</small></span>${icon('arrow').replace('<svg','<svg class="arrow"')}</button></div>${note()}`;
@@ -170,7 +185,8 @@ function home() {
 let recognitionBlob=null,recognitionUrl=null,recognitionBusy=false,recognitionMatches=null,recognitionTrack=null;
 function setRecognition(blob){recognitionBlob=blob;recognitionMatches=null;recognitionTrack=null;if(recognitionUrl)URL.revokeObjectURL(recognitionUrl);recognitionUrl=URL.createObjectURL(blob);}
 function musicWords(text){return String(text).normalize('NFKC').toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu)||[];}
-function matchingRecording(match,tracks){const title=musicWords(match.title).filter(x=>x.length>1),artist=musicWords(match.artist).filter(x=>x.length>1);return tracks.find(track=>{const words=new Set(musicWords(track.title+' '+track.artist));return title.length&&artist.length&&title.every(x=>words.has(x))&&artist.every(x=>words.has(x));});}
+function matchingRecordings(match,tracks){const title=musicWords(match.title).filter(x=>x.length>1),artist=musicWords(match.artist).filter(x=>x.length>1);return tracks.filter(track=>{const words=new Set(musicWords(track.title+' '+track.artist));return title.length&&artist.length&&title.every(x=>words.has(x))&&artist.every(x=>words.has(x));});}
+function matchingRecording(match,tracks){return matchingRecordings(match,tracks)[0];}
 function recognitionPanel(){return `<details class="recognition-panel"><summary>${e(t('recognitionTitle'))}</summary><p>${e(t('recognitionNote'))}</p><div class="voice-actions"><button type="button" class="btn secondary" id="record-music" ${recognitionBusy?'disabled':''}>${e(t(recorder?.state==='recording'?'stopVoice':'recordMusic'))}</button><label class="btn secondary" for="recognition-file">${e(t('recognitionFile'))}</label><input id="recognition-file" type="file" accept="audio/*"></div>${recognitionUrl?`<audio controls src="${e(recognitionUrl)}"></audio><button type="button" class="btn" id="recognize-music" ${recognitionBusy||recorder?.state==='recording'?'disabled':''}>${e(t(recognitionBusy?'recognizingMusic':'recognizeMusic'))}</button>`:''}${recognitionTrack?`<section class="recognition-ready"><strong>${e(recognitionTrack.title)}</strong><span>${e(recognitionTrack.artist)}</span><button type="button" class="btn" data-track="${e(recognitionTrack.id)}" data-action="download">${icon('download')}${e(t('downloadAudio'))}</button><button type="button" class="btn secondary" data-track="${e(recognitionTrack.id)}" data-action="send">${e(t('send'))}</button></section>`:''}${recognitionMatches!==null&&!recognitionTrack?`<section class="recognition-results"><h3>${e(t(recognitionMatches.length?'recognitionMatches':'recognitionEmpty'))}</h3>${recognitionMatches.map((match,i)=>`<button type="button" class="dialog-option" data-recognition-match="${i}">${icon('search')}<span><strong>${e(match.title)}</strong><small>${e(match.artist)}</small></span></button>`).join('')}</section>`:''}</details>`;}
 async function identifyMusic(){
  if(demo)return toast('needsTelegram');if(recognitionBusy||!recognitionBlob)return;

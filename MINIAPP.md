@@ -211,3 +211,6 @@ After a strong match, the app searches for a recording matching artist/title and
 
 
 2026-10-25 Charts: independent Apple Music Top50 lists for Germany, USA, UK, France, Ukraine and Russia. Dedicated navigation and home shortcut; country, source date, artwork and local filter. Rankings come from the provider feed, not app search history. Selecting one song resolves a recording using existing search/preparation; uncertain matches open recording choices. Cached30minutes, with explicit stale-country data during temporary provider failure. No new paid service, account or key required. Source: https://rss.marketingtools.apple.com/ . Provider metadata does not provide subscription audio.
+
+
+2026-10-25 chart playback: unlock the audio context on the original chart tap before waiting for search. Try a second matching recording when the first source cannot prepare audio. Retry a search-rate-limit response once after the existing cooldown. Fresh WebKit chart-first-play regression includes delayed networking. Real first German chart track, Tate McRae Housewife, prepared successfully from three matching sources.
