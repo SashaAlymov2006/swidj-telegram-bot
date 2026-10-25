@@ -214,6 +214,10 @@ def _extract_media(options, query, directory):
 
 
 def download_youtube_audio(query: str):
+    from catalog_links import classify
+    if classify(query) == 'soundcloud':
+        data = download_soundcloud_audio(query)
+        return data['path'], data
     check_ffmpeg()
     temp_dir = tempfile.mkdtemp(dir=scratch_root(), prefix="yt_audio_")
 
