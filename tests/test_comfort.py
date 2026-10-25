@@ -12,28 +12,11 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from operations import Operation, OperationCancelled, checkpoint, cancel, run_process, _active, _current
 from dispatch import serialize_user
 from lyrics_search import phrases, search_lyrics
-from versions import find_versions, request_versions, choose_version, direct_recording_url
+from versions import find_versions, request_versions, choose_version
 from effect_preview import accept_preview
 
 
 class ComfortUnitTests(unittest.TestCase):
-    def test_soundcloud_search_returns_only_canonical_recordings(self):
-        manager = MagicMock()
-        manager.__enter__.return_value.extract_info.return_value = {'entries': [
-            {'id':'42','webpage_url':'https://soundcloud.com/artist/song','title':'Song','duration':180},
-            {'id':'42','webpage_url':'https://soundcloud.com/artist/song','title':'Duplicate'},
-            {'webpage_url':'http://127.0.0.1/private','title':'Unsafe'},
-            {'webpage_url':'https://soundcloud.com/artist/sets/album','title':'Playlist'},
-        ]}
-        with patch.dict(os.environ, SEARCH_RECORDING_SOURCE='soundcloud'), patch('versions.yt_dlp.YoutubeDL',return_value=manager), patch('versions.soundcloud_available',side_effect=lambda song:song):
-            songs=find_versions('Artist Song')
-        self.assertEqual(len(songs),1)
-        self.assertEqual(songs[0]['source'],'SoundCloud')
-        self.assertTrue(direct_recording_url(songs[0]['url']))
-        manager.__enter__.return_value.extract_info.assert_called_once_with('scsearch5:Artist Song',download=False)
-        for url in ('https://soundcloud.com.evil.test/a/b','https://soundcloud.com/a/b?url=private','https://user@soundcloud.com/a/b'):
-            self.assertFalse(direct_recording_url(url))
-
     def test_version_results_are_safe_deduplicated_and_keep_duration(self):
         manager = MagicMock()
         manager.__enter__.return_value.extract_info.return_value = {"entries": [

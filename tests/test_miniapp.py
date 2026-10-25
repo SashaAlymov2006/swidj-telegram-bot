@@ -237,24 +237,6 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload['tracks'][0]['title'],'Recording')
         self.bridge.application.bot.send_message.assert_not_awaited()
 
-    async def test_soundcloud_recording_prepares_directly_without_search_loop(self):
-        source=Path(self.tmp.name)/'soundcloud.mp3'
-        source.write_bytes(b'fixture-audio')
-        calls=[]
-        def download(url):
-            calls.append(url)
-            return str(source), {}
-        self.bridge.audio_jobs.downloader=download
-        url='https://soundcloud.com/artist/recording'
-        self.favorites[77][0]['url']=url
-        with patch('versions.find_versions') as finder:
-            response=await self.client.post('/api/prepare',headers=self.headers,json={'track':'1'})
-            payload=await response.json()
-            await self.bridge.audio_jobs.get(77,payload['job']).task
-            finder.assert_not_called()
-        self.assertEqual(calls,[url])
-        self.assertEqual(self.bridge.audio_jobs.get(77,payload['job']).state,'ready')
-
     async def test_failed_audio_job_does_not_expose_provider_error(self):
         def download(_):
             raise ValueError('private provider token and path')

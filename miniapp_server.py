@@ -217,8 +217,7 @@ class BotLibrary:
             return {'status':'ready', 'track':public_song(song, True)}
         if song.get('kind') == 'upload':
             raise web.HTTPGone()
-        from versions import direct_recording_url
-        if not direct_recording_url(song.get('url', '')):
+        if not re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', song.get('url', '')):
             self.allowed(uid, 'search')
             from versions import find_versions
             async with self.search_slots:
@@ -360,8 +359,7 @@ class BotLibrary:
             token = secrets.token_hex(5)
             data = self.data(uid)
             requests = data.setdefault('version_requests', {})
-            from versions import direct_recording_url
-            if direct_recording_url(song.get('url', '')):
+            if song.get('url', '').startswith('https://www.youtube.com/watch?v='):
                 candidates = [dict(song)]
             else:
                 from versions import find_versions
@@ -411,7 +409,7 @@ def create_app(*, token='', bridge=None):
             response = web.json_response({'error': 500}, status=500)
         response.headers.update({'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
                                  'Referrer-Policy': 'no-referrer',
-                                 'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https://i.ytimg.com https://*.mzstatic.com https://*.sndcdn.com data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'"})
+                                 'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https://i.ytimg.com https://*.mzstatic.com data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'"})
         return response
 
     app = web.Application(middlewares=[boundary], client_max_size=16*1024)
