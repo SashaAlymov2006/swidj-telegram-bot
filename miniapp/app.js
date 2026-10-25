@@ -86,6 +86,8 @@ Object.assign(copy.en,{"recognitionTooShort": "The recording is too short. Recor
 Object.assign(copy.ru,{"recognitionTooShort": "\u0417\u0430\u043f\u0438\u0441\u044c \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u043a\u043e\u0440\u043e\u0442\u043a\u0430\u044f. \u0417\u0430\u043f\u0438\u0448\u0438 \u043d\u0435 \u043c\u0435\u043d\u0435\u0435 12 \u0441\u0435\u043a\u0443\u043d\u0434.", "recognitionInvalidAudio": "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u0442\u044c \u0437\u0430\u043f\u0438\u0441\u044c. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 \u0437\u0430\u043f\u0438\u0441\u0430\u0442\u044c \u0435\u0449\u0451 \u0440\u0430\u0437.", "recognitionLimit": "\u0410\u0443\u0434\u0438\u043e\u0444\u0430\u0439\u043b \u0431\u043e\u043b\u044c\u0448\u0435 32 \u041c\u0411."});
 Object.assign(copy.en,{"charts": "Charts", "chartsTitle": "Popular. Right now.", "chartsNote": "Top 50 songs by country.", "chartSource": "Apple Music Top 50", "chartCountry": "Country", "chartFilter": "Find a song in this chart", "chartUnavailable": "Could not load this chart. Please try again.", "chartNoMatches": "No songs match your filter.", "chartUpdated": "Updated", "chartCached": "Saved chart", "chartOpenSource": "View on Apple Music", "chartHome": "Explore the charts", "chartHomeNote": "The Top50. Choose your country.", "countryDE": "Germany", "countryUS": "United States", "countryGB": "United Kingdom", "countryFR": "France", "countryUA": "Ukraine", "countryRU": "Russia"});
 Object.assign(copy.ru,{"charts": "\u0427\u0430\u0440\u0442\u044b", "chartsTitle": "\u0422\u043e, \u0447\u0442\u043e \u0441\u043b\u0443\u0448\u0430\u044e\u0442 \u0441\u0435\u0439\u0447\u0430\u0441.", "chartsNote": "50 \u043f\u043e\u043f\u0443\u043b\u044f\u0440\u043d\u044b\u0445 \u043f\u0435\u0441\u0435\u043d \u043f\u043e \u0441\u0442\u0440\u0430\u043d\u0430\u043c.", "chartSource": "Apple Music Top 50", "chartCountry": "\u0421\u0442\u0440\u0430\u043d\u0430", "chartFilter": "\u041d\u0430\u0439\u0442\u0438 \u043f\u0435\u0441\u043d\u044e \u0432 \u0447\u0430\u0440\u0442\u0435", "chartUnavailable": "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0447\u0430\u0440\u0442. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 \u0435\u0449\u0451 \u0440\u0430\u0437.", "chartNoMatches": "\u041f\u043e \u044d\u0442\u043e\u043c\u0443 \u0444\u0438\u043b\u044c\u0442\u0440\u0443 \u043f\u0435\u0441\u0435\u043d \u043d\u0435\u0442.", "chartUpdated": "\u041e\u0431\u043d\u043e\u0432\u043b\u0451\u043d", "chartCached": "\u0421\u043e\u0445\u0440\u0430\u043d\u0451\u043d\u043d\u044b\u0439 \u0447\u0430\u0440\u0442", "chartOpenSource": "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0447\u0430\u0440\u0442 \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u0430", "chartHome": "\u041e\u0442\u043a\u0440\u043e\u0439 \u0447\u0430\u0440\u0442\u044b", "chartHomeNote": "\u0422\u043e\u043f 50. \u0412\u044b\u0431\u0435\u0440\u0438 \u0441\u0442\u0440\u0430\u043d\u0443.", "countryDE": "\u0413\u0435\u0440\u043c\u0430\u043d\u0438\u044f", "countryUS": "\u0421\u0428\u0410", "countryGB": "\u0412\u0435\u043b\u0438\u043a\u043e\u0431\u0440\u0438\u0442\u0430\u043d\u0438\u044f", "countryFR": "\u0424\u0440\u0430\u043d\u0446\u0438\u044f", "countryUA": "\u0423\u043a\u0440\u0430\u0438\u043d\u0430", "countryRU": "\u0420\u043e\u0441\u0441\u0438\u044f"});
+Object.assign(copy.en,{"chartRecordingUnavailable": "No playable recording was found for this song yet. The chart remains available; try another song."});
+Object.assign(copy.ru,{"chartRecordingUnavailable": "\u0414\u043b\u044f \u044d\u0442\u043e\u0439 \u043f\u0435\u0441\u043d\u0438 \u043f\u043e\u043a\u0430 \u043d\u0435 \u043d\u0430\u0448\u043b\u0430\u0441\u044c \u0437\u0430\u043f\u0438\u0441\u044c \u0434\u043b\u044f \u043f\u0440\u043e\u0441\u043b\u0443\u0448\u0438\u0432\u0430\u043d\u0438\u044f. \u0427\u0430\u0440\u0442 \u043e\u0441\u0442\u0430\u0451\u0442\u0441\u044f \u043e\u0442\u043a\u0440\u044b\u0442\u044b\u043c \u2014 \u043c\u043e\u0436\u043d\u043e \u0432\u044b\u0431\u0440\u0430\u0442\u044c \u0434\u0440\u0443\u0433\u0443\u044e \u043f\u0435\u0441\u043d\u044e."});
 const demos = [
   ['Velvet hours','SwiDJ Originals'],['Sunset circuit','SwiDJ Originals'],['After the rain','SwiDJ Originals'],
   ['Blue distance','SwiDJ Originals'],['Soft focus','SwiDJ Originals'],['Golden hour','SwiDJ Originals']
@@ -111,7 +113,7 @@ audio.volume = .8;
 let demoState;
 try { demoState = JSON.parse(localStorage.getItem('swidj-demo-library') || 'null'); } catch {}
 const api = async (path, payload) => {
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),path.startsWith('charts')?90000:30000);
   let response;try {response = await fetch('/api/' + path, {method:payload ? 'POST':'GET', headers:{'X-Telegram-Init-Data':initData,...(payload ? {'Content-Type':'application/json'}:{})},body:payload ? JSON.stringify(payload):undefined, credentials:'omit',signal:controller.signal});}catch(error){if(error.name==='AbortError')throw new Error('requestTimeout');throw error;}finally{clearTimeout(timer);}
   if (!response.ok) throw new Error(({401:'expired',403:'unavailable',409:'capacity',410:'missingFile',429:'rateLimit',503:'unavailable'})[response.status] || 'error');
   return response;
@@ -151,29 +153,32 @@ async function loadCharts(){
  catch{if(request===chartRequest){chartsError=true;chartData=null;}}
  finally{if(request===chartRequest){chartsLoading=false;if(route==='charts')render();}}
 }
+let chartChoiceKey=null;
+function showChartChoices(item,tracks,key){
+ chartChoiceKey=key;for(const track of tracks)extraTracks.set(track.id,track);
+ $('dialog-form').onsubmit=null;
+ dialog(t('chooseVersion'),`<p class="dialog-copy">${e(item.artist+' / '+item.title)}</p>${tracks.length?tracks.map(track=>`<button type="button" class="dialog-option" data-chart-version="${e(track.id)}">${icon('play')}<span><strong>${e(track.title)}</strong><small class="version-artist">${e(track.artist)} / ${stamp(track.duration)}</small></span></button>`).join(''):`<p class="dialog-copy">${e(t('chartRecordingUnavailable'))}</p>`}`);
+}
 async function playChart(index){
  if(chartBusy)return;const item=chartData?.tracks[Number(index)];if(!item)return;
- const key=chartKey(item);chartBusy=key;render();
+ const country=chartCountry,key=chartKey(item);chartBusy=key;render();
  try{
-  // Unlock audio during the original tap, before waiting for search/network.
   await engine.unlock();
-  const cached=chartResolved.get(key);let candidates=cached?[cached]:null;
+  const cached=chartResolved.get(key);let candidates=cached?[cached]:null,alternatives=[];
   if(!candidates){
-   let response;
-   try{response=await api('search?q='+encodeURIComponent(item.query));}
-   catch(error){if(error.message!=='rateLimit')throw error;await new Promise(resolve=>setTimeout(resolve,3200));response=await api('search?q='+encodeURIComponent(item.query));}
-   const tracks=(await response.json()).tracks||[];candidates=matchingRecordings(item,tracks).slice(0,2);
-   if(!candidates.length){searchQuery=item.query;results=tracks;linkMode=false;navigate('search');return;}
+   const resolved=await(await api('charts/resolve',{country,track:item.id})).json();
+   candidates=resolved.tracks||[];alternatives=resolved.alternatives||[];
+   if(!candidates.length){showChartChoices(item,alternatives,key);return;}
   }
   let lastError;
-  for(const recording of candidates){
+  for(const recording of candidates.slice(0,3)){
    extraTracks.set(recording.id,recording);
    try{if(await playTrack(recording))chartResolved.set(key,recording);return;}
-   catch(error){
-    lastError=error;chartResolved.delete(key);
+   catch(error){lastError=error;chartResolved.delete(key);
     if(!['prepareFailed','sourceUnavailable','sourceLogin','sourceRateLimit','invalidAudio'].includes(error.message)&&error.name!=='NotSupportedError')throw error;
    }
   }
+  if(alternatives.length){showChartChoices(item,alternatives,key);return;}
   if(lastError)throw lastError;
  }catch(error){report(error);}finally{chartBusy=null;if(route==='charts')render();}
 }
@@ -662,6 +667,7 @@ document.addEventListener('click',async event=>{
     if(button.id==='record-music')return await recordVoice('music');
     if(button.id==='recognize-music')return await identifyMusic();
     if(button.dataset.recognitionMatch!==undefined){const match=recognitionMatches?.[Number(button.dataset.recognitionMatch)];if(match)await runSearch(match.query);return;}
+    if(button.dataset.chartVersion){const track=trackById(button.dataset.chartVersion),key=chartChoiceKey;$('dialog').close();if(track&&await playTrack(track)){chartResolved.set(key,track);if(route==='charts')render();}return;}
     if(button.id==='refresh-charts')return await loadCharts();
     if(button.dataset.chartPlay!==undefined)return await playChart(button.dataset.chartPlay);
     if(button.id==='cancel-mix'&&activeRenderJob){await api('studio/jobs/'+activeRenderJob+'/cancel',{});return;}

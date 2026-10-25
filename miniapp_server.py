@@ -91,6 +91,7 @@ class BotLibrary:
         self.application, self.store, self.favorites = application, store, favorites
         self.saved_sessions, self.owner_ids = saved_sessions, owner_ids
         self.searches = {}
+        self.chart_recordings = {}
         self.search_times = {}
         self.send_times = {}
         self.search_slots = asyncio.Semaphore(2)
@@ -179,6 +180,7 @@ class BotLibrary:
         if active:
             sources.append(active)
         sources.extend(self.searches.get(uid, []))
+        sources.extend(self.chart_recordings.get(uid, []))
         sources.extend(await self.app_history(uid))
         sources.extend(job.song for job in self.audio_jobs.jobs.values() if job.uid == uid)
         song = next((s for s in sources if str(s['id']) == identifier), None)
@@ -393,7 +395,7 @@ def create_app(*, token='', bridge=None):
                 uid = user['id']
                 bridge.allowed(uid)
                 from dispatch import user_lock
-                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts'):
+                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts','/api/charts/resolve'):
                     response=await handler(request)
                 else:
                     async with user_lock(uid):

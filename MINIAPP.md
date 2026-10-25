@@ -214,3 +214,6 @@ After a strong match, the app searches for a recording matching artist/title and
 
 
 2026-10-25 chart playback: unlock the audio context on the original chart tap before waiting for search. Try a second matching recording when the first source cannot prepare audio. Retry a search-rate-limit response once after the existing cooldown. Fresh WebKit chart-first-play regression includes delayed networking. Real first German chart track, Tate McRae Housewife, prepared successfully from three matching sources.
+
+
+2026-10-25 chart recording resolution: selecting a song now uses a dedicated chart resolver instead of redirecting to ordinary search. Artist/title matching handles diacritics, apostrophes, featured artists and excludes unrequested covers/live/remix/commentary. It checks more candidate recordings and keeps independent owner-scoped recording references. If automatic matching is uncertain, choices appear over the chart; country and ranking remain visible. Ordinary bot search keeps its original5-result default.227 tests and Chromium/WebKit UI passed; real German ranks8/10 both prepared full MP3 with206range playback.

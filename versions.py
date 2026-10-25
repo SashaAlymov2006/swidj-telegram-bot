@@ -11,13 +11,14 @@ from operations import checkpoint, stage
 from audio_presentation import send_music
 
 
-def find_versions(query):
+def find_versions(query, limit=5):
+    if type(limit) is not int or not 1<=limit<=10:raise ValueError('Invalid search limit')
     checkpoint()
     options = {"quiet": True, "no_warnings": True, "skip_download": True,
                "extract_flat": "in_playlist", "socket_timeout": 15, "retries": 1,
                "cookiefile": os.getenv("YTDLP_COOKIE_FILE") or None}
     with yt_dlp.YoutubeDL(options) as ydl:
-        info = ydl.extract_info("ytsearch5:" + query[:240], download=False)
+        info = ydl.extract_info(f"ytsearch{limit}:" + query[:240], download=False)
     checkpoint()
     result, seen = [], set()
     for entry in (info or {}).get("entries") or []:
@@ -37,7 +38,7 @@ def find_versions(query):
                        "artist": str(entry.get("uploader") or entry.get("channel") or "")[:120],
                        "duration": round(duration) if isinstance(duration, (int, float)) else None,
                        "cover": "https://i.ytimg.com/vi/" + identifier + "/hqdefault.jpg"})
-    return result[:5]
+    return result[:limit]
 
 
 def remember_request(context, song, mode):

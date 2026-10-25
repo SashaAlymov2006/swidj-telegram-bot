@@ -190,6 +190,10 @@ async def run():
                 calls['search_count']=calls.get('search_count',0)+1
                 if calls.get('slow_chart_search'):await asyncio.sleep(.7)
                 result={'tracks':([dict(tracks[0],id='3')]+tracks) if calls.get('chart_fail_first') else tracks}
+            elif path=='charts/resolve':
+                if calls.get('slow_chart_search'):await asyncio.sleep(.7)
+                if calls.get('chart_nomatch'):result={'tracks':[],'alternatives':[]}
+                else:result={'tracks':([dict(tracks[0],id='3'),tracks[0]] if calls.get('chart_fail_first') else [tracks[0]]),'alternatives':tracks}
             elif path=='charts':
                 from urllib.parse import urlsplit,parse_qs
                 country=parse_qs(urlsplit(route.request.url).query).get('country',['de'])[0]
@@ -443,6 +447,14 @@ async def run():
         assert await app_page.locator('.chart-rank').all_inner_texts()==['1','2']
         assert calls['chart_attempts'][-2:]==['3','1']
         calls['chart_fail_first']=False
+        calls['chart_nomatch']=True
+        await app_page.locator('.chart-song').nth(1).click()
+        await app_page.locator('#dialog').wait_for(state='visible')
+        assert await app_page.evaluate("location.hash==='#charts'")
+        assert await app_page.locator('#chart-country').count()==1
+        await app_page.locator('#dialog .dialog-head button').click()
+        calls['chart_nomatch']=False
+
         assert calls['send']==0
         for width in [320,390,540,720]:
             await app_page.set_viewport_size({'width':width,'height':844})

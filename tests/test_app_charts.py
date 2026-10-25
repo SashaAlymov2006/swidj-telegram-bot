@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock,patch
 from aiohttp.test_utils import TestClient,TestServer
-from app_charts import Charts,clean_feed,TTL
+from app_charts import Charts,clean_feed,matching_versions,TTL
 from miniapp_server import BotLibrary,create_app
 from state_store import StateStore
 from tests.test_miniapp import signed,TOKEN
@@ -25,6 +25,14 @@ class ChartDataTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([item['rank'] for item in value['tracks']],[1,3])
         self.assertTrue(value['tracks'][0]['artwork']);self.assertEqual(value['tracks'][1]['artwork'],'')
         self.assertEqual(value['tracks'][0]['query'],'Artist Song')
+
+    def test_artist_collaborations_accents_and_versions_are_matched_conservatively(self):
+        item={'title':"Don't Stop (feat. Guest)",'artist':'Beyonc\u00e9 & Guest'}
+        recordings=[{'title':'Beyonce - Dont Stop (Official Audio)','artist':'Beyonce'},
+                    {'title':'Beyonce - Dont Stop cover','artist':'Other singer'},
+                    {'title':'Dont Stop','artist':'Unrelated singer'},
+                    {'title':'Beyonce Dont Stop Lyrics Meaning','artist':'Genius'}]
+        self.assertEqual(matching_versions(item,recordings),recordings[:1])
 
     async def test_cache_coalesces_requests_and_returns_explicit_stale_data(self):
         service=Charts();value=clean_feed(fixture(),'de')
@@ -50,7 +58,7 @@ class ChartDataTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_chart_api_is_authenticated_and_independent_of_search_history(self):
         with tempfile.TemporaryDirectory() as folder:
-            app=SimpleNamespace(user_data={77:{}},bot_data={},bot=SimpleNamespace(username='fixture',send_message=AsyncMock()))
+            app=SimpleNamespace(user_data={77:{},78:{}},bot_data={},bot=SimpleNamespace(username='fixture',send_message=AsyncMock()))
             bridge=BotLibrary(app,StateStore(Path(folder)/'state.db'),{},{},frozenset(),cache_root=Path(folder)/'cache')
             client=TestClient(TestServer(create_app(token=TOKEN,bridge=bridge)));await client.start_server()
             try:
@@ -58,8 +66,20 @@ class ChartDataTests(unittest.IsolatedAsyncioTestCase):
                 service=client.server.app['charts_worker']
                 with patch.object(service,'fetch',new_callable=AsyncMock,return_value=clean_feed(fixture(),'de')):
                     a=await(await client.get('/api/charts?country=de',headers={'X-Telegram-Init-Data':signed()})).json()
-                    bridge.searches[77]=[{'title':'Unrelated search'}]
+                    bridge.searches[77]=[{'id':999,'title':'Unrelated search'}]
                     b=await(await client.get('/api/charts?country=de',headers={'X-Telegram-Init-Data':signed()})).json()
                     self.assertEqual(a,b)
+                    recording={'title':'Artist - Song (Official Audio)','artist':'Artist','url':'https://www.youtube.com/watch?v=abcdefghijk','duration':180}
+                    bridge.searches[77]=[{'id':999,'title':'Unrelated search'}]
+                    with patch('versions.find_versions',return_value=[recording]) as search:
+                        response=await client.post('/api/charts/resolve',headers={'X-Telegram-Init-Data':signed()},json={'country':'de','track':'101'})
+                        self.assertEqual(response.status,200)
+                        resolved=await response.json();self.assertEqual(len(resolved['tracks']),1)
+                        identifier=resolved['tracks'][0]['id']
+                        self.assertEqual((await bridge.find(77,identifier))['url'],recording['url'])
+                        self.assertEqual(bridge.searches[77],[{'id':999,'title':'Unrelated search'}])
+                        from aiohttp import web
+                        with self.assertRaises(web.HTTPNotFound):await bridge.find(78,identifier)
+                        self.assertEqual(search.call_args.kwargs,{'limit':10})
                 self.assertEqual((await client.get('/api/charts?country=invalid',headers={'X-Telegram-Init-Data':signed()})).status,400)
             finally:await client.close()
