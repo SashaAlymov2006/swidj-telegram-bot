@@ -1,0 +1,26 @@
+name: swidj-youtube-browser
+services:
+  browser:
+    image: jlesage/chromium:latest
+    container_name: swidj-youtube-browser
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:5800:5800'
+    environment:
+      USER_ID: '10001'
+      GROUP_ID: '10001'
+      UMASK: '0077'
+      KEEP_APP_RUNNING: '1'
+      DISPLAY_WIDTH: '1280'
+      DISPLAY_HEIGHT: '800'
+      CHROMIUM_CUSTOM_ARGS: https://www.youtube.com/watch?v=liRLUgaUwh4
+    volumes:
+      - /opt/swidj-private/server-browser:/config
+    shm_size: 512m
+    mem_limit: 2g
+    cpus: 1.5
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '2'
