@@ -161,6 +161,12 @@ def fetch(payload,directory):
              'format':'bestaudio/best' if mode=='audio' else f'bv*[height<={height}][vcodec^=avc]+ba[acodec^=mp4a]/b[height<={height}][ext=mp4]/bv*[height<={height}]+ba/b[height<={height}]',
              'merge_output_format':'mp4','allowed_extractors':['youtube.*','soundcloud.*','tiktok.*','instagram.*','vimeo.*','bandcamp.*'],
              'cookiefile':(os.getenv('YTDLP_COOKIE_FILE') or None) if platform=='youtube' else None}
+    if platform in ('tiktok','instagram'):
+        # Social clips commonly expose one combined MP4 above the selected YouTube height.
+        # Match the working chat downloader; normalize handles phone-compatible output.
+        options['format']='b[ext=mp4]/b' if mode=='video' else 'bestaudio/best'
+        options['user_agent']=('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                               'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
     with yt_dlp.YoutubeDL(options) as downloader:info=downloader.extract_info(url,download=True)
     if isinstance(info,dict) and 'entries' in info:info=next((item for item in info['entries'] if item),None)
     if not isinstance(info,dict):raise ValueError('No media')

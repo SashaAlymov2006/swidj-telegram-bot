@@ -26,6 +26,23 @@ class LinkValidationTests(unittest.TestCase):
             self.assertEqual(result['path'],str(source))
             self.assertEqual(result['title'],'Recording')
 
+    def test_social_video_selects_combined_mp4_even_above_youtube_quality(self):
+        import yt_dlp
+        from app_media import fetch
+        formats=[{'format_id':'social','url':'https://media.example.test/file.mp4','ext':'mp4',
+                  'height':1080,'width':1920,'vcodec':'h264','acodec':'aac','protocol':'https'}]
+        def extract(downloader,url,download=True):
+            selected=list(downloader.build_format_selector(downloader.params['format'])({'formats':formats,'has_merged_format':True,'incomplete_formats':False}))
+            self.assertEqual(len(selected),1)
+            self.assertEqual(selected[0]['format_id'],'social')
+            self.assertIsNone(downloader.params.get('cookiefile'))
+            return {'title':'Public clip'}
+        for url in ['https://www.tiktok.com/@artist/video/12345','https://vm.tiktok.com/ABC12/','https://www.instagram.com/reel/ABC12/']:
+            with self.subTest(url=url),tempfile.TemporaryDirectory() as directory:
+                (Path(directory)/'source.mp4').write_bytes(b'fixture')
+                with patch.object(yt_dlp.YoutubeDL,'extract_info',extract):
+                    self.assertEqual(fetch({'url':url,'mode':'video','height':360},directory)['title'],'Public clip')
+
     def test_only_supported_links_and_explicit_modes_are_accepted(self):
         for payload in [{'url':'http://127.0.0.1/private'}, {'url':'file:///etc/passwd'}, {'url':'https://youtube.com.evil.test/watch?v=abcdefghijk'}, {'url':'https://www.youtube.com/watch?v=bad'}, {'url':'https://soundcloud.com/a/b','mode':'video'}, {'url':'https://youtu.be/abcdefghijk','height':True}]:
             with self.subTest(payload=payload),self.assertRaises(ValueError):validate(payload)
