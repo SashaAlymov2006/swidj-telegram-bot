@@ -17,8 +17,11 @@ def find_versions(query, limit=5):
     options = {"quiet": True, "no_warnings": True, "skip_download": True,
                "extract_flat": "in_playlist", "socket_timeout": 15, "retries": 1,
                "cookiefile": os.getenv("YTDLP_COOKIE_FILE") or None}
-    with yt_dlp.YoutubeDL(options) as ydl:
-        info = ydl.extract_info(f"ytsearch{limit}:" + query[:240], download=False)
+    from youtube_session import cookie_snapshot
+    with cookie_snapshot(options.get('cookiefile')) as cookies:
+        options['cookiefile']=cookies
+        with yt_dlp.YoutubeDL(options) as ydl:
+            info = ydl.extract_info(f"ytsearch{limit}:" + query[:240], download=False)
     checkpoint()
     result, seen = [], set()
     for entry in (info or {}).get("entries") or []:

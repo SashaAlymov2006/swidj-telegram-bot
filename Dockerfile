@@ -18,6 +18,8 @@ RUN useradd --uid 10001 --create-home bot && mkdir -p /app/data /app/tmp /home/b
 COPY --chmod=0444 bot.py access.py state_store.py audio_tools.py bass_labels.py miniapp_server.py miniapp_jobs.py dispatch.py recognition_flow.py subscriptions.py scratch.py media_store.py railway_start.py diagnostics.py search_quality.py studio_tools.py studio_ui.py audio_presentation.py operations.py versions.py library_ui.py lyrics_search.py effect_preview.py owner_panel.py uploaded_media.py ui_layout.py video_presentation.py track_card.py quick_studio.py catalog_links.py link_queue.py i18n_ui.py i18n_en.json ./
 COPY --chmod=0444 app_uploads.py miniapp_studio.py app_exports.py app_lyrics.py app_media.py app_limits.py app_dsp.py app_render_jobs.py app_recognition.py app_charts.py ./
 COPY --chmod=0444 youtube_health.py ./
+COPY --chmod=0444 youtube_session.py ./
+COPY --chmod=0444 youtube_session_sync.py ./
 COPY --chmod=0555 miniapp/ ./miniapp/
 USER bot
 CMD ["python", "bot.py"]

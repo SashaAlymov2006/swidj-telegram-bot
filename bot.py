@@ -200,8 +200,11 @@ def _extract_media(options, query, directory):
         options.setdefault("max_filesize", 49 * 1024 * 1024)
         options["progress_hooks"] = list(options.get("progress_hooks", [])) + [lambda _: checkpoint()]
         options["postprocessor_hooks"] = list(options.get("postprocessor_hooks", [])) + [lambda _: checkpoint()]
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(query, download=True)
+        from youtube_session import cookie_snapshot
+        with cookie_snapshot(options.get('cookiefile')) as cookies:
+            if 'cookiefile' in options:options['cookiefile']=cookies
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(query, download=True)
         checkpoint()
         if isinstance(info, dict) and 'entries' in info:
             info = next((entry for entry in info.get('entries') or [] if entry), None)

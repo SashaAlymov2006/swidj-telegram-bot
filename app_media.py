@@ -174,7 +174,10 @@ def fetch(payload,directory):
         options['format']='b[ext=mp4]/b' if mode=='video' else 'bestaudio/best'
         options['user_agent']=('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                                'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
-    with yt_dlp.YoutubeDL(options) as downloader:info=downloader.extract_info(url,download=True)
+    from youtube_session import cookie_snapshot
+    with cookie_snapshot(options.get('cookiefile')) as cookies:
+        options['cookiefile']=cookies
+        with yt_dlp.YoutubeDL(options) as downloader:info=downloader.extract_info(url,download=True)
     if isinstance(info,dict) and 'entries' in info:info=next((item for item in info['entries'] if item),None)
     if not isinstance(info,dict):raise ValueError('No media')
     files=[p for p in Path(directory).glob('source.*') if p.is_file() and p.suffix not in ('.part','.ytdl','.json')]

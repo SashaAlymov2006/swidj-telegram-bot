@@ -5,8 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+ExecStartPre=-/usr/bin/python3 /opt/swidj/youtube_session_sync.py run --root /opt/swidj
 ExecStart=/usr/bin/python3 /opt/swidj/youtube_health.py run --root /opt/swidj
-TimeoutStartSec=100
+TimeoutStartSec=150
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
