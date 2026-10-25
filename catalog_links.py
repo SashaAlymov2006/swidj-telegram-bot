@@ -45,6 +45,33 @@ def extract_links(text):
             result.append({"url":url,"platform":platform});seen.add(url)
     return result
 
+
+def youtube_metadata(url):
+    """Read public embed metadata, not protected media or an authenticated session."""
+    if classify(url) != 'youtube':
+        raise ValueError('Invalid YouTube recording link')
+    parsed = urlparse(url)
+    identifier = (parsed.path.strip('/') if parsed.hostname == 'youtu.be' else
+                  parse_qs(parsed.query).get('v', [''])[0] if parsed.path == '/watch' else
+                  parsed.path.rstrip('/').rsplit('/', 1)[-1])
+    if not re.fullmatch(r'[A-Za-z0-9_-]{11}', identifier):
+        raise ValueError('Invalid YouTube recording ID')
+    canonical = 'https://www.youtube.com/watch?v=' + identifier
+    response = requests.get('https://www.youtube.com/oembed',
+                            params={'url':canonical, 'format':'json'}, timeout=8,
+                            allow_redirects=False)
+    response.raise_for_status()
+    if response.status_code != 200:
+        raise ValueError('YouTube metadata unavailable')
+    data = response.json()
+    title = data.get('title')
+    if not isinstance(title, str) or not title.strip():
+        raise ValueError('YouTube title unavailable')
+    # Channel names are not necessarily recording artists.
+    return {'title':title.strip()[:180], 'artist':'', 'query':title.strip()[:240],
+            'cover':'https://i.ytimg.com/vi/' + identifier + '/hqdefault.jpg',
+            'url':canonical}
+
 def apple_metadata(url):
     if classify(url)!="apple":
         raise ValueError("Нужна ссылка на отдельную песню Apple Music.")

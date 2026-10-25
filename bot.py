@@ -596,6 +596,14 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             if platform == 'youtube':
+                if os.getenv('SEARCH_RECORDING_SOURCE') == 'soundcloud':
+                    from catalog_links import youtube_metadata
+                    from versions import request_versions
+                    from hashlib import sha256
+                    metadata = await asyncio.to_thread(youtube_metadata, url)
+                    song = dict(metadata, id=-(10**15 + int.from_bytes(sha256(url.encode()).digest()[:6], 'big')),
+                                source='YouTube')
+                    return await request_versions(update, context, song, mode='listen')
                 mp3, info = await asyncio.to_thread(download_youtube_audio, url)
                 title, performer = extract_youtube_metadata(info)
 
