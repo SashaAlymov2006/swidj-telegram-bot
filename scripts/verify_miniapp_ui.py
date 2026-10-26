@@ -281,8 +281,11 @@ async def run():
         assert await app_page.evaluate('!document.querySelector("#audio").paused')
         await app_page.locator('#mix-pitch').fill('2')
         await app_page.locator('#mix-pitch').dispatch_event('change')
-        await app_page.locator('#toast').filter(has_text='Preview ready').wait_for()
-        assert calls['studioSettings']['preview'] is True
+        await app_page.locator('#toast').filter(has_text='Full track tone applied').wait_for()
+        assert calls['studioSettings']['preview'] is False
+        assert calls['studioSettings']['speed']==1
+        assert calls['studioSettings']['start']==0 and calls['studioSettings']['end']==0
+        assert calls['studioSettings']['effects']==[]
         assert calls['studioSettings']['pitch']==2
         assert calls['studioSettings']['linked'] is False
         assert await app_page.evaluate('document.querySelector("#audio").playbackRate===1')

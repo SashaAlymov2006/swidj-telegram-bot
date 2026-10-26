@@ -185,6 +185,8 @@ class BotLibrary:
         sources.extend(self.searches.get(uid, []))
         sources.extend(self.chart_recordings.get(uid, []))
         sources.extend(await self.app_history(uid))
+        # Bot cards are immutable, per-user snapshots and survive session restores.
+        sources.extend(self.data(uid).get('track_cards', {}).values())
         sources.extend(job.song for job in self.audio_jobs.jobs.values() if job.uid == uid)
         song = next((s for s in sources if str(s['id']) == identifier), None)
         if not song:
@@ -289,8 +291,8 @@ class BotLibrary:
                 removed = folder['songs'] if action == 'delete_playlist' else [
                     s for s in folder['songs'] if str(s['id']) == str(payload.get('track', ''))]
                 # Removing a playlist/membership keeps the recordings in the library.
-                known = {s['id'] for s in favorites}
-                favorites.extend(dict(s) for s in removed if s['id'] not in known)
+                known = {s['id'] for s in app_tracks}
+                app_tracks.extend(dict(s) for s in removed if s['id'] not in known)
                 if action == 'delete_playlist':
                     del folders[key]
                 else:
@@ -345,6 +347,14 @@ class BotLibrary:
         return await self.snapshot(uid)
 
     async def send(self, uid, identifier):
+        from i18n_ui import locale
+        marker=locale.set(self.data(uid).get('language','ru'))
+        try:
+            return await self._send(uid,identifier)
+        finally:
+            locale.reset(marker)
+
+    async def _send(self, uid, identifier):
         self.allowed(uid, 'downloads')
         if time.monotonic() - self.send_times.get(uid, 0) < 5:
             raise web.HTTPTooManyRequests()
@@ -354,13 +364,20 @@ class BotLibrary:
         song = await self.find(uid, identifier)
         path = self.audio_path(uid, song)
         if path:
+            from types import SimpleNamespace
+            from track_card import card_keyboard
+            markup=card_keyboard(SimpleNamespace(user_data=self.data(uid),_chat_id=uid),song,
+                                 saved=any(s['id']==song['id'] for s in self.favorites.get(uid,[])),delivered=True)
+            sessions=await asyncio.to_thread(self.store.load_named,'sessions')
+            session=dict(sessions.get(uid,{}),track_cards=self.data(uid)['track_cards'])
+            await asyncio.to_thread(self.store.save_named,'sessions',uid,session)
             if song.get('kind') == 'upload':
                 with path.open('rb') as source:
                     await self.application.bot.send_document(uid, document=source,
-                        filename=song.get('original_filename') or 'SwiDJ.audio', caption=song['title'])
+                        filename=song.get('original_filename') or 'SwiDJ.audio', caption=song['title'],reply_markup=markup)
             else:
                 from audio_presentation import send_music
-                await send_music(self.application.bot, uid, path, song['title'], song.get('artist'), source_url=song.get('url'),license_url=song.get('license_url'))
+                await send_music(self.application.bot, uid, path, song['title'], song.get('artist'), reply_markup=markup, source_url=song.get('url'),license_url=song.get('license_url'))
         else:
             # Use existing download/retry/card handlers; never accept a URL from the browser.
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -535,6 +552,10 @@ def create_app(*, token='', bridge=None):
         if not isinstance(payload, dict):
             raise web.HTTPBadRequest()
         return web.json_response(await bridge.download_ticket(request['user']['id'], str(payload.get('track', '')), stream=request.path == '/api/stream'))
+    async def selected_track(request):
+        uid=request['user']['id'];bridge.allowed(uid)
+        song=await bridge.find(uid,request.match_info['track'])
+        return web.json_response({'track':public_song(song,bool(bridge.audio_path(uid,song)))})
     async def download_file(request):
         item = bridge.download_tickets.get(request.match_info['ticket']) if bridge else None
         if not item or item['expires'] <= time.monotonic():
@@ -561,6 +582,7 @@ def create_app(*, token='', bridge=None):
                     web.post('/api/prepare', prepare),
                     web.post('/api/download', download_ticket),
                     web.post('/api/stream', download_ticket),
+                    web.get('/api/track/{track:-?\\d{1,20}}', selected_track),
                     web.post('/api/upload', upload),
                     web.get('/download/{ticket:[A-Za-z0-9_-]{32}}', download_file),
                     web.get('/stream/{ticket:[A-Za-z0-9_-]{32}}', download_file),

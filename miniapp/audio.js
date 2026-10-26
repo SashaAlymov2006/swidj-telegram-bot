@@ -66,10 +66,12 @@ export class AudioEngine {
   setTreble(value){this.treble=value;this.applyTone();}
   setBypass(value){if(this.bypass===value)return;this.bypass=value;this.rebuildLive();this.applyTone();this.setSpeed(this.speed);}
   setSpeed(value) {
-    this.speed = value; this.element.playbackRate = this.bypass||this.processed?1:value;
+    this.speed = value;
+    const rate=this.bypass||this.processed?1:value;
+    if(Math.abs(this.element.playbackRate-rate)>0.000001)this.element.playbackRate=rate;
     // Keep live tempo independent of pitch, matching server exports.
-    this.element.preservesPitch = !this.linked;
-    if('webkitPreservesPitch' in this.element)this.element.webkitPreservesPitch=!this.linked;
+    if(this.element.preservesPitch!==!this.linked)this.element.preservesPitch=!this.linked;
+    if('webkitPreservesPitch' in this.element&&this.element.webkitPreservesPitch!==!this.linked)this.element.webkitPreservesPitch=!this.linked;
   }
   async render(blob, preview = false, sourceDuration = this.element.duration) {
     const bass = this.bypass?0:this.bass, treble=this.bypass?0:this.treble, speed = this.bypass?1:this.speed;

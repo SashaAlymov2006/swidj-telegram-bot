@@ -166,7 +166,8 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         payload=await response.json()
         self.assertEqual(payload['playlists'],[])
         self.assertEqual(payload['tracks'][0]['id'],'1')
-        self.assertEqual(self.store.load()[1][77][0]['id'],1)
+        self.assertEqual(self.store.load()[1][77],[])
+        self.assertEqual(self.store.load_named('miniapp_library')[77][0]['id'],1)
         self.assertEqual((await self.client.post('/api/library',headers=self.headers,json={'action':'delete_playlist','playlist':'someone-else'})).status,404)
 
     async def test_failed_commit_preserves_live_library(self):
@@ -177,6 +178,55 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('filesystem',await response.text())
         self.assertEqual(self.favorites[77][0]['id'],1)
         self.assertEqual(self.bridge.data(77)['music_collections']['night']['songs'][0]['id'],1)
+
+    async def test_chat_and_app_share_language_unstarred_tracks_and_deletion(self):
+        from library_ui import handle_library,all_saved
+        data=self.bridge.data(77)
+        context=SimpleNamespace(user_data=data)
+        data['miniapp_library']=[dict(self.song)]
+        self.favorites[77]=[]
+        data['music_collections']={'abcdef12':{'name':'Shared','songs':[dict(self.song)]}}
+        response=await self.client.post('/api/library',headers=self.headers,json={'action':'language','language':'en'})
+        self.assertEqual(response.status,200)
+        self.assertEqual(context.user_data['language'],'en')
+        self.assertEqual(self.store.load_named('sessions')[77]['language'],'en')
+        # A bot language change is immediately visible to the authenticated app.
+        context.user_data['language']='ru'
+        self.assertEqual((await(await self.client.get('/api/library',headers=self.headers)).json())['language'],'ru')
+        update=SimpleNamespace(effective_user=SimpleNamespace(id=77),callback_query=SimpleNamespace(data='lib:mark:abcdef12:1:0',answer=AsyncMock()))
+        with patch('library_ui.screen',new=AsyncMock()):
+            await handle_library(update,context,self.favorites,AsyncMock(),self.store,{},AsyncMock(),AsyncMock())
+        payload=await(await self.client.get('/api/library',headers=self.headers)).json()
+        self.assertEqual(payload['favorites'],[])
+        self.assertEqual(payload['playlists'][0]['tracks'],[])
+        self.assertEqual(len(all_saved(77,self.favorites,data['music_collections'],data['miniapp_library'])),1)
+        update.callback_query.data='lib:confirmdelete:1'
+        with patch('library_ui.screen',new=AsyncMock()):
+            await handle_library(update,context,self.favorites,AsyncMock(),self.store,{},AsyncMock(),AsyncMock())
+        payload=await(await self.client.get('/api/library',headers=self.headers)).json()
+        self.assertEqual(payload['tracks'],[])
+        self.assertEqual(self.store.load_named('miniapp_library')[77],[])
+
+    async def test_bot_card_can_open_own_track_in_app_without_saving_it(self):
+        self.bridge.data(77)['track_cards']={'a'*10:{'id':999,'title':'Bot search result','artist':'Artist'}}
+        response=await self.client.get('/api/track/999',headers=self.headers)
+        self.assertEqual(response.status,200)
+        self.assertEqual((await response.json())['track']['title'],'Bot search result')
+        self.assertEqual((await self.client.get('/api/track/999',headers={'X-Telegram-Init-Data':signed(78)})).status,404)
+        self.assertEqual((await self.client.get('/api/track/999')).status,401)
+        self.assertEqual([song['id'] for song in self.favorites[77]],[1])
+
+    async def test_app_saved_audio_returns_to_chat_with_shared_studio_controls(self):
+        source=Path(self.tmp.name)/'mix.mp3';source.write_bytes(b'fixture audio')
+        self.bridge.audio_jobs.retain(77,1,source)
+        with patch('audio_presentation.send_music',new=AsyncMock()) as send:
+            response=await self.client.post('/api/send',headers=self.headers,json={'track':'1'})
+        self.assertEqual(response.status,200)
+        markup=send.await_args.kwargs['reply_markup']
+        buttons=[button for row in markup.inline_keyboard for button in row]
+        self.assertTrue(any(button.callback_data and ':studio:' in button.callback_data for button in buttons))
+        cards=self.store.load_named('sessions')[77]['track_cards']
+        self.assertEqual(next(iter(cards.values()))['id'],1)
 
     async def test_app_prepares_and_plays_audio_without_chat_or_chat_session_changes(self):
         source=Path(self.tmp.name)/'download.mp3'

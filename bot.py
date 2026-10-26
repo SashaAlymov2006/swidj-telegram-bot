@@ -1399,7 +1399,7 @@ async def send_song(update: Update, context: ContextTypes.DEFAULT_TYPE, index=0,
     extra = [[InlineKeyboardButton("← Меню", callback_data="ui:home")]]
     from library_ui import collections, all_saved
     folders = await collections(context, user_id, state_store)
-    saved = any(item["id"] == song["id"] for item in all_saved(user_id, user_favorites, folders))
+    saved = any(item["id"] == song["id"] for item in all_saved(user_id, user_favorites, folders, context.user_data.get('miniapp_library',[])))
     return await show_card(update, context, song, saved=saved, extra_rows=extra)
 
 
@@ -2172,7 +2172,7 @@ async def track_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await update.effective_message.reply_text("Открой трек ещё раз — эта карточка уже недоступна.")
     uid = update.effective_user.id
     folders = await collections(context, uid, state_store)
-    current = next((item for item in all_saved(uid, user_favorites, folders) if item["id"] == song["id"]), None)
+    current = next((item for item in all_saved(uid, user_favorites, folders, context.user_data.get('miniapp_library',[])) if item["id"] == song["id"]), None)
     if song.get("kind") == "upload" and current:
         song = current
     if action in ("save", "playlist"):

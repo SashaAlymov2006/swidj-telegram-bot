@@ -3,8 +3,9 @@ import asyncio
 from html import escape
 import re
 import secrets
-from urllib.parse import urlparse, quote
-from telegram import InlineKeyboardButton as Button, InputFile, InputMediaPhoto
+import os
+from urllib.parse import urlparse, quote, urlsplit, urlunsplit, parse_qsl, urlencode
+from telegram import InlineKeyboardButton as Button, InputFile, InputMediaPhoto, WebAppInfo
 from telegram.error import TelegramError, BadRequest
 from ui_layout import comfortable_keyboard as Markup
 from audio_presentation import fetch_cover, clean_label
@@ -23,6 +24,14 @@ def card_keyboard(context, song, saved=False, extra_rows=None, *, delivered=Fals
     rows += [[button("✓ Сохранено" if saved else "＋ Сохранить", "save", "success")],
              [button("＋ В плейлист", "playlist")],
              [button("🎛 Обработать", "studio")]]
+    if os.getenv('MINIAPP_ENABLED','').lower() in ('1','true') and (getattr(context,'_chat_id',None) is None or context._chat_id>0):
+        from miniapp_server import public_url
+        base=public_url()
+        if base:
+            parsed=urlsplit(base);query=dict(parse_qsl(parsed.query));query['track']=str(song['id'])
+            url=urlunsplit((parsed.scheme,parsed.netloc,parsed.path,urlencode(query),'studio'))
+            label='Studio in app' if context.user_data.get('language')=='en' else 'Студия в приложении'
+            rows.append([Button(label,web_app=WebAppInfo(url))])
     if not delivered and song.get("kind") != "upload":
         source = str(song.get("url") or "")
         parsed = urlparse(source)

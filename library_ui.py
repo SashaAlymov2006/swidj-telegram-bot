@@ -27,15 +27,17 @@ async def screen(update, text, rows):
 
 
 async def collections(context, uid, store):
+    if 'miniapp_library' not in context.user_data:
+        context.user_data['miniapp_library'] = (await asyncio.to_thread(store.load_named, 'miniapp_library')).get(uid, [])
     if "music_collections" not in context.user_data:
         saved = await asyncio.to_thread(store.load_named, "music_collections")
         context.user_data["music_collections"] = saved.get(uid, {})
     return context.user_data["music_collections"]
 
 
-def all_saved(uid, favorites, folders):
+def all_saved(uid, favorites, folders, app_tracks=()):
     result, seen = [], set()
-    for song in list(favorites.get(uid, [])) + [song for folder in folders.values() for song in folder["songs"]]:
+    for song in list(app_tracks) + list(favorites.get(uid, [])) + [song for folder in folders.values() for song in folder["songs"]]:
         if song["id"] not in seen:
             seen.add(song["id"])
             result.append(dict(song))
@@ -43,7 +45,13 @@ def all_saved(uid, favorites, folders):
 
 
 async def commit(context, uid, store, favorites, folders):
-    await asyncio.to_thread(store.save_library, uid, favorites.get(uid, []), folders)
+    tracks=all_saved(uid,favorites,folders,context.user_data.get('miniapp_library',[]))
+    await asyncio.to_thread(store.save_library, uid, favorites.get(uid, []), folders, tracks)
+    context.user_data['miniapp_library']=tracks
+
+
+def remember_library(context, uid, favorites, folders):
+    context.user_data['miniapp_library']=all_saved(uid,favorites,folders,context.user_data.get('miniapp_library',[]))
 
 
 async def save_collections(context, uid, store):
@@ -54,18 +62,18 @@ def clean_name(name):
     return " ".join(re.sub(r"[\x00-\x1f\x7f]", " ", name).split())[:40]
 
 
-def find_song(uid, identifier, favorites, folders, results=None):
-    sources = all_saved(uid, favorites, folders) + list((results or {}).get(uid, []))
+def find_song(uid, identifier, favorites, folders, results=None, app_tracks=()):
+    sources = all_saved(uid, favorites, folders, app_tracks) + list((results or {}).get(uid, []))
     return next((song for song in sources if song["id"] == identifier), None)
 
 
 async def show_library_home(update, context, favorites, store):
     folders = await collections(context, update.effective_user.id, store)
-    count = len(all_saved(update.effective_user.id, favorites, folders))
+    count = len(all_saved(update.effective_user.id, favorites, folders,context.user_data.get('miniapp_library',[])))
     await screen(update, "⭐ <b>Моя музыка</b>\nТреки и плейлисты — всё здесь.", [
         [Button(f"🎵 Все сохранённые · {count}", callback_data="lib:page:0", style="primary")],
         [Button(f"🎧 Мои плейлисты · {len(folders)}", callback_data="lib:folders")],
-        [Button(f"📂 Мои файлы · {sum(song.get('kind') == 'upload' for song in all_saved(update.effective_user.id, favorites, folders))}", callback_data="lib:uploads:0")],
+        [Button(f"📂 Мои файлы · {sum(song.get('kind') == 'upload' for song in all_saved(update.effective_user.id, favorites, folders,context.user_data.get('miniapp_library',[])))}", callback_data="lib:uploads:0")],
         [Button("🔎 Найти музыку", callback_data="ui:search"), Button("← Меню", callback_data="ui:home")]])
 
 
@@ -79,7 +87,7 @@ async def show_folders(update, context, store):
 
 
 async def show_favorites(update, context, favorites, page=0, uploads_only=False):
-    songs = all_saved(update.effective_user.id, favorites, context.user_data.get("music_collections", {}))
+    songs = all_saved(update.effective_user.id, favorites, context.user_data.get("music_collections", {}),context.user_data.get('miniapp_library',[]))
     if uploads_only:
         songs = [song for song in songs if song.get("kind") == "upload"]
     page_prefix = "lib:uploads" if uploads_only else "lib:page"
@@ -138,9 +146,10 @@ async def save_song(update, context, song, favorites, store, *, offer_playlist=T
     folders = await collections(context, uid, store)
     if song.get("kind") == "upload":
         from uploaded_media import retain_upload
-        existing = find_song(uid, song["id"], favorites, folders)
+        existing = find_song(uid, song["id"], favorites, folders, app_tracks=context.user_data.get('miniapp_library',[]))
         song = await retain_upload(update, context, existing or song)
-    favorites[uid] = all_saved(uid, favorites, folders)
+    remember_library(context, uid, favorites, folders)
+    favorites.setdefault(uid,[])
     if not any(item["id"] == song["id"] for item in favorites[uid]):
         favorites[uid].append(dict(song))
     await commit(context, uid, store, favorites, folders)
@@ -161,7 +170,7 @@ async def create_collection(update, context, store, name, favorites=None):
     folders = await collections(context, uid, store)
     if favorites is None:
         _, favorites = await asyncio.to_thread(store.load)
-    favorites[uid] = all_saved(uid, favorites, folders)
+    remember_library(context, uid, favorites, folders)
     key = next((key for key, folder in folders.items() if folder["name"].casefold() == name.casefold()), None)
     if key is None:
         if len(folders) >= 30:
@@ -173,8 +182,6 @@ async def create_collection(update, context, store, name, favorites=None):
         if len(folders[key]["songs"]) >= MAX_TRACKS:
             return await screen(update, "Плейлист заполнен. Выбери другой.", [[Button("← Плейлисты", callback_data="lib:folders")]])
         folders[key]["songs"].append(dict(pending))
-        if not any(item["id"] == pending["id"] for item in favorites[uid]):
-            favorites[uid].append(dict(pending))
     source = context.user_data.get("new_playlist_move_from")
     if pending and source in folders and source != key:
         folders[source]["songs"] = [item for item in folders[source]["songs"] if item["id"] != pending["id"]]
@@ -203,7 +210,7 @@ async def add_picker(update, context, favorites, folders, key, page=0):
     folder = folders.get(key)
     if not folder:
         return
-    songs = all_saved(update.effective_user.id, favorites, folders)
+    songs = all_saved(update.effective_user.id, favorites, folders,context.user_data.get('miniapp_library',[]))
     total = max(1, (len(songs) + PAGE_SIZE - 1) // PAGE_SIZE)
     page = max(0, min(page, total - 1))
     identifiers = {song["id"] for song in folder["songs"]}
@@ -245,7 +252,7 @@ async def handle_library(update, context, favorites, persist_favorites, store, r
         context.user_data.pop("new_collection_song", None)
         context.user_data.pop("new_playlist_move_from", None)
         if match[1]:
-            song = find_song(uid, int(match[1]), favorites, folders, results)
+            song = find_song(uid, int(match[1]), favorites, folders, results, context.user_data.get('miniapp_library',[]))
             if not song:
                 return
             context.user_data["new_collection_song"] = dict(song)
@@ -277,7 +284,7 @@ async def handle_library(update, context, favorites, persist_favorites, store, r
         if action == "drop":
             return await screen(update, f"Удалить <b>{escape(folder['name'])}</b>?\nТреки останутся в сохранённых.", [
                 [Button("Удалить", callback_data="lib:confirmdrop:" + key, style="danger"), Button("Отмена", callback_data="lib:col:" + key)]])
-        favorites[uid] = all_saved(uid, favorites, folders)
+        remember_library(context, uid, favorites, folders)
         folders.pop(key)
         await commit(context, uid, store, favorites, folders)
         return await show_folders(update, context, store)
@@ -287,10 +294,10 @@ async def handle_library(update, context, favorites, persist_favorites, store, r
     match = re.fullmatch(r"lib:mark:([0-9a-f]{8}):(-?[0-9]{1,19}):([0-9]{1,3})", data)
     if match:
         key, identifier, page = match.groups()
-        folder, song = folders.get(key), find_song(uid, int(identifier), favorites, folders, results)
+        folder, song = folders.get(key), find_song(uid, int(identifier), favorites, folders, results, context.user_data.get('miniapp_library',[]))
         if not folder or not song:
             return
-        favorites[uid] = all_saved(uid, favorites, folders)
+        remember_library(context, uid, favorites, folders)
         if any(item["id"] == song["id"] for item in folder["songs"]):
             folder["songs"] = [item for item in folder["songs"] if item["id"] != song["id"]]
         elif len(folder["songs"]) < MAX_TRACKS:
@@ -323,14 +330,14 @@ async def handle_library(update, context, favorites, persist_favorites, store, r
                 return await screen(update, "Плейлист заполнен.", [[Button("← Назад", callback_data="lib:col:" + source)]])
             folders[target]["songs"].append(dict(song))
         folders[source]["songs"] = [item for item in folders[source]["songs"] if item["id"] != song["id"]]
-        favorites[uid] = all_saved(uid, favorites, folders)
+        remember_library(context, uid, favorites, folders)
         await commit(context, uid, store, favorites, folders)
         return await show_playlist(update, context, folders, target, notice="Перемещено")
     match = re.fullmatch(r"lib:(save|ci|cd|move):([0-9a-f]{8}):(-?[0-9]{1,19})", data)
     if match:
         action, key, identifier = match.groups()
         folder = folders.get(key)
-        song = find_song(uid, int(identifier), favorites, folders, results)
+        song = find_song(uid, int(identifier), favorites, folders, results, context.user_data.get('miniapp_library',[]))
         if not folder or not song:
             return await screen(update, "Трек больше недоступен.", [[Button("← Моя музыка", callback_data="lib:home")]])
         if action in ("ci", "cd", "move") and not any(item["id"] == song["id"] for item in folder["songs"]):
@@ -339,15 +346,13 @@ async def handle_library(update, context, favorites, persist_favorites, store, r
             exists = any(item["id"] == song["id"] for item in folder["songs"])
             if not exists and len(folder["songs"]) >= MAX_TRACKS:
                 return await screen(update, "Плейлист заполнен.", [[Button("← Плейлисты", callback_data="lib:folders")]])
-            favorites[uid] = all_saved(uid, favorites, folders)
-            if not any(item["id"] == song["id"] for item in favorites[uid]):
-                favorites[uid].append(dict(song))
+            remember_library(context, uid, favorites, folders)
             if not exists:
                 folder["songs"].append(dict(song))
             await commit(context, uid, store, favorites, folders)
             return await show_playlist(update, context, folders, key, notice="Добавлено")
         if action == "cd":
-            favorites[uid] = all_saved(uid, favorites, folders)
+            remember_library(context, uid, favorites, folders)
             folder["songs"] = [item for item in folder["songs"] if item["id"] != song["id"]]
             await commit(context, uid, store, favorites, folders)
             return await show_playlist(update, context, folders, key, notice="Трек убран")
@@ -366,7 +371,7 @@ async def handle_library(update, context, favorites, persist_favorites, store, r
     if not match:
         return
     action, identifier = match.groups()
-    song = find_song(uid, int(identifier), favorites, folders, results)
+    song = find_song(uid, int(identifier), favorites, folders, results, context.user_data.get('miniapp_library',[]))
     if not song:
         return await screen(update, "Трек больше недоступен.", [[Button("← Моя музыка", callback_data="lib:home")]])
     if action == "delete":
@@ -374,7 +379,8 @@ async def handle_library(update, context, favorites, persist_favorites, store, r
             [Button("Убрать", callback_data=f"lib:confirmdelete:{identifier}", style="danger"),
              Button("Отмена", callback_data=f"lib:item:{identifier}")]])
     if action == "confirmdelete":
-        favorites[uid] = [item for item in all_saved(uid, favorites, folders) if item["id"] != song["id"]]
+        favorites[uid] = [item for item in favorites.get(uid,[]) if item["id"] != song["id"]]
+        context.user_data['miniapp_library']=[item for item in context.user_data.get('miniapp_library',[]) if item['id']!=song['id']]
         for folder in folders.values():
             folder["songs"] = [item for item in folder["songs"] if item["id"] != song["id"]]
         await commit(context, uid, store, favorites, folders)

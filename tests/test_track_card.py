@@ -5,6 +5,17 @@ from telegram.error import BadRequest
 from track_card import show_card, selected_song, card_keyboard, retire_download_menus
 
 class TrackCardTests(unittest.IsolatedAsyncioTestCase):
+    async def test_app_studio_button_keeps_chat_actions_and_selected_track(self):
+        context=NS(user_data={'language':'en'})
+        with patch.dict('os.environ',{'MINIAPP_ENABLED':'true','MINIAPP_URL':'https://app.example.test/'}):
+            markup=card_keyboard(context,{'id':123,'title':'Track'})
+        buttons=[button for row in markup.inline_keyboard for button in row]
+        link=next(button for button in buttons if button.web_app)
+        self.assertEqual(link.text,'Studio in app')
+        self.assertEqual(link.web_app.url,'https://app.example.test/?track=123#studio')
+        self.assertTrue(any(button.callback_data and ':studio:' in button.callback_data for button in buttons))
+        self.assertEqual(context.user_data['track_cards'][buttons[0].callback_data.rsplit(':',1)[-1]]['id'],123)
+
     def fixture(self, message=None):
         query = NS(message=message, edit_message_media=AsyncMock(), edit_message_caption=AsyncMock(),
                    edit_message_text=AsyncMock()) if message else None
