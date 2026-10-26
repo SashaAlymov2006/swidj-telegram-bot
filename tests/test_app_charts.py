@@ -21,6 +21,24 @@ def fixture():
 
 
 class ChartDataTests(unittest.IsolatedAsyncioTestCase):
+    async def test_background_refresh_checks_all_countries_and_stops_cleanly(self):
+        from aiohttp import web
+        from app_charts import register,COUNTRIES
+        application=web.Application();register(application,SimpleNamespace())
+        service=application['charts_worker'];completed=asyncio.Event()
+        async def delay(seconds):
+            if seconds==60:return
+            self.assertEqual(seconds,3600);completed.set();await asyncio.Future()
+        async def get(country):
+            if country=='de':raise web.HTTPServiceUnavailable()
+            return {}
+        with patch.object(service,'get',side_effect=get) as fetch,patch('app_charts.asyncio.sleep',side_effect=delay):
+            lifecycle=application.cleanup_ctx[0](application)
+            await anext(lifecycle)
+            await asyncio.wait_for(completed.wait(),1)
+            self.assertEqual([call.args[0] for call in fetch.await_args_list],list(COUNTRIES))
+            await lifecycle.aclose()
+
     async def test_restart_preserves_country_rank_and_stale_fallback(self):
         with tempfile.TemporaryDirectory() as folder:
             service=Charts(cache_root=folder);value=clean_feed(fixture(),'de')

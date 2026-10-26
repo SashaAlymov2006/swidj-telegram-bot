@@ -134,7 +134,8 @@ function empty(title, note, name='music') { return `<div class="empty">${icon(na
 function heading(title, note) { return `<div class="page-heading"><p class="eyebrow">${e(t(route))}</p><h1>${e(t(title))}</h1><p>${e(t(note))}</p></div>`; }
 function note() { return demo ? `<p class="demo-note">${icon('info')}${e(t('demoNote'))}</p>` : ''; }
 function mediaShortcuts(){return `<div class="media-shortcuts">${['video','audio'].map(mode=>`<button type="button" class="media-shortcut" data-media-mode="${mode}">${icon(mode==='video'?'play':'download')}<span><strong>${e(t(mode==='video'?'videoShortcut':'audioShortcut'))}</strong><small>${e(t('downloadShortcutNote'))}</small></span></button>`).join('')}</div>`;}
-let chartCountry='de',chartData=null,chartsLoading=false,chartsError=false,chartFilter='',chartRequest=0,chartBusy=null;
+let chartCountry='de',chartData=null,chartsLoading=false,chartsError=false,chartFilter='',chartRequest=0,chartBusy=null,chartCheckedAt=0;
+function chartsNeedRefresh(){return !demo&&!chartsLoading&&!chartBusy&&Date.now()-chartCheckedAt>=(chartsError?60000:30*60*1000);}
 const chartResolved=new Map(),chartCountries=['de','us','gb','fr','ua','ru'];
 try{const saved=localStorage.getItem('swidj-chart-country');if(chartCountries.includes(saved))chartCountry=saved;}catch{}
 function chartKey(item){return chartCountry+':'+item.id;}
@@ -148,7 +149,7 @@ function chartsScreen(){
  return `<section class="chart-hero"><p class="eyebrow">SWIDJ / TOP 50</p><h1>${e(t('chartsTitle'))}</h1><p>${e(t('chartsNote'))}</p><span class="chart-hero-mark" aria-hidden="true">50</span></section><div class="chart-toolbar"><label>${e(t('chartCountry'))}<select id="chart-country">${chartCountries.map(country=>`<option value="${country}" ${chartCountry===country?'selected':''}>${e(t('country'+country.toUpperCase()))}</option>`).join('')}</select></label><button type="button" class="btn secondary" id="refresh-charts" ${chartsLoading?'disabled':''}>${icon('repeat')}${e(t('refresh'))}</button></div>${demo?`<p class="chart-empty">${e(t('needsTelegram'))}</p>`:chartsLoading?`<div class="loading" role="status">${e(t('loading'))}</div>`:chartsError?`<p class="chart-empty" role="status">${e(t('chartUnavailable'))}</p>`:chartData?`<div class="chart-source"><strong>${e(t('chartSource'))}</strong><span>${Number.isFinite(date.getTime())?e(t('chartUpdated')+' '+date.toLocaleDateString(language==='ru'?'ru-RU':'en-GB')):''}${chartData.stale?' / '+e(t('chartCached')):''}</span></div><input id="chart-filter" type="search" maxlength="80" value="${e(chartFilter)}" placeholder="${e(t('chartFilter'))}" aria-label="${e(t('chartFilter'))}"><section id="chart-tracks" class="chart-list">${chartRows()}</section><a class="chart-credit" href="${e(chartData.source_url)}" target="_blank" rel="noopener noreferrer">${e(t('chartOpenSource'))} &#8599;</a>`:''}`;
 }
 async function loadCharts(){
- if(demo)return;const request=++chartRequest,country=chartCountry;chartsLoading=true;chartsError=false;if(route==='charts')render();
+ if(demo)return;const request=++chartRequest,country=chartCountry;chartCheckedAt=Date.now();chartsLoading=true;chartsError=false;if(route==='charts')render();
  try{const response=await api('charts?country='+country);const data=await response.json();if(request===chartRequest)chartData=data;}
  catch{if(request===chartRequest){chartsError=true;chartData=null;}}
  finally{if(request===chartRequest){chartsLoading=false;if(route==='charts')render();}}
@@ -279,7 +280,7 @@ function render() {
   for (const [id,key] of [['previous','previous'],['next','next'],['repeat','repeat'],['seek','seek'],['volume','volume'],['language','language'],['player-art','nowPlaying'],['open-player','nowPlaying'],['expand-studio','openStudio'],['player-like','favorite']]) $(id).setAttribute('aria-label',t(key));
   if(renderBusy) for(const id of ['preview-mix','export-mix','save-mix','apply-mix']) if($(id))$(id).disabled=true;
   updatePlayer();
-  if(route==='charts'&&!chartData&&!chartsLoading&&!chartsError&&!demo)queueMicrotask(loadCharts);
+  if(route==='charts'&&chartsNeedRefresh())queueMicrotask(loadCharts);
 }
 function updatePlayer() {
   document.body.classList.toggle('is-playing',!audio.paused);
@@ -824,5 +825,9 @@ async function start() {
   render();
 }
 start().catch(report);
+
+function refreshVisibleCharts(){if(route==='charts'&&!document.hidden&&document.activeElement?.id!=='chart-filter'&&chartsNeedRefresh())loadCharts().catch(report);}
+setInterval(refreshVisibleCharts,60000);
+document.addEventListener('visibilitychange',refreshVisibleCharts);
 
 document.addEventListener('keydown',event=>{if(event.key==='Enter'&&event.target.id==='link-url'){event.preventDefault();importLink().catch(report);}});

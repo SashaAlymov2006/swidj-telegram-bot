@@ -6,13 +6,40 @@ import time
 import aiohttp
 from aiohttp import web
 
+
+def search_labels(title,artist):
+    title=re.sub(r'\([^)]*(?:official|video|audio|lyrics|slowed|reverb|sped up|visualizer|remaster)[^)]*\)|\[[^]]*(?:official|video|audio|lyrics|slowed|reverb|sped up|visualizer|remaster)[^]]*\]','',title,flags=re.I).strip()[:180]
+    artist=re.sub(r'\s*-\s*Topic$','',artist,flags=re.I).strip()[:120]
+    parts=re.split(r'\s+[-–—]\s+',title,maxsplit=1)
+    normalize=lambda value:re.sub(r'\W','',value.casefold()).removesuffix('vevo')
+    if len(parts)==2 and all(parts) and normalize(parts[0])==normalize(artist):
+        artist,title=parts
+    return title.strip(),artist.strip()
+
+
+def lyric_matches(data):
+    matches=[];seen=set()
+    if not isinstance(data,list):return matches
+    for item in data[:100]:
+        if not isinstance(item,dict):continue
+        text=item.get('plainLyrics')
+        if not isinstance(text,str) or not text.strip():
+            synced=item.get('syncedLyrics')
+            text=re.sub(r'\[\d+:\d+(?:\.\d+)?\]','',synced).strip() if isinstance(synced,str) else ''
+        if not text:continue
+        title=str(item.get('trackName',''))[:180];artist=str(item.get('artistName',''))[:120]
+        key=(title.casefold(),artist.casefold(),text.strip())
+        if key in seen:continue
+        seen.add(key);matches.append({'title':title,'artist':artist,'text':text[:64000],'source':'LRCLIB'})
+        if len(matches)>=5:break
+    return matches
+
 class Lyrics:
     def __init__(self):
         self.cache={};self.slots=asyncio.Semaphore(1);self.blocked_until=0
 
     async def lookup(self,title,artist):
-        title=re.sub(r'\([^)]*(?:official|video|audio|lyrics)[^)]*\)|\[[^]]*(?:official|video|audio|lyrics)[^]]*\]','',title,flags=re.I).strip()[:180]
-        artist=re.sub(r'\s*-\s*Topic$','',artist,flags=re.I).strip()[:120]
+        title,artist=search_labels(title,artist)
         key=(title,artist)
         if key in self.cache and self.cache[key][0]>time.monotonic():return self.cache[key][1]
         if self.blocked_until>time.monotonic() or self.slots.locked():raise web.HTTPTooManyRequests()
@@ -33,19 +60,10 @@ class Lyrics:
                     raw=b''.join(chunks)
                     import json
                     data=json.loads(raw)
-            matches=[]
-            if isinstance(data,list):
-                for item in data[:20]:
-                    if not isinstance(item,dict):continue
-                    text=item.get('plainLyrics')
-                    if not isinstance(text,str) or not text.strip():continue
-                    matches.append({'title':str(item.get('trackName',''))[:180],
-                                    'artist':str(item.get('artistName',''))[:120],
-                                    'text':text[:64000],'source':'LRCLIB'})
-                    if len(matches)>=5:break
+            matches=lyric_matches(data)
             result={'matches':matches,'source':'LRCLIB'}
             while len(self.cache)>=128:self.cache.pop(next(iter(self.cache)))
-            self.cache[key]=(time.monotonic()+3600,result)
+            self.cache[key]=(time.monotonic()+(3600 if matches else 120),result)
             return result
 
 def register(app,bridge):

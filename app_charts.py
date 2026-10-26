@@ -164,6 +164,22 @@ class Charts:
 
 def register(app,bridge):
     service=Charts();app['charts_worker']=service
+    async def refresh_periodically():
+        # Requests still use the 30-minute TTL. Keep disk feeds fresh even without visitors.
+        await asyncio.sleep(60)
+        while True:
+            for country in COUNTRIES:
+                try:await service.get(country)
+                except web.HTTPException:pass
+            await asyncio.sleep(3600)
+    async def lifecycle(application):
+        task=asyncio.create_task(refresh_periodically())
+        try:yield
+        finally:
+            task.cancel()
+            try:await task
+            except asyncio.CancelledError:pass
+    app.cleanup_ctx.append(lifecycle)
     async def chart(request):
         bridge.allowed(request['user']['id'],'search')
         return web.json_response(await service.get(request.query.get('country','de').lower()))
