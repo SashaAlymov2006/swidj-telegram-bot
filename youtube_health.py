@@ -22,6 +22,9 @@ def probe():
     try:
         jar = http.cookiejar.MozillaCookieJar(str(cookie))
         jar.load(ignore_discard=True, ignore_expires=True)
+        from youtube_session_sync import authenticated_youtube
+        if not authenticated_youtube(jar):
+            return 'auth_required'
         relevant = [c for c in jar if c.domain.lstrip('.') == 'youtube.com'
                     or c.domain.lstrip('.').endswith('.youtube.com')]
         if not relevant or not any(not c.expires or c.expires > time.time() for c in relevant):

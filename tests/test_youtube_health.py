@@ -12,7 +12,7 @@ class YouTubeHealthTests(unittest.TestCase):
         from youtube_health import probe
         with tempfile.TemporaryDirectory() as folder:
             source=Path(folder)/'cookies.txt'
-            original='# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tfixture-session\n'
+            original='# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSAPISID\tfixture-session\n.youtube.com\tTRUE\t/\tTRUE\t2147483647\tLOGIN_INFO\tfixture-login\n'
             source.write_text(original)
             seen=[]
             def factory(options):

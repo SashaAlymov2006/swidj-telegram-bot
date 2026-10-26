@@ -10,6 +10,15 @@ import time
 MARKERS={'SID','SAPISID','LOGIN_INFO','__Secure-3PSID','__Secure-1PSID'}
 
 
+def authenticated_youtube(jar, now=None):
+    """Mirror yt-dlp's login check; Google SID cookies alone are insufficient."""
+    now=time.time() if now is None else now
+    names={c.name for c in jar if c.value and c.path=='/'
+           and c.domain.lstrip('.').lower() in ('youtube.com','www.youtube.com')
+           and (c.expires is None or c.expires>now)}
+    return 'LOGIN_INFO' in names and bool(names & {'SAPISID','__Secure-1PAPISID','__Secure-3PAPISID'})
+
+
 def filter_youtube(jar, now=None):
     now=time.time() if now is None else now
     for cookie in list(jar):
@@ -30,8 +39,8 @@ def export():
     try:
         jar=extract_cookies_from_browser('chromium',profile='/profile/chromium/Default',logger=Quiet())
         count,auth=filter_youtube(jar)
-        if not count or not auth:
-            return {'synced':False,'previous_retained':True}
+        if not authenticated_youtube(jar):
+            return {'synced':False,'previous_retained':True,'reason':'youtube_login_incomplete'}
         with tempfile.NamedTemporaryFile(dir='/out',prefix='.session-',delete=False) as stream:
             pending=Path(stream.name)
         jar.save(str(pending),ignore_discard=True,ignore_expires=True)
