@@ -13,7 +13,7 @@ SwiDJ brings music discovery, personal audio tools and public video retrieval in
 | --- | --- |
 | Discovery | Search by title or lyrics; transcribe spoken words for a song search |
 | Music links | YouTube and SoundCloud audio; Spotify, Apple Music and Yandex Music links resolve song metadata and search for an available recording |
-| Video | Public YouTube videos, TikTok videos and Instagram videos/Reels |
+| Video | Public YouTube videos, TikTok videos and photo slideshows with audio; Instagram videos/Reels |
 | Audio studio | Trim, convert, speed up, slowed/reverb, adjustable bass with preview, reverse, loops and phone ringtone exports |
 | Personal library | Favourites, playlists and saving users' own uploaded audio |
 | Experience | Russian/English UI, remembered language, compact result navigation, retries and cancellation |

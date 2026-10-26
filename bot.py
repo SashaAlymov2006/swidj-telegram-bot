@@ -400,7 +400,19 @@ def download_youtube_video(url: str, height: int) -> str:
         ydl_opts["cookiefile"] = None
         ydl_opts["format"] = "b[ext=mp4]/b"
         ydl_opts["playlist_items"] = "1"
-    _extract_media(ydl_opts, url, temp_dir)
+    try:
+        _extract_media(ydl_opts, url, temp_dir)
+    except Exception as error:
+        if classify(url)=='tiktok' and 'unsupported url' in str(error).lower():
+            from tiktok_photos import download
+            try:photos=download(url,temp_dir,'video',height,49*1024**2)
+            except BaseException:
+                shutil.rmtree(temp_dir,ignore_errors=True)
+                raise
+            if photos:
+                cache_retain(url,f'chat-video-{height}',photos['path'],photos)
+                return photos['path']
+        raise
 
     for f in os.listdir(temp_dir):
         if f.endswith(".mp4"):

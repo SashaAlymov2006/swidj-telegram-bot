@@ -2,6 +2,20 @@ import unittest
 from unittest.mock import Mock, patch
 from catalog_links import classify, extract_links, apple_metadata, public_metadata
 class CatalogLinksTests(unittest.TestCase):
+    def test_copied_tiktok_share_formats_work_in_chat_and_miniapp(self):
+        from app_media import validate
+        url='https://vm.tiktok.com/ABC12/'
+        samples=[url,'vm.tiktok.com/ABC12/','HTTPS://VM.TIKTOK.COM/ABC12/',
+                 'Shared video '+url+'\u200b','Watch: '+url+'»',url+url]
+        for text in samples:
+            with self.subTest(text=text):
+                links=extract_links(text)
+                self.assertTrue(links);self.assertEqual(links[0]['platform'],'tiktok')
+                self.assertEqual(validate({'url':text,'mode':'video','height':720})[3],'tiktok')
+        self.assertEqual(len(extract_links(url+url)),1)
+        for text in ('vm.tiktok.com.evil.test/ABC12/','https://user:password@vm.tiktok.com/ABC12/','https://127.0.0.1/ABC12/'):
+            self.assertEqual(extract_links(text),[])
+            with self.assertRaises(ValueError):validate({'url':text})
     def test_selected_platform_urls_only_and_deduplication(self):
         cases={"https://music.yandex.ru/album/1/track/2?utm_source=x":"yandex",
                "https://music.yandex.kz/track/12":"yandex",
@@ -82,9 +96,9 @@ class CatalogLinksTests(unittest.TestCase):
             self.assertTrue(active.exists())
 
     def test_tiktok_video_and_share_links_only(self):
-        for url in ("https://www.tiktok.com/@artist/video/12345","https://vm.tiktok.com/ABC12/","https://vt.tiktok.com/ABC12/","https://www.tiktok.com/t/ABC12/"):
+        for url in ("https://www.tiktok.com/@artist/video/12345","https://vm.tiktok.com/ABC12/","https://vt.tiktok.com/ABC12/","https://www.tiktok.com/t/ABC12/","https://tiktok.com/@a/photo/123"):
             self.assertEqual(classify(url),"tiktok")
-        for url in ("https://www.tiktok.com/@artist","https://tiktok.com.evil.test/@a/video/123","https://tiktok.com/@a/photo/123","https://vm.tiktok.com/","https://user:pass@tiktok.com/@a/video/123"):
+        for url in ("https://www.tiktok.com/@artist","https://tiktok.com.evil.test/@a/video/123","https://vm.tiktok.com/","https://user:pass@tiktok.com/@a/video/123"):
             self.assertIsNone(classify(url))
 
     def test_yandex_jsonld_graph_types_and_artist_list(self):

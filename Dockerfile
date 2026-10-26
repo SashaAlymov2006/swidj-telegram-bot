@@ -23,6 +23,7 @@ COPY --chmod=0444 youtube_session_sync.py ./
 COPY --chmod=0444 download_cache.py ./
 COPY --chmod=0444 media_recovery.py ./
 COPY --chmod=0444 jamendo_source.py ./
+COPY --chmod=0444 tiktok_photos.py ./
 COPY --chmod=0555 miniapp/ ./miniapp/
 USER bot
 CMD ["python", "bot.py"]

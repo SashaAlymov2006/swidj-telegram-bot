@@ -22,9 +22,10 @@ def validate(payload):
     if not isinstance(payload,dict):raise ValueError('Invalid link')
     text=payload.get('url','');mode=payload.get('mode','audio');height=payload.get('height',360)
     if not isinstance(text,str) or not 1<len(text)<=4096 or mode not in ('audio','video') or type(height) is not int or height not in LINK_QUALITIES:raise ValueError('Invalid options')
-    matches=re.findall(r'https?://[^\s<>]*?(?=https?://|\s|$)',text.strip(),flags=re.I)
+    from catalog_links import link_candidates
+    matches=link_candidates(text)
     if not matches:raise ValueError('Invalid link')
-    url=matches[0].rstrip('.,;!?)"')
+    url=matches[0]
     parts=urlsplit(url);host=(parts.hostname or '').lower()
     if parts.username or parts.password or parts.port not in (None,80,443):raise ValueError('Invalid URL')
     if host in ('youtu.be','youtube.com','www.youtube.com','m.youtube.com','music.youtube.com'):
@@ -197,9 +198,16 @@ def fetch(payload,directory):
         options['user_agent']=('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                                'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
     from youtube_session import cookie_snapshot
-    with cookie_snapshot(options.get('cookiefile')) as cookies:
-        options['cookiefile']=cookies
-        with yt_dlp.YoutubeDL(options) as downloader:info=downloader.extract_info(url,download=True)
+    try:
+        with cookie_snapshot(options.get('cookiefile')) as cookies:
+            options['cookiefile']=cookies
+            with yt_dlp.YoutubeDL(options) as downloader:info=downloader.extract_info(url,download=True)
+    except yt_dlp.utils.DownloadError as error:
+        if platform=='tiktok' and any(text in str(error).lower() for text in ('unsupported url','no suitable extractor')):
+            from tiktok_photos import download
+            photos=download(url,directory,mode,height,budget)
+            if photos:return photos
+        raise
     if isinstance(info,dict) and 'entries' in info:info=next((item for item in info['entries'] if item),None)
     if not isinstance(info,dict):raise ValueError('No media')
     files=[p for p in Path(directory).glob('source.*') if p.is_file() and p.suffix not in ('.part','.ytdl','.json')]

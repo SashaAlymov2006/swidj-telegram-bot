@@ -14,7 +14,7 @@ def classify(url):
         path=parsed.path
         if host in ("youtu.be","youtube.com","www.youtube.com","m.youtube.com","music.youtube.com"):
             return "youtube" if host=="youtu.be" and path.strip("/") or re.match(r"/(watch|shorts/|live/)",path) else None
-        if host in ("tiktok.com","www.tiktok.com","m.tiktok.com") and re.fullmatch(r"/(?:@[^/]+/video/\d+|t/[A-Za-z0-9]+|embed/v2/\d+)/?",path):
+        if host in ("tiktok.com","www.tiktok.com","m.tiktok.com") and re.fullmatch(r"/(?:@[^/]+/(?:video|photo)/\d+|t/[A-Za-z0-9]+|embed/v2/\d+)/?",path):
             return "tiktok"
         if host in ("vm.tiktok.com","vt.tiktok.com") and re.fullmatch(r"/[A-Za-z0-9]+/?",path):
             return "tiktok"
@@ -36,10 +36,17 @@ def classify(url):
         pass
     return None
 
+def link_candidates(text):
+    """Accept copied share text while retaining strict host/path validation downstream."""
+    if not isinstance(text,str):return []
+    text=re.sub(r'[\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]','',text[:8192])
+    text=re.sub(r'(?<![\w./:@-])((?:(?:www|m|vm|vt)\.)?tiktok\.com/)',r'https://\1',text,flags=re.I)
+    return [match[0].rstrip(".,;!?)\"'»”’]") for match in re.finditer(r'https?://[^\s<>]*?(?=https?://|\s|$)',text,flags=re.I)]
+
+
 def extract_links(text):
     result=[]; seen=set()
-    for match in re.finditer(r"https?://[^\s<>]+",text or ""):
-        url=match[0].rstrip(".,;!?)\"'»")
+    for url in link_candidates(text):
         platform=classify(url)
         if platform and url not in seen:
             result.append({"url":url,"platform":platform});seen.add(url)

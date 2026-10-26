@@ -20,13 +20,16 @@ async def main():
                 await page.clock.install()
                 await page.add_init_script("window.Telegram={WebApp:{initData:'fixture',initDataUnsafe:{user:{id:77}},ready(){},expand(){}}}")
                 await page.route('https://telegram.org/**',lambda route:route.fulfill(body=''))
-                calls=[]
+                calls=[];submitted=[]
                 async def api(route):
                     path=route.request.url.split('/api/')[1]
                     if path.startswith('library'):data={'tracks':[{'id':'1','title':'Fixture song','artist':'Artist','source':'Fixture'}],'recent':[],'favorites':['1'],'playlists':[],'language':'en','bot':''}
                     elif path.startswith('charts?'):
                         calls.append(path);data={'source':'Apple Music','country':'de','updated':'2026-10-26T00:00:00Z','source_url':'https://music.apple.com/de/browse/top-charts/songs','tracks':[{'id':'101','rank':1,'title':'Chart '+str(len(calls)),'artist':'Artist','artwork':''}],'stale':False}
                     elif path.startswith('lyrics?'):data={'matches':[{'title':'Fixture song','artist':'Artist','text':'Fixture words','source':'LRCLIB'}]}
+                    elif path=='link':
+                        submitted.append(route.request.post_data_json)
+                        data={'kind':'video','url':'/fixture.mp4','title':'Video fixture','artist':'','duration':5,'filename':'fixture.mp4'}
                     else:data={}
                     await route.fulfill(json=data)
                 await page.route('**/api/**',api)
@@ -40,8 +43,15 @@ async def main():
                 await page.locator('[data-action=lyrics]').click()
                 await page.locator('.lyrics-text').wait_for()
                 assert await page.locator('.lyrics-text').inner_text()=='Fixture words'
+                await page.locator('#dialog .dialog-head button').click()
+                await page.locator('#mobile-nav [data-go=home]').click()
+                await page.locator('[data-media-mode=video]').click()
+                await page.locator('#link-url').evaluate("node=>{node.value='vm.tiktok.com/ABC12/'}")
+                await page.locator('#prepare-link').click()
+                await page.locator('#download-link').wait_for()
+                assert submitted[-1]['url']=='vm.tiktok.com/ABC12/'
                 assert not errors,errors
-                print(json.dumps({'browser':browser_type.name,'chart_auto_refresh':True,'lyrics_dialog':True,'js_errors':errors}),flush=True)
+                print(json.dumps({'browser':browser_type.name,'chart_auto_refresh':True,'lyrics_dialog':True,'paste_without_input_event':True,'js_errors':errors}),flush=True)
                 await browser.close()
     finally:await runner.cleanup()
 
