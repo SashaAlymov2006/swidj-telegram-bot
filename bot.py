@@ -609,8 +609,15 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from audio_presentation import send_cached_music
             from track_card import card_keyboard, retire_download_menus
             if platform in ('youtube','soundcloud'):
-                cached_song=download_song(platform,url,None,None,None)
-                if await send_cached_music(context.bot,query.message.chat_id,url,reply_markup=card_keyboard(context,cached_song,delivered=True)):
+                cached_message=await send_cached_music(context.bot,query.message.chat_id,url)
+                if cached_message:
+                    from telegram.error import TelegramError
+                    cached_audio=getattr(cached_message,'audio',None)
+                    cached_song=download_song(platform,url,getattr(cached_audio,'title',None),getattr(cached_audio,'performer',None),None)
+                    try:
+                        await cached_message.edit_reply_markup(reply_markup=card_keyboard(context,cached_song,delivered=True))
+                    except TelegramError:
+                        pass
                     request.setdefault('delivered_actions',[]).append(action)
                     await retire_download_menus(update,context)
                     return
