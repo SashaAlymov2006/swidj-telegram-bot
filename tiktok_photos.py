@@ -88,11 +88,12 @@ def download(url,directory,mode='video',height=720,max_bytes=256*1024**2):
     finally:html.unlink(missing_ok=True)
     from app_limits import link_budget
     from miniapp_studio import process,probe
-    budget=min(max_bytes,link_budget(directory));used=0
+    workspace_budget=min(1024**3,link_budget(directory))
+    budget=min(max_bytes,workspace_budget);used=0
     audio=None;audio_duration=0
     if post['audio']:
         audio=directory/'soundtrack.mp3'
-        used+=download_resource(post['audio'],audio,min(32*1024**2,budget))
+        used+=download_resource(post['audio'],audio,min(32*1024**2,workspace_budget))
         audio_duration=asyncio.run(probe(audio))
     if mode=='audio':
         if not audio:raise ValueError('This photo post has no soundtrack')
@@ -108,12 +109,12 @@ def download(url,directory,mode='video',height=720,max_bytes=256*1024**2):
     paths=[]
     for index,url in enumerate(post['images']):
         raw=directory/f'photo-{index:02d}.image'
-        used+=download_resource(url,raw,min(20*1024**2,budget-used))
+        used+=download_resource(url,raw,min(20*1024**2,workspace_budget-used))
         path=directory/f'slide-{index:02d}.png'
         asyncio.run(process(['ffmpeg','-nostdin','-v','error','-y','-threads','2','-protocol_whitelist','file,pipe',
             '-i',str(raw),'-frames:v','1','-vf',frame_filter,'-threads','1',str(path)],30))
         used+=path.stat().st_size
-        if used>=budget:raise ValueError('Photo resource budget reached')
+        if used>=workspace_budget:raise ValueError('Photo resource budget reached')
         paths.append(path)
     duration=max(len(paths)*3,min(audio_duration,180))
     step=duration/len(paths)

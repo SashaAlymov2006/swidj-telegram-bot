@@ -48,9 +48,10 @@ class PhotoPostTests(unittest.TestCase):
                 target=Path(target)
                 if not media:target.write_text(html(fixture()))
                 else:shutil.copyfile(audio if 'audio.mp3' in url else second if 'second.webp' in url else image,target)
-                return target.stat().st_size
+                # Simulate larger image inputs than the permitted final MP4 size.
+                return 600*1024 if media and 'audio.mp3' not in url else target.stat().st_size
             with patch('tiktok_photos.download_resource',side_effect=resource):
-                result=download('https://www.tiktok.com/@a/photo/123',root/'work','video',720)
+                result=download('https://www.tiktok.com/@a/photo/123',root/'work','video',720,max_bytes=1024*1024)
             data=json.loads(subprocess.run(['ffprobe','-v','error','-show_streams','-show_format','-of','json',result['path']],capture_output=True,text=True,check=True).stdout)
             video=next(row for row in data['streams'] if row['codec_type']=='video')
             self.assertGreater(video['height'],video['width'])
