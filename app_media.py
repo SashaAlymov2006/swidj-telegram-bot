@@ -78,14 +78,26 @@ def register(app,bridge):
             from scratch import scratch_root
             with tempfile.TemporaryDirectory(dir=scratch_root(),prefix='app-link-') as directory:
                 try:
-                    raw=await process([sys.executable,str(Path(__file__).resolve()),'fetch',json.dumps({'url':url,'mode':mode,'height':height,'platform':platform}),directory],600)
-                    result=json.loads(raw)
+                    from download_cache import restore, retain as cache_retain
+                    variant='audio-mp3-192' if mode=='audio' else f'app-video-{height}'
+                    cached=await asyncio.to_thread(restore,url,variant,directory,uid)
+                    if cached:
+                        path,metadata=cached
+                        result=dict(metadata,path=path)
+                    else:
+                        raw=await process([sys.executable,str(Path(__file__).resolve()),'fetch',json.dumps({'url':url,'mode':mode,'height':height,'platform':platform}),directory],600)
+                        result=json.loads(raw)
                     if result.get('kind')=='search':return web.json_response(result)
                     if result.get('error'):return web.json_response({'reason':result['error']},status=502)
                     source=Path(result['path'])
                     if source.is_symlink() or source.resolve().parent!=Path(directory).resolve() or not source.stat().st_size>0:raise ValueError('Invalid output')
                     target=Path(directory)/('ready.mp4' if mode=='video' else 'ready.mp3')
-                    duration=await normalize(source,target,mode,height)
+                    if cached:
+                        shutil.copyfile(source,target)
+                        duration=float(result.get('duration') or await probe(source))
+                    else:
+                        duration=await normalize(source,target,mode,height)
+                        await asyncio.to_thread(cache_retain,url,variant,target,dict(result,duration=duration),uid)
                     token,item=app['studio_worker'].exports.retain(uid,target,result.get('title','SwiDJ'),feature='downloads',ttl=max(3600,duration+600))
                     poster=None;has_audio=True
                     if mode=='video':
@@ -209,9 +221,14 @@ def download_app_audio(url):
     directory=tempfile.mkdtemp(dir=scratch_root(),prefix='yt_audio_app_')
     try:
         checkpoint()
+        from download_cache import restore, retain as cache_retain
+        cached=restore(url,'audio-mp3-192',directory)
+        if cached:return cached
         result=fetch({'url':url,'mode':'audio','height':360},directory)
         target=Path(directory)/'ready.mp3'
-        asyncio.run(normalize(Path(result['path']),target,'audio'))
+        duration=asyncio.run(normalize(Path(result['path']),target,'audio'))
+        result['duration']=duration
+        cache_retain(url,'audio-mp3-192',target,result)
         checkpoint()
         return str(target),result
     except BaseException:

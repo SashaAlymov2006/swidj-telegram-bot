@@ -352,7 +352,7 @@ class BotLibrary:
                         filename=song.get('original_filename') or 'SwiDJ.audio', caption=song['title'])
             else:
                 from audio_presentation import send_music
-                await send_music(self.application.bot, uid, path, song['title'], song.get('artist'))
+                await send_music(self.application.bot, uid, path, song['title'], song.get('artist'), source_url=song.get('url'))
         else:
             # Use existing download/retry/card handlers; never accept a URL from the browser.
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup

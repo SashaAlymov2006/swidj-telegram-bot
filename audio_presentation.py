@@ -93,7 +93,34 @@ def prepare_music(path, title, artist, cover=None):
     return title, artist, filename, thumbnail, duration
 
 
-async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *, reply_markup=None):
+async def send_cached_music(bot, chat_id, source_url, title=None, artist=None, *, reply_markup=None):
+    """Reuse only this bot's file sent to the same private chat; no provider request."""
+    from download_cache import configured
+    from telegram.error import BadRequest
+    try:
+        bot_id=bot.id
+        if type(bot_id) is not int or type(chat_id) is not int or chat_id<=0:return None
+        cache=configured()
+        file_id=await asyncio.to_thread(cache.telegram_get,bot_id,chat_id,source_url) if cache else None
+    except Exception:return None
+    if not file_id:return None
+    kwargs={'chat_id':chat_id,'audio':file_id}
+    if reply_markup is not None:kwargs['reply_markup']=reply_markup
+    if title:
+        label,performer,_=music_labels(title,artist)
+        kwargs.update(title=label,performer=performer,caption=f'🎵 <b>{escape(label)}</b>\n{escape(performer)}\n\n♪ SwiDJ',parse_mode='HTML')
+    checkpoint()
+    try:return await bot.send_audio(**kwargs)
+    except BadRequest as error:
+        if not any(word in str(error).lower() for word in ('file identifier','file_id','wrong remote file','file reference')):raise
+        await asyncio.to_thread(cache.telegram_set,bot_id,chat_id,source_url,None)
+        return None
+
+
+async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *, reply_markup=None, source_url=None):
+    if source_url:
+        reused=await send_cached_music(bot,chat_id,source_url,title,artist,reply_markup=reply_markup)
+        if reused:return reused
     title, artist, filename, thumbnail, duration = await asyncio.to_thread(
         prepare_music, path, title, artist, cover)
     kwargs = {
@@ -109,4 +136,12 @@ async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *,
         kwargs["duration"] = duration
     checkpoint()
     with open(path, "rb") as audio:
-        return await bot.send_audio(audio=InputFile(audio, filename=filename), **kwargs)
+        message=await bot.send_audio(audio=InputFile(audio, filename=filename), **kwargs)
+    if source_url:
+        try:
+            from download_cache import configured
+            cache=configured()
+            if cache and type(bot.id) is int and getattr(message,'audio',None) and isinstance(message.audio.file_id,str):
+                await asyncio.to_thread(cache.telegram_set,bot.id,chat_id,source_url,message.audio.file_id)
+        except Exception:pass
+    return message

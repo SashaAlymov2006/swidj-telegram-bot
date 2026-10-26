@@ -17,7 +17,7 @@ SwiDJ brings music discovery, personal audio tools and public video retrieval in
 | Audio studio | Trim, convert, speed up, slowed/reverb, adjustable bass with preview, reverse, loops and phone ringtone exports |
 | Personal library | Favourites, playlists and saving users' own uploaded audio |
 | Experience | Russian/English UI, remembered language, compact result navigation, retries and cancellation |
-| Operations | Owner controls, persistent state, bounded caches and source/runtime backup utilities |
+| Operations | Owner controls, persistent state, bounded per-user media cache, Telegram file reuse and source/runtime backup utilities |
 
 Catalog links do **not** extract protected audio from subscription services. When the title and artist match, the bot can automatically download a corresponding full YouTube recording; ambiguous results retain recording choices. Yandex metadata has an additional public Songlink fallback that validates the exact track ID. Availability depends on the source and network region.
 
@@ -93,3 +93,5 @@ See [architecture and engineering decisions](docs/ARCHITECTURE.md) and the [demo
 A local-first RU/EN web interface now complements the bot: persistent player, search, shared library/playlists and browser audio studio. After local Docker startup, open http://127.0.0.1:8765 for the demo. Real library access requires signed Telegram initData and an HTTPS deployment; a free temporary Telegram HTTPS preview can be started with `python miniapp_tunnel.py start`. Permanent hosting is not configured. See [Mini App setup and limits](MINIAPP.md).
 
 The normal Telegram command menu remains available. Mini App search, recording choices, preparation, playback, device downloads and own-file saving run in the app without automatically messaging or navigating to chat. The app has its own library/recent history and bounded media preparation workers. An explicit Send to chat action remains optional.
+
+Persistent media reuse is optional and bounded to 20 GiB by default. See [cache setup and limitations](deploy/DOWNLOAD_CACHE.md). Cached files help repeat requests; they do not remove upstream access restrictions.

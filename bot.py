@@ -217,8 +217,13 @@ def _extract_media(options, query, directory):
 
 
 def download_youtube_audio(query: str):
+    from pathlib import Path
     check_ffmpeg()
     temp_dir = tempfile.mkdtemp(dir=scratch_root(), prefix="yt_audio_")
+    from download_cache import restore, retain as cache_retain
+    cached = restore(query, 'audio-mp3-192', temp_dir)
+    if cached and Path(cached[0]).stat().st_size <= 49*1024*1024:
+        return cached
 
     ydl_opts = {
         "format": "bestaudio/best",
@@ -271,6 +276,7 @@ def download_youtube_audio(query: str):
             if os.path.getsize(os.path.join(temp_dir, f)) > 49 * 1024 * 1024:
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 raise ValueError("Файл слишком большой. Выбери более короткий трек или меньшее качество видео.")
+            cache_retain(query, 'audio-mp3-192', os.path.join(temp_dir, f), info)
             return os.path.join(temp_dir, f), info
 
     shutil.rmtree(temp_dir)
@@ -348,10 +354,15 @@ def yandex_to_metadata(url: str) -> dict:
 
 
 def download_youtube_video(url: str, height: int) -> str:
+    from pathlib import Path
     if height not in (360, 480, 720, 1080):
         raise ValueError("Unsupported video quality")
     check_ffmpeg()
     temp_dir = tempfile.mkdtemp(dir=scratch_root(), prefix="yt_video_")
+    from download_cache import restore, retain as cache_retain
+    cached = restore(url, f'chat-video-{height}', temp_dir)
+    if cached and Path(cached[0]).stat().st_size <= 49*1024*1024:
+        return cached[0]
 
     ydl_opts = {
         "format": f"bv*[height<={height}]+ba/b[height<={height}]",
@@ -386,6 +397,7 @@ def download_youtube_video(url: str, height: int) -> str:
             if os.path.getsize(os.path.join(temp_dir, f)) > 49 * 1024 * 1024:
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 raise ValueError("Файл слишком большой. Выбери более короткий трек или меньшее качество видео.")
+            cache_retain(url, f'chat-video-{height}', os.path.join(temp_dir, f), {'kind':'video'})
             return os.path.join(temp_dir, f)
 
     shutil.rmtree(temp_dir)
@@ -594,6 +606,14 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         performer = None
 
         try:
+            from audio_presentation import send_cached_music
+            from track_card import card_keyboard, retire_download_menus
+            if platform in ('youtube','soundcloud'):
+                cached_song=download_song(platform,url,None,None,None)
+                if await send_cached_music(context.bot,query.message.chat_id,url,reply_markup=card_keyboard(context,cached_song,delivered=True)):
+                    request.setdefault('delivered_actions',[]).append(action)
+                    await retire_download_menus(update,context)
+                    return
             if platform == 'youtube':
                 mp3, info = await asyncio.to_thread(download_youtube_audio, url)
                 title, performer = extract_youtube_metadata(info)
@@ -634,7 +654,7 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from track_card import card_keyboard, retire_download_menus
             song = download_song(platform, url, title, performer, art)
             await send_music(context.bot, query.message.chat_id, mp3, title, performer, art,
-                             reply_markup=card_keyboard(context, song, delivered=True))
+                             reply_markup=card_keyboard(context, song, delivered=True), source_url=url)
             request.setdefault("delivered_actions",[]).append(action)
             await retire_download_menus(update, context)
             delivered = mp3
@@ -715,8 +735,13 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def download_soundcloud_audio(url: str) -> dict:
+    from pathlib import Path
     check_ffmpeg()
     temp_dir = tempfile.mkdtemp(dir=scratch_root(), prefix="sc_audio_")
+    from download_cache import restore, retain as cache_retain
+    cached=restore(url,'audio-mp3-192',temp_dir)
+    if cached and Path(cached[0]).stat().st_size <= 49*1024*1024:
+        return dict(cached[1],path=cached[0])
 
     ydl_opts = {
         "format": "bestaudio/best",
@@ -743,6 +768,7 @@ def download_soundcloud_audio(url: str) -> dict:
             if os.path.getsize(os.path.join(temp_dir, f)) > 49 * 1024 * 1024:
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 raise ValueError("Файл слишком большой. Выбери более короткий трек или меньшее качество видео.")
+            cache_retain(url,'audio-mp3-192',os.path.join(temp_dir,f),{'title':title,'artist':artist,'duration':info.get('duration')})
             return {
                 "path": os.path.join(temp_dir, f),
                 "title": title,

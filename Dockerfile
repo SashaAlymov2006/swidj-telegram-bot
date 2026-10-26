@@ -20,6 +20,7 @@ COPY --chmod=0444 app_uploads.py miniapp_studio.py app_exports.py app_lyrics.py 
 COPY --chmod=0444 youtube_health.py ./
 COPY --chmod=0444 youtube_session.py ./
 COPY --chmod=0444 youtube_session_sync.py ./
+COPY --chmod=0444 download_cache.py ./
 COPY --chmod=0555 miniapp/ ./miniapp/
 USER bot
 CMD ["python", "bot.py"]

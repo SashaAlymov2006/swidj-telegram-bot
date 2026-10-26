@@ -195,6 +195,14 @@ async def download_selected(update, context, token, request, index, downloader, 
     path = None
     sent = False
     try:
+        if request.get('mode') in ('listen','queue'):
+            from audio_presentation import send_cached_music
+            from track_card import card_keyboard, retire_download_menus
+            resolved=dict(request['song'],url=candidate['url'],title=candidate['title'],artist=candidate.get('artist',''))
+            if await send_cached_music(context.bot,update.effective_chat.id,candidate['url'],resolved['title'],resolved['artist'],reply_markup=card_keyboard(context,resolved,delivered=True)):
+                request.setdefault('sent_indices',[]).append(index)
+                await retire_download_menus(update,context,request)
+                return True
         path, info = await asyncio.to_thread(downloader, candidate["url"])
         checkpoint()
         title, artist = metadata(info)
@@ -208,7 +216,7 @@ async def download_selected(update, context, token, request, index, downloader, 
             from track_card import card_keyboard
             kwargs["reply_markup"] = card_keyboard(context, resolved, delivered=True)
         await send_music(context.bot, update.effective_chat.id, path, title, artist,
-                         resolved.get("cover"), **kwargs)
+                         resolved.get("cover"), source_url=candidate['url'], **kwargs)
         sent = True
         request.setdefault("sent_indices", []).append(index)
         from track_card import retire_download_menus
