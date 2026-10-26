@@ -48,6 +48,19 @@ async def probe(path, allow_unknown=False):
                          '-select_streams','a:0','-show_entries','stream=codec_name:format=duration,format_name',
                          '-of','json',str(path)], 15)
     data = json.loads(raw)
+    if not data.get('format',{}).get('duration') and not allow_unknown and data.get('streams'):
+        # MediaRecorder WebM has no duration header. Read bounded packet timestamps,
+        # rather than trusting a client-supplied recording length.
+        packets = await process(['ffprobe','-v','error','-protocol_whitelist','file,pipe',
+            '-format_whitelist','mp3,wav,ogg,flac,mov,matroska,webm','-select_streams','a:0',
+            '-read_intervals',f'%+{MEDIA_SECONDS+1}','-show_entries','packet=pts_time,duration_time',
+            '-of','csv=p=0',str(path)],60)
+        ends=[]
+        for line in packets.decode().splitlines():
+            try:
+                fields=line.split(',');ends.append(float(fields[0])+float(fields[1]))
+            except (ValueError,IndexError):continue
+        if ends:data['format']['duration']=max(ends)
     duration = float(data['format'].get('duration') or (0 if allow_unknown else 'nan'))
     container = data['format']['format_name'].split(',')[0]
     if not data.get('streams') or container not in ('mp3','wav','ogg','flac','mov','mp4','matroska','webm') or not math.isfinite(duration) or duration < 0 or (not duration and not allow_unknown):

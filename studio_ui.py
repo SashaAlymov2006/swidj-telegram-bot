@@ -37,6 +37,7 @@ def keyboard(effects, selected, song=None, category="main"):
         rows += [
             [Button("✂ Обрезать", callback_data="studio:trim"), Button("🔄 Изменить формат", callback_data="studio:formats")],
             [Button("Ещё инструменты", callback_data="studio:more")],
+            [Button(tr("Мои пресеты"),callback_data="preset:list")],
         ]
         if song:
             rows.append([Button("＋ Сохранить", callback_data=f"upload:save:{song['id']}" if song.get("kind") == "upload" else "audio_favorite", style="success")])
@@ -50,7 +51,7 @@ def keyboard(effects, selected, song=None, category="main"):
 async def show_studio(update, context, effects):
     source = context.user_data.get("last_audio_path")
     if not source or not os.path.isfile(source):
-        return await update.effective_message.reply_text("🎛 Пришли аудиофайл — затем появятся инструменты студии.")
+        return await update.effective_message.reply_text("🎛 Пришли аудиофайл — затем появятся инструменты студии.",reply_markup=Markup([[Button(tr('Мои пресеты'),callback_data='preset:list')]]))
     selected = context.user_data.get("pending_effects", [])
     names = ", ".join(effects.get(key, key) for key in selected) or "ничего"
     context.user_data["studio_category"] = "main"

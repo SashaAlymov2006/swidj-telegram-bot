@@ -58,7 +58,7 @@ class Controls:
         feature = None
         if name in ("route_music_links", "batch_callback", "download_callback", "download_command", "versions_callback") or data.startswith(("download_", "enhance_", "lib:download:", "track:listen:")) or data == "recognized_download":
             feature = "downloads"
-        elif name in ("quick_callback", "studio_callback", "studio_command", "trim_command") or data.startswith(("effect_", "toggle_", "fx:", "upload:studio:", "track:studio:")) or data in ("apply_effects", "reverse_audio", "make_loop", "detect_chords", "pitch_detect"):
+        elif name in ("quick_callback", "studio_callback", "studio_command", "trim_command", "presets_command", "preset_callback") or data.startswith(("effect_", "toggle_", "fx:", "upload:studio:", "track:studio:")) or data in ("apply_effects", "reverse_audio", "make_loop", "detect_chords", "pitch_detect"):
             feature = "studio"
         elif name == "voice_callback" and data == "voice_effects":
             feature = "studio"

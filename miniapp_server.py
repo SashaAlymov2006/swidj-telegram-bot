@@ -441,7 +441,7 @@ def create_app(*, token='', bridge=None):
     app = web.Application(middlewares=[boundary], client_max_size=16*1024)
     async def asset(request):
         name = request.match_info.get('name', 'index.html')
-        if name not in ('index.html', 'app.css', 'app.js', 'audio.js', 'live.js', 'SoundTouchNode.js', 'constants.js', 'soundtouch-processor.js', 'soundtouch-LICENSE.txt', 'soundtouch-NOTICE.json'):
+        if name not in ('index.html', 'app.css', 'app.js', 'audio.js', 'live.js', 'dj.js', 'dj-loop-processor.js', 'dj-recorder.js', 'dj-recorder-processor.js', 'SoundTouchNode.js', 'constants.js', 'soundtouch-processor.js', 'soundtouch-LICENSE.txt', 'soundtouch-NOTICE.json'):
             raise web.HTTPNotFound()
         return web.FileResponse(ASSETS / name)
     async def demo(request):
@@ -590,6 +590,9 @@ def create_app(*, token='', bridge=None):
                     web.post('/api/jobs/{job:[a-f0-9]{24}}/cancel', job_status)])
     from miniapp_studio import register
     register(app, bridge)
+    if bridge:
+        from studio_presets import register as register_presets
+        register_presets(app,bridge)
     from app_recognition import register as register_recognition
     register_recognition(app)
     from app_charts import register as register_charts

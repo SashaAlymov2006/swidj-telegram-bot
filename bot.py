@@ -979,6 +979,14 @@ async def quick_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from quick_studio import handle_quick
     return await handle_quick(update, context)
 
+async def presets_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from studio_presets_bot import show
+    return await show(update,context,state_store)
+
+async def preset_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from studio_presets_bot import handle
+    return await handle(update,context,state_store,retain_audio_source)
+
 
 async def trim_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from studio_ui import trim_command as trim
@@ -2403,6 +2411,8 @@ def build_application(*, request=None, updates_request=None):
     app.add_handler(CommandHandler("menu", serialize_user(menu_command)))
     app.add_handler(CommandHandler("search", serialize_user(search_command)))
     app.add_handler(CommandHandler("studio", serialize_user(studio_command)))
+    app.add_handler(CommandHandler("presets", serialize_user(presets_command)))
+    app.add_handler(CallbackQueryHandler(serialize_user(preset_callback),pattern=r"^preset:(list(?::\d{1,2})?|apply:[a-f0-9]{8})$"))
     app.add_handler(CommandHandler("app", serialize_user(miniapp_command)))
     app.add_handler(CommandHandler("trim", serialize_user(trim_command)))
     app.add_handler(CallbackQueryHandler(serialize_user(quick_callback), pattern=r"^quick:"))

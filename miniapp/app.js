@@ -96,6 +96,7 @@ let state = {tracks:[],favorites:[],playlists:[],bot:''};
 let route = 'home', filter = 'all', playlist = null, current = null, results = null, searching = false, failed = false;
 let trackBlob = null, trackUrl = null, previewUrl = null, loadingTrack = 0, toastTimer;
 let renderBusy = false, refreshing = false, sourceDuration = 0;
+let djMode=false,djRoom=null,djModule=null,djChoosingDeck='A',soundPresets=null,presetsOpen=false;
 let preparation = null, searchQuery = '';
 let lastRendered=null;
 function studioSignature(){return JSON.stringify([loadingTrack,engine.bass,engine.speed,engine.treble,studioPitch,studioEffects,engine.trimStart,engine.trimEnd,engine.fade,engine.ambience,engine.linked,engine.params]);}
@@ -118,8 +119,9 @@ audio.volume = .8;
 let demoState;
 try { demoState = JSON.parse(localStorage.getItem('swidj-demo-library') || 'null'); } catch {}
 const api = async (path, payload) => {
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),path.startsWith('charts')?90000:30000);
-  let response;try {response = await fetch('/api/' + path, {method:payload ? 'POST':'GET', headers:{'X-Telegram-Init-Data':initData,...(payload ? {'Content-Type':'application/json'}:{})},body:payload ? JSON.stringify(payload):undefined, credentials:'omit',signal:controller.signal});}catch(error){if(error.name==='AbortError')throw new Error('requestTimeout');throw error;}finally{clearTimeout(timer);}
+  const multipart=payload instanceof FormData;
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),multipart?1200000:path.startsWith('charts')?90000:30000);
+  let response;try {response = await fetch('/api/' + path, {method:payload ? 'POST':'GET', headers:{'X-Telegram-Init-Data':initData,...(payload&&!multipart ? {'Content-Type':'application/json'}:{})},body:payload ? multipart?payload:JSON.stringify(payload):undefined, credentials:'omit',signal:controller.signal});}catch(error){if(error.name==='AbortError')throw new Error('requestTimeout');throw error;}finally{clearTimeout(timer);}
   if (!response.ok) throw new Error(({401:'expired',403:'unavailable',409:'capacity',410:'missingFile',429:'rateLimit',503:'unavailable'})[response.status] || 'error');
   return response;
 };
@@ -253,15 +255,24 @@ function studio() {
   return `<section class="studio-hero"><div><p class="eyebrow">SwiDJ / STUDIO</p><h1>${e(t('makeSound'))}</h1><p>${e(t('studioNote'))}</p></div><div class="studio-visual" aria-hidden="true"><div class="visual-orbit"></div><svg class="visual-wave" viewBox="0 0 300 120">${[20,40,65,30,80,100,55,35,75,90,45,65,25,50,30].map((h,i)=>`<rect x="${i*20}" y="${60-h/2}" width="8" height="${h}" rx="4"/>`).join('')}</svg><span>01 / SOUND LAB</span></div></section>`+`<div class="studio-layout"><section class="studio-source">${current?art(current):`<div class="art art-0"><span class="art-symbol">∿</span></div>`}<h2>${e(current?.title || t('chooseFirst'))}</h2><p>${e(current?.artist || t('chooseFirstNote'))}</p><label class="btn secondary" for="local-file">${icon('upload')}${e(t('chooseFile'))}</label><input id="local-file" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac"></section><section class="studio-controls"><span class="studio-badge">${e(t(demo?'localProcessing':'serverProcessing'))}</span><h2>${e(t('soundSettings'))}</h2><p>${e(t('applyNote'))}</p><p class="output-state">${e(t(previewUrl?'mixApplied':'dry'))}</p><div class="control-label"><label>${e(t('bass'))}</label><output id="bass-value">${engine.bass>0?'+':''}${engine.bass} dB</output></div><div class="bass-options">${bassOptions.map(([value,label])=>`<button class="chip ${value===engine.bass?'active':''}" data-bass="${value}" aria-pressed="${value===engine.bass}">${e(t(label))}</button>`).join('')}</div><div class="control-label"><label for="speed">${e(t('speed'))}</label><output id="speed-value">${engine.speed.toFixed(2)}×</output></div><input id="speed" class="control-range" type="range" min="0.5" max="2" step="0.05" value="${engine.speed}"><div class="range-labels"><span>${e(t('slower'))}</span><span>${e(t('original'))}</span><span>${e(t('faster'))}</span></div><button class="btn secondary" id="preview-mix" ${!trackUrl?'disabled':''}>${icon('play')}${e(t('preview'))}</button><button type="button" class="btn apply-full" id="apply-mix" ${!trackUrl?'disabled':''}>${icon('play')}${e(t('applyMix'))}</button><button class="btn lime" id="export-mix" ${!trackUrl?'disabled':''}>${icon('download')}${e(t('export'))}</button><button class="text-btn reset-btn" id="reset-fx">${e(t('reset'))}</button><p class="fineprint">${e(t('studioFine'))}</p></section></div><p class="demo-note">${icon('info')}${e(t(demo?'demoStudio':'processingNote'))}</p>`;
 }
 function render() {
+  if(route!=='studio')djRoom?.pauseAll();
   document.documentElement.lang = language;document.body.classList.toggle('studio-open',route==='studio');
+  document.body.classList.toggle('dj-open',route==='studio'&&djMode);
   document.querySelectorAll('[data-i18n]').forEach(node=>node.textContent=t(node.dataset.i18n));
   const nav = ['home','search','charts','library','studio'].map(key=>`<button class="${route===key?'active':''}" data-go="${key}" ${route===key?'aria-current="page"':''}>${icon(key)}<span>${e(t(key))}</span></button>`).join('');
   $('desktop-nav').innerHTML=nav; $('mobile-nav').innerHTML=nav;
   $('connection').textContent=t(demo?'demo':'connected'); $('language').textContent=language==='ru'?'EN':'RU';
+  if(route==='studio'&&djMode&&!failed){
+    $('content').innerHTML=studioTabs()+`<div id="dj-root"><p class="loading">${e(t('loading'))}</p></div>`;
+    mountDJ($('dj-root')).catch(report);return;
+  }
   $('content').innerHTML=failed?empty('authError','authHint','info'):({home,search:searchScreen,charts:chartsScreen,library:libraryScreen,studio}[route])();
   if(route==='home'&&resumeState&&trackById(resumeState.id))$('content').insertAdjacentHTML('afterbegin',`<button class="resume-card" id="resume-track">${icon('play')}<span><strong>${e(t('resume'))}</strong><small>${e(trackById(resumeState.id).title)} &middot; ${stamp(resumeState.position)}</small></span></button>`);
   if(route==='studio')$('content').querySelector('.studio-controls').insertAdjacentHTML('afterbegin',`<div class="studio-recipes"><h3>${e(t('presets'))}</h3><div class="recipe-grid">${['clean','warm','night','bright'].map(key=>`<button type="button" class="chip" data-recipe="${key}">${e(t(key))}</button>`).join('')}</div><div class="control-label"><label for="treble">${e(t('treble'))}</label><output>${engine.treble} dB</output></div><input id="treble" class="control-range" type="range" min="-6" max="6" step="1" value="${engine.treble}"><button type="button" class="btn secondary" id="compare-fx" aria-pressed="${engine.bypass}">${e(t(engine.bypass?'dry':'compare'))}</button><div class="studio-advanced"><label>${e(t('format'))}<select id="mix-format">${['mp3','wav'].map(f=>`<option value="${f}" ${f===exportFormat?'selected':''}>${f.toUpperCase()}</option>`).join('')}</select></label><section class="effect-rack"><div class="rack-heading"><h3>${e(t('effectRack'))}</h3><span>${studioEffects.length}/8</span></div><p class="fineprint">${e(t('liveNote'))}</p><div class="effect-grid">${['reverb','echo','delay','lofi','normalize','compressor','equalizer','mastering','pro_reverb','highpass','lowpass','reverse','tremolo','distortion','stereo'].map((f,i)=>`<button type="button" class="effect-tile ${studioEffects.includes(f)?'selected':''}" data-effect="${f}" aria-pressed="${studioEffects.includes(f)}" ${studioEffects.length>=8&&!studioEffects.includes(f)?'disabled':''}><span class="effect-glyph">${['~','&#9678;','///','&#9682;','=','&#8779;','&#9783;','&#10022;','&#8734;','&#8599;','&#8600;','&#8630;','&#8779;','&#9889;','&#8646;'][i]}</span><strong>${e(t(f))}</strong><span class="effect-mode">${e(t(liveEffects.has(f)?'live':'renderOnly'))}</span><small>${studioEffects.includes(f)?'&#10003;':''}</small></button>`).join('')}</div><div class="effect-chain">${studioEffects.length?studioEffects.map((f,i)=>`<span>${i+1}. ${e(t(f))}</span>`).join(''):e(t('none'))}</div></section><label>${e(t('pitch'))}<input id="mix-pitch" type="range" min="-12" max="12" step="0.1" value="${studioPitch}"><output id="pitch-value">${studioPitch}</output></label><p class="fineprint">${e(t('pitchNote'))}</p></div><div class="trim-grid">${['trimStart','trimEnd','fade'].map(key=>`<label>${e(t(key))}<input class="studio-number" type="number" min="0" max="${key==='fade'?10:7200}" step="0.1" data-edit="${key}" value="${engine[key]}"></label>`).join('')}</div><button type="button" class="btn secondary" id="save-mix" ${!trackUrl?'disabled':''}>${e(t('saveMix'))}</button></div>`);
   if(route==='studio'){
+    $('content').insertAdjacentHTML('afterbegin',studioTabs());
+    document.querySelector('.studio-recipes').insertAdjacentHTML('beforeend',presetMarkup());
+    const savedSounds=$('my-sound-presets');savedSounds.addEventListener('toggle',()=>{if(!savedSounds.isConnected)return;presetsOpen=savedSounds.open;if(presetsOpen&&soundPresets===null)loadSoundPresets().catch(report);});
     $('speed').insertAdjacentHTML('afterend',`<div class="touch-stepper"><button type="button" data-speed-step="-0.05" aria-label="${e(t('speedDown'))}">&minus;</button>${[.75,1,1.25,1.5].map(v=>`<button type="button" data-speed-preset="${v}" aria-pressed="${engine.speed===v}">${v}&times;</button>`).join('')}<button type="button" data-speed-step="0.05" aria-label="${e(t('speedUp'))}">+</button></div>`);
     $('mix-pitch').insertAdjacentHTML('afterend',`<div class="touch-stepper"><button type="button" data-tone-step="-1" aria-label="${e(t('toneDown'))}">&minus;</button>${[-2,0,2].map(v=>`<button type="button" data-tone-preset="${v}" aria-pressed="${studioPitch===v}">${v===0?e(t('original')):v>0?'+'+v:v}</button>`).join('')}<button type="button" data-tone-step="1" aria-label="${e(t('toneUp'))}">+</button></div>`);
     if(studioEffects.some(f=>['reverb','pro_reverb','echo','delay'].includes(f)))document.querySelector('.effect-chain').insertAdjacentHTML('afterend',`<div class="ambience-control"><label for="ambience">${e(t('ambience'))}<output id="ambience-value">${engine.ambience}%</output></label><input id="ambience" type="range" min="0" max="100" step="5" value="${engine.ambience}"></div>`);
@@ -405,7 +416,7 @@ function fullPlayer() {
 async function refreshLibrary() {
   if(demo||failed||refreshing)return;
   refreshing=true;
-  try{state=await(await api('library')).json();language=state.language==='en'?'en':'ru';try{localStorage.setItem('swidj-language',language);}catch{}if(!document.activeElement?.matches('input,textarea,select')&&!renderBusy)render();}finally{refreshing=false;}
+  try{state=await(await api('library')).json();language=state.language==='en'?'en':'ru';if(soundPresets!==null)await loadSoundPresets();try{localStorage.setItem('swidj-language',language);}catch{}if(!document.activeElement?.matches('input,textarea,select')&&!renderBusy)render();}finally{refreshing=false;}
 }
 function showPreparation() {
   $('activity').hidden=!preparation;
@@ -514,7 +525,7 @@ Object.assign(copy.ru,{pitchNote:'Отдельный тон — на весь т
 let toneTimer=null,toneRevision=0;
 function scheduleTone(){
   clearTimeout(toneTimer);const revision=++toneRevision,track=loadingTrack;
-  if(engine.linked||engine.livePitch||demo||!trackUrl)return;
+  if(!engine.context||engine.linked||engine.livePitch||demo||!trackUrl)return;
   const run=async()=>{
     if(revision!==toneRevision||track!==loadingTrack||engine.linked||route!=='studio')return;
     if(engine.pitchReady)await engine.pitchReady;
@@ -601,6 +612,71 @@ document.addEventListener('play',event=>{if(event.target.closest?.('.link-result
 function setStudioSpeed(value){engine.setSpeed(Math.max(.5,Math.min(2,value)));if(engine.linked)studioPitch=12*Math.log2(engine.speed);engine.setPitch(studioPitch);}
 function setStudioPitch(value){if(!engine.context)engine.unlock().catch(report);studioPitch=Math.max(-12,Math.min(12,value));if(engine.linked)engine.setSpeed(2**(studioPitch/12));engine.setPitch(studioPitch);}
 function syncTempo(active=null){if($('speed')){if(active!==$('speed'))$('speed').value=engine.speed;$('speed-value').textContent=engine.speed.toFixed(2)+'\u00d7';}if($('mix-pitch')){if(active!==$('mix-pitch'))$('mix-pitch').value=studioPitch;$('pitch-value').textContent=Number(studioPitch.toFixed(2));}}
+const studioText={en:{mine:'My presets',save:'Save this sound',empty:'Save a sound to use it again in the app or bot.',name:'Preset name',apply:'Apply',remove:'Delete',saved:'Sound saved',nameHint:'For example: My night mix',normal:'Sound studio',dj:'DJ room',find:'Find',loadA:'Load into A',loadB:'Load into B'},ru:{mine:'Мои пресеты',save:'Сохранить этот звук',empty:'Сохрани звук — он появится здесь и в боте.',name:'Название пресета',apply:'Применить',remove:'Удалить',saved:'Звук сохранён',nameHint:'Например: Мой ночной микс',normal:'Обработка',dj:'DJ-комната',find:'Найти',loadA:'Загрузить в A',loadB:'Загрузить в B'}};
+const st=key=>(studioText[language]||studioText.en)[key];
+function studioTabs(){return `<div class="studio-tabs" role="group" aria-label="Studio"><button type="button" data-studio-mode="sound" aria-pressed="${!djMode}">${e(st('normal'))}</button><button type="button" data-studio-mode="dj" aria-pressed="${djMode}">${e(st('dj'))}</button></div>`;}
+function presetMarkup(){return `<details id="my-sound-presets" class="my-presets" ${presetsOpen?'open':''}><summary>${e(st('mine'))}</summary><button type="button" class="btn secondary" id="save-sound-preset">${e(st('save'))}</button><div id="sound-preset-list">${presetList()}</div></details>`;}
+function presetList(){return soundPresets?.length?soundPresets.map(item=>`<div class="sound-preset-row"><button type="button" class="preset-apply" data-sound-preset="${e(item.id)}">${e(item.name)}</button><button type="button" class="icon-btn" data-remove-preset="${e(item.id)}" aria-label="${e(st('remove'))}">${icon('trash')}</button></div>`).join(''):`<p class="fineprint">${e(st('empty'))}</p>`;}
+async function loadSoundPresets(){
+  if(demo){try{soundPresets=JSON.parse(localStorage.getItem(sessionKey+'-presets')||'[]');}catch{soundPresets=[];}}
+  else soundPresets=(await(await api('presets')).json()).presets;
+  if($('sound-preset-list'))$('sound-preset-list').innerHTML=presetList();
+}
+function soundSettings(){return {speed:engine.speed,pitch:studioPitch,bass:engine.bass,treble:engine.treble,linked:engine.linked,effects:[...studioEffects],params:{...engine.params},ambience:engine.ambience,fade:engine.fade};}
+async function saveSoundPreset(){
+  const settings=soundSettings();
+  dialog(st('save'),`<input id="sound-preset-name" maxlength="40" required placeholder="${e(st('nameHint'))}" aria-label="${e(st('name'))}">`,`<button value="cancel" class="btn secondary">${e(t('cancel'))}</button><button value="save" class="btn">${e(t('saveName'))}</button>`);
+  $('dialog-form').onsubmit=async event=>{
+    if(event.submitter?.value!=='save')return;event.preventDefault();
+    const name=$('sound-preset-name').value.trim();if(!name)return;
+    event.submitter.disabled=true;
+    try{
+      if(demo){if(soundPresets===null)await loadSoundPresets();if(soundPresets.length>=20)throw new Error('capacity');soundPresets.push({id:crypto.randomUUID(),name,settings});localStorage.setItem(sessionKey+'-presets',JSON.stringify(soundPresets));}
+      else soundPresets=(await(await api('presets',{action:'save',name,settings})).json()).presets;
+      $('dialog').close();presetsOpen=true;render();toast('saved');
+    }catch(error){event.submitter.disabled=false;report(error);}
+  };
+}
+async function applySoundPreset(id){
+  const item=soundPresets?.find(p=>p.id===id);if(!item)return;
+  const s=item.settings,playing=!audio.paused;engine.cancelSourceSwitch();invalidateMix();
+  studioEffects=[...s.effects];studioPitch=s.pitch;engine.setBypass(false);engine.setLinked(s.linked);engine.setParams({...dspDefaults,...s.params});engine.setEffects(studioEffects);
+  engine.setBass(s.bass);engine.setTreble(s.treble);engine.setAmbience(s.ambience);engine.fade=s.fade;engine.setSpeed(s.speed);engine.setPitch(s.pitch);
+  if(engine.linked&&toneUrl){const position=audio.currentTime;toneUrl=null;audio.src=trackUrl;audio.currentTime=position;}
+  if(playing&&audio.paused)await audio.play();render();if(!engine.linked)scheduleTone();
+}
+async function removeSoundPreset(id){
+  if(demo){soundPresets=soundPresets.filter(p=>p.id!==id);localStorage.setItem(sessionKey+'-presets',JSON.stringify(soundPresets));}
+  else soundPresets=(await(await api('presets',{action:'remove',id})).json()).presets;
+  if($('sound-preset-list'))$('sound-preset-list').innerHTML=presetList();
+}
+async function mountDJ(root){
+  if(!djModule)djModule=import('./dj.js');
+  const {DJRoom}=await djModule;
+  if(!djRoom)djRoom=new DJRoom({language:()=>language,getContext:async()=>{await engine.unlock();return engine.context;},pauseMain:()=>{audio.pause();document.querySelector('.link-result video')?.pause();document.querySelector('.link-result audio')?.pause();},choose:chooseDJTrack,request:api,onError:report,notify:message=>{clearTimeout(toastTimer);$('toast').textContent=message;$('toast').classList.add('show');toastTimer=setTimeout(()=>$('toast').classList.remove('show'),4500);},getSource:async (track,{cancelled=()=>false}={})=>{
+    if(demo)return {track,url:location.origin+'/demo/'+track.demo+'.wav'};
+    if(track.local)return {track,url:track.serverTicket?location.origin+'/studio-file/'+track.serverTicket:URL.createObjectURL(track.blob)};
+    while(preparation){if(cancelled())return null;await new Promise(resolve=>setTimeout(resolve,150));}
+    if(cancelled())return null;
+    const cancellation=setInterval(()=>{if(cancelled()&&preparation?.track.id===track.id)preparation.cancel=true;},150);
+    try{if(!await prepareTrack(track)||cancelled())return null;}finally{clearInterval(cancellation);}
+    const ticket=await(await api('stream',{track:track.id})).json();return {track,url:ticket.url};
+  },download:file=>{showExportDownload(file);nativeExportDownload();},saved:result=>{state=result.library;extraTracks.set(result.track.id,result.track);}});
+  if(root.isConnected&&djMode&&route==='studio')djRoom.mount(root);
+}
+function chooseDJTrack(deck){
+  djChoosingDeck=deck;
+  const tracks=[...new Map([...state.tracks,...(state.recent||[]),...(results||[]),...(current?[current]:[])].map(track=>[track.id,track])).values()];
+  dialog(st(deck==='A'?'loadA':'loadB'),`<div class="dj-picker-search"><input type="search" id="dj-search" placeholder="${e(t('searchPlaceholder'))}" maxlength="120"><button type="button" class="btn secondary" id="dj-search-button">${e(st('find'))}</button></div><div id="dj-pick-list">${djChoices(tracks,deck)}</div>`);
+  $('dj-search').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();searchDJTracks().catch(report);}});
+}
+function djChoices(tracks,deck){return tracks.map(track=>`<button type="button" class="dialog-option" data-dj-pick="${e(track.id)}" data-deck="${deck}"><span>${e(track.title)}<small>${e(track.artist||'')}</small></span></button>`).join('')||`<p>${e(t('emptyLibrary'))}</p>`;}
+async function searchDJTracks(){
+  const query=$('dj-search')?.value.trim();if(!query)return;
+  $('dj-search-button').disabled=true;
+  try{results=demo?demos.filter(track=>(track.title+' '+track.artist).toLowerCase().includes(query.toLowerCase())):(await(await api('search?q='+encodeURIComponent(query))).json()).tracks;for(const track of results)extraTracks.set(track.id,track);$('dj-pick-list').innerHTML=djChoices(results,djChoosingDeck);}
+  finally{if($('dj-search-button'))$('dj-search-button').disabled=false;}
+}
 const paramGroups={equalizer:['eq60','eq250','eq1000','eq4000','eq12000'],reverb:['room_s'],pro_reverb:['room_s'],echo:['delay_ms','feedback'],delay:['delay_ms','feedback'],lofi:['lofi_hz'],highpass:['highpass_hz'],lowpass:['lowpass_hz'],compressor:['comp_threshold','comp_ratio','comp_attack','comp_release'],stereo:['stereo_width'],tremolo:['tremolo_rate','tremolo_depth'],distortion:['drive']};
 const paramRanges={eq60:[-12,12,1],eq250:[-12,12,1],eq1000:[-12,12,1],eq4000:[-12,12,1],eq12000:[-12,12,1],room_s:[.2,3,.1],delay_ms:[60,1000,10],feedback:[0,.65,.05],lofi_hz:[500,3500,100],highpass_hz:[20,6000,20],lowpass_hz:[100,20000,100],comp_threshold:[-48,-6,1],comp_ratio:[1,12,.5],comp_attack:[1,100,1],comp_release:[20,1000,10],stereo_width:[0,2,.1],tremolo_rate:[.5,12,.5],tremolo_depth:[0,1,.05],drive:[1,8,.5]};
 const easyEffectSettings={
@@ -712,6 +788,12 @@ async function renderMix(preview,keepPosition=false) {
 document.addEventListener('click',async event=>{
   const button=event.target.closest('button,a,label');if(!button)return;
   try {
+    if(button.dataset.studioMode){djMode=button.dataset.studioMode==='dj';if(djMode)audio.pause();else djRoom?.pauseAll();render();return;}
+    if(button.id==='save-sound-preset')return await saveSoundPreset();
+    if(button.dataset.soundPreset)return await applySoundPreset(button.dataset.soundPreset);
+    if(button.dataset.removePreset)return await removeSoundPreset(button.dataset.removePreset);
+    if(button.id==='dj-search-button')return await searchDJTracks();
+    if(button.dataset.djPick){const track=trackById(button.dataset.djPick),deck=button.dataset.deck;if(track&&['A','B'].includes(deck)){$('dialog').close();await djRoom.load(deck,track);}return;}
     if(button.dataset.mediaMode){linkMode=true;linkType=button.dataset.mediaMode;return navigate('search');}
     if(button.id==='new-media-link'){document.querySelector('#link-video')?.pause();document.querySelector('.link-result audio')?.pause();linkResult=null;linkAudioResult=null;linkUrl='';render();$('link-url')?.focus();return;}
     if(button.id==='expand-video'){const video=$('link-video');if(video?.requestFullscreen)await video.requestFullscreen();else if(video?.webkitEnterFullscreen)video.webkitEnterFullscreen();return;}
@@ -857,8 +939,8 @@ audio.addEventListener('play',updatePlayer);audio.addEventListener('pause',updat
 audio.addEventListener('error',()=>toast('invalidAudio'));
 document.addEventListener('error',event=>{if(event.target.matches?.('.cover-image'))event.target.remove();},true);
 audio.addEventListener('ended',()=>{if(previewUrl){audio.src=playbackSource();URL.revokeObjectURL(previewUrl);previewUrl=null;engine.setProcessed(false);engine.setBass(engine.bass);engine.setSpeed(engine.speed);updatePlayer();}else if(!audio.loop)nextTrack().catch(report);});
-window.addEventListener('keydown',event=>{if(event.code==='Space'&&!['INPUT','TEXTAREA','BUTTON'].includes(document.activeElement?.tagName)&&!$('dialog').open){event.preventDefault();togglePlay().catch(report);}});
-window.addEventListener('pagehide',()=>{clearTimeout(recordTimer);if(recorder?.state==='recording')recorder.stop();recordStream?.getTracks().forEach(t=>t.stop());persistSession();if(trackUrl)URL.revokeObjectURL(trackUrl);if(previewUrl)URL.revokeObjectURL(previewUrl);});
+window.addEventListener('keydown',event=>{if(event.code==='Space'&&!['INPUT','TEXTAREA','BUTTON'].includes(document.activeElement?.tagName)&&!$('dialog').open){event.preventDefault();if(route==='studio'&&djMode&&djRoom)djRoom.action({dataset:{djAction:Object.values(djRoom.decks).some(d=>!d.audio.paused)?'pause-all':'start-all'}}).catch(report);else togglePlay().catch(report);}});
+window.addEventListener('pagehide',()=>{djRoom?.pauseAll();clearTimeout(recordTimer);if(recorder?.state==='recording')recorder.stop();recordStream?.getTracks().forEach(t=>t.stop());persistSession();if(trackUrl)URL.revokeObjectURL(trackUrl);if(previewUrl)URL.revokeObjectURL(previewUrl);});
 
 async function start() {
   if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#101116');tg.setBackgroundColor?.('#101116');}
@@ -879,6 +961,8 @@ async function start() {
     const selected=await(await api('track/'+encodeURIComponent(requestedTrack))).json();
     extraTracks.set(selected.track.id,selected.track);if(await playTrack(selected.track,false))navigate('studio');
   }
+  const requestedPreset=new URLSearchParams(location.search).get('preset');
+  if(!demo&&!failed&&/^[a-f0-9]{8}$/.test(requestedPreset||'')){await loadSoundPresets();await applySoundPreset(requestedPreset);navigate('studio');}
 }
 window.addEventListener('swidj-pitch-fallback',()=>{if(studioPitch!==0&&!engine.linked)scheduleTone();});
 start().catch(report);

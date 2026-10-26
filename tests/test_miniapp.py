@@ -79,13 +79,36 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         self.headers = {'X-Telegram-Init-Data': signed()}
 
     async def test_static_assets_and_demo_do_not_expose_authenticated_library(self):
-        for path in ['/', '/assets/app.css', '/assets/app.js', '/assets/audio.js', '/assets/SoundTouchNode.js', '/assets/constants.js', '/assets/soundtouch-processor.js', '/assets/soundtouch-LICENSE.txt', '/assets/soundtouch-NOTICE.json', '/demo/0.wav']:
+        for path in ['/', '/assets/app.css', '/assets/app.js', '/assets/audio.js', '/assets/dj.js', '/assets/dj-loop-processor.js', '/assets/dj-recorder.js', '/assets/dj-recorder-processor.js', '/assets/SoundTouchNode.js', '/assets/constants.js', '/assets/soundtouch-processor.js', '/assets/soundtouch-LICENSE.txt', '/assets/soundtouch-NOTICE.json', '/demo/0.wav']:
             response = await self.client.get(path)
             self.assertEqual(response.status, 200, path)
         response = await self.client.get('/api/library')
         self.assertEqual(response.status, 401)
         for path in ['/assets/bot.py','/assets/.env','/demo/9.wav']:
             self.assertEqual((await self.client.get(path)).status, 404)
+
+    async def test_sound_presets_are_private_persistent_and_validated(self):
+        self.assertEqual((await self.client.get('/api/presets')).status,401)
+        payload={'action':'save','name':'Night sound','user_id':78,'settings':{'speed':1.25,'pitch':-2,'bass':3,'effects':['reverb','echo'],'params':{'feedback':.3}}}
+        response=await self.client.post('/api/presets',headers=self.headers,json=payload)
+        self.assertEqual(response.status,200)
+        item=(await response.json())['presets'][0]
+        self.assertEqual(item['settings']['pitch'],-2)
+        self.assertEqual(self.store.load_named('studio_presets')[77][0]['name'],'Night sound')
+        other={'X-Telegram-Init-Data':signed(78)}
+        self.assertEqual((await(await self.client.get('/api/presets',headers=other)).json())['presets'],[])
+        self.assertEqual((await self.client.post('/api/presets',headers=other,json={'action':'remove','id':item['id']})).status,404)
+        bad=dict(payload,settings={'params':{'ffmpeg':'arbitrary filter'}})
+        self.assertEqual((await self.client.post('/api/presets',headers=self.headers,json=bad)).status,400)
+        self.assertEqual((await self.client.post('/api/presets',headers=self.headers,json=dict(payload,settings={'speed':99}))).status,400)
+        response=await self.client.post('/api/presets',headers=self.headers,json={'action':'remove','id':item['id']})
+        self.assertEqual((await response.json())['presets'],[])
+
+    async def test_named_sound_does_not_store_track_paths_or_crop_other_tracks(self):
+        response=await self.client.post('/api/presets',headers=self.headers,json={'action':'save','name':'Linked','settings':{'linked':True,'speed':2,'pitch':0,'start':90,'end':100,'source_track':'private','source_ticket':'secret'}})
+        config=(await response.json())['presets'][0]['settings']
+        self.assertEqual(config['pitch'],12)
+        for key in ('start','end','source_track','source_ticket'):self.assertNotIn(key,config)
 
     async def test_library_isolation_and_persistent_playlist_changes(self):
         payload = await (await self.client.get('/api/library', headers=self.headers)).json()

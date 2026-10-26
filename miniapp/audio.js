@@ -1,4 +1,5 @@
 import {connectLive,dspDefaults} from './live.js';
+const pitchModules=new WeakMap();
 // Browser audio stays on the user's device. No microphone access or uploads.
 export function stamp(value) {
   const seconds = Math.max(0, Math.floor(Number(value) || 0));
@@ -37,9 +38,11 @@ export function chain(context, source, destination, bass, treble = 0) {
 }
 
 export class AudioEngine {
-  constructor(element,{mobile=globalThis.matchMedia?.('(pointer: coarse)').matches||false}={}) {
+  constructor(element,{mobile=globalThis.matchMedia?.('(pointer: coarse)').matches||false,context=null,destination=null,inputNode=null}={}) {
     this.element=element;
     this.mobile=mobile;
+    this.sharedContext=context;this.destination=destination;
+    this.inputNode=inputNode;this.inputPitchRatio=1;
     const agent=globalThis.navigator?.userAgent||'';
     this.webkit=/AppleWebKit/.test(agent)&&!/(Chrome|Chromium|Edg|OPR)\//.test(agent);
     this.rateAt=-Infinity;
@@ -50,9 +53,11 @@ export class AudioEngine {
   }
   async unlock() {
     if (!this.context) {
-      this.context = new AudioContext({latencyHint:this.mobile?'playback':'interactive'});
-      this.source=this.context.createMediaElementSource(this.element);
-      this.nodes = chain(this.context, this.source, this.context.destination, this.bypass?0:this.bass, this.bypass?0:this.treble);
+      this.context = this.sharedContext||new AudioContext({latencyHint:this.mobile?'playback':'interactive'});
+      this.mediaSource=this.context.createMediaElementSource(this.element);
+      this.source=this.inputNode||this.mediaSource;
+      if(this.inputNode)this.mediaSource.connect(this.inputNode);
+      this.nodes = chain(this.context, this.source, this.destination||this.context.destination, this.bypass?0:this.bass, this.bypass?0:this.treble);
       this.nodes.high.disconnect(this.nodes.compressor);
       this.rebuildLive();
       this.element.addEventListener('emptied',()=>this.resetPitch());
@@ -65,8 +70,12 @@ export class AudioEngine {
     if(!this.context.audioWorklet)return;
     let node;
     try{
-      const {SoundTouchNode}=await import('./SoundTouchNode.js');
-      await SoundTouchNode.register(this.context,new URL('./soundtouch-processor.js',import.meta.url).href);
+      if(!pitchModules.has(this.context))pitchModules.set(this.context,(async()=>{
+        const {SoundTouchNode}=await import('./SoundTouchNode.js');
+        await SoundTouchNode.register(this.context,new URL('./soundtouch-processor.js',import.meta.url).href);
+        return SoundTouchNode;
+      })());
+      const SoundTouchNode=await pitchModules.get(this.context);
       node=new SoundTouchNode({context:this.context});
       node.setStretchParameters({sequenceMs:80,seekWindowMs:20,overlapMs:8,quickSeek:true});
       this.source.disconnect(this.nodes.headroom);this.source.connect(node).connect(this.nodes.headroom);
@@ -89,7 +98,8 @@ export class AudioEngine {
     const desired=neutral?1:this.linked?rate:2**((this.pitch||0)/12);
     // Native tempo preserves input pitch. The worklet shifts that stable-pitch
     // stream, avoiding browser-dependent resampling/preservesPitch=false behavior.
-    if(this.pitchRate!==1){this.pitchNode.playbackRate.value=1;this.pitchRate=1;}
+    const inputRate=this.inputPitchRatio||1;
+    if(this.pitchRate!==inputRate){this.pitchNode.playbackRate.value=inputRate;this.pitchRate=inputRate;}
     if(this.pitchTarget!==desired){
       const param=this.pitchNode.pitch,now=this.context.currentTime;
       if(param.cancelAndHoldAtTime)param.cancelAndHoldAtTime(now);else param.cancelScheduledValues(now);

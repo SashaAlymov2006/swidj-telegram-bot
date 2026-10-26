@@ -56,6 +56,8 @@ async def stage(text):
 def needed(handler, update):
     name = handler.__name__
     data = getattr(getattr(update, "callback_query", None), "data", "") or ""
+    if name=='preset_callback' and data.startswith('preset:apply:'):
+        return 'Обрабатываю…'
     if name in ("download_callback", "download_command", "trim_command", "versions_callback", "upload_callback"):
         return "Готовлю…"
     if name in ("route_music_links", "batch_callback"):
