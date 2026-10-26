@@ -15,3 +15,6 @@ With the optional private server browser configured, install `youtube_session_sy
 The bot uses `YTDLP_COOKIE_FILE=/run/youtube/cookies-server-session.txt` with the private YouTube directory mounted into its container. Each downloader and search request works with a disposable cookie snapshot, so downloader cookie-jar writes cannot modify the shared export. Temporary copies are removed on success and failure.
 
 This synchronizes an existing session; it does not sign into Google, complete challenges, or guarantee a permanent session. Keep the browser profile private and exclude it, exported cookies, and all login data from Git and backups. The browser web interface must remain bound to server localhost and accessed through an authorized administrator connection.
+
+
+A separate `swidj-youtube-session.timer` exports the existing dedicated browser session every 60 seconds (up to 5 seconds jitter), without network access in the export worker. Install the matching service/timer in `/etc/systemd/system` and enable the timer. This reduces stale cookie exports during browser session rotation; it does not automate sign-in or guarantee continued access. The metadata health probe remains on its original 30-minute timer.

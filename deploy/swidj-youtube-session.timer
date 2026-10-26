@@ -1,0 +1,12 @@
+[Unit]
+Description=Keep the existing SwiDJ browser cookie export current
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+RandomizedDelaySec=5s
+AccuracySec=1s
+Unit=swidj-youtube-session.service
+
+[Install]
+WantedBy=timers.target

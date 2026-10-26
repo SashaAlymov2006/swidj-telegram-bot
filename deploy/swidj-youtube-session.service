@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh the existing SwiDJ YouTube browser session export
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/swidj/youtube_session_sync.py run --root /opt/swidj
+TimeoutStartSec=60
+UMask=0077
