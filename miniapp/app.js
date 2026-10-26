@@ -247,7 +247,7 @@ function libraryScreen() {
 
 const bassOptions = [[-6,'bassLess'],[0,'bassOff'],[3,'bassGentle'],[6,'bassMedium'],[9,'bassStrong']];
 function studio() {
-  return `<section class="studio-hero"><div><p class="eyebrow">SwiDJ / STUDIO</p><h1>${e(t('makeSound'))}</h1><p>${e(t('studioNote'))}</p></div><div class="studio-visual" aria-hidden="true"><div class="visual-orbit"></div><svg class="visual-wave" viewBox="0 0 300 120">${[20,40,65,30,80,100,55,35,75,90,45,65,25,50,30].map((h,i)=>`<rect x="${i*20}" y="${60-h/2}" width="8" height="${h}" rx="4"/>`).join('')}</svg><span>01 / SOUND LAB</span></div></section>`+`<div class="studio-layout"><section class="studio-source">${current?art(current):`<div class="art art-0"><span class="art-symbol">∿</span></div>`}<h2>${e(current?.title || t('chooseFirst'))}</h2><p>${e(current?.artist || t('chooseFirstNote'))}</p><label class="btn secondary" for="local-file">${icon('upload')}${e(t('chooseFile'))}</label><input id="local-file" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac"></section><section class="studio-controls"><span class="studio-badge">${e(t(demo?'localProcessing':'serverProcessing'))}</span><h2>${e(t('soundSettings'))}</h2><p>${e(t('applyNote'))}</p><p class="output-state">${e(t(previewUrl?'mixApplied':'dry'))}</p><div class="control-label"><label>${e(t('bass'))}</label><output id="bass-value">${engine.bass>0?'+':''}${engine.bass} dB</output></div><div class="bass-options">${bassOptions.map(([value,label])=>`<button class="chip ${value===engine.bass?'active':''}" data-bass="${value}" aria-pressed="${value===engine.bass}">${e(t(label))}</button>`).join('')}</div><div class="control-label"><label for="speed">${e(t('speed'))}</label><output id="speed-value">${engine.speed.toFixed(2)}×</output></div><input id="speed" class="control-range" type="range" min="0.5" max="2" step="0.05" value="${engine.speed}"><div class="range-labels"><span>${e(t('slower'))}</span><span>${e(t('original'))}</span><span>${e(t('faster'))}</span></div><button class="btn secondary" id="preview-mix" ${!trackBlob?'disabled':''}>${icon('play')}${e(t('preview'))}</button><button type="button" class="btn apply-full" id="apply-mix" ${!trackBlob?'disabled':''}>${icon('play')}${e(t('applyMix'))}</button><button class="btn lime" id="export-mix" ${!trackBlob?'disabled':''}>${icon('download')}${e(t('export'))}</button><button class="text-btn reset-btn" id="reset-fx">${e(t('reset'))}</button><p class="fineprint">${e(t('studioFine'))}</p></section></div><p class="demo-note">${icon('info')}${e(t(demo?'demoStudio':'processingNote'))}</p>`;
+  return `<section class="studio-hero"><div><p class="eyebrow">SwiDJ / STUDIO</p><h1>${e(t('makeSound'))}</h1><p>${e(t('studioNote'))}</p></div><div class="studio-visual" aria-hidden="true"><div class="visual-orbit"></div><svg class="visual-wave" viewBox="0 0 300 120">${[20,40,65,30,80,100,55,35,75,90,45,65,25,50,30].map((h,i)=>`<rect x="${i*20}" y="${60-h/2}" width="8" height="${h}" rx="4"/>`).join('')}</svg><span>01 / SOUND LAB</span></div></section>`+`<div class="studio-layout"><section class="studio-source">${current?art(current):`<div class="art art-0"><span class="art-symbol">∿</span></div>`}<h2>${e(current?.title || t('chooseFirst'))}</h2><p>${e(current?.artist || t('chooseFirstNote'))}</p><label class="btn secondary" for="local-file">${icon('upload')}${e(t('chooseFile'))}</label><input id="local-file" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac"></section><section class="studio-controls"><span class="studio-badge">${e(t(demo?'localProcessing':'serverProcessing'))}</span><h2>${e(t('soundSettings'))}</h2><p>${e(t('applyNote'))}</p><p class="output-state">${e(t(previewUrl?'mixApplied':'dry'))}</p><div class="control-label"><label>${e(t('bass'))}</label><output id="bass-value">${engine.bass>0?'+':''}${engine.bass} dB</output></div><div class="bass-options">${bassOptions.map(([value,label])=>`<button class="chip ${value===engine.bass?'active':''}" data-bass="${value}" aria-pressed="${value===engine.bass}">${e(t(label))}</button>`).join('')}</div><div class="control-label"><label for="speed">${e(t('speed'))}</label><output id="speed-value">${engine.speed.toFixed(2)}×</output></div><input id="speed" class="control-range" type="range" min="0.5" max="2" step="0.05" value="${engine.speed}"><div class="range-labels"><span>${e(t('slower'))}</span><span>${e(t('original'))}</span><span>${e(t('faster'))}</span></div><button class="btn secondary" id="preview-mix" ${!trackUrl?'disabled':''}>${icon('play')}${e(t('preview'))}</button><button type="button" class="btn apply-full" id="apply-mix" ${!trackUrl?'disabled':''}>${icon('play')}${e(t('applyMix'))}</button><button class="btn lime" id="export-mix" ${!trackUrl?'disabled':''}>${icon('download')}${e(t('export'))}</button><button class="text-btn reset-btn" id="reset-fx">${e(t('reset'))}</button><p class="fineprint">${e(t('studioFine'))}</p></section></div><p class="demo-note">${icon('info')}${e(t(demo?'demoStudio':'processingNote'))}</p>`;
 }
 function render() {
   document.documentElement.lang = language;document.body.classList.toggle('studio-open',route==='studio');
@@ -257,7 +257,7 @@ function render() {
   $('connection').textContent=t(demo?'demo':'connected'); $('language').textContent=language==='ru'?'EN':'RU';
   $('content').innerHTML=failed?empty('authError','authHint','info'):({home,search:searchScreen,charts:chartsScreen,library:libraryScreen,studio}[route])();
   if(route==='home'&&resumeState&&trackById(resumeState.id))$('content').insertAdjacentHTML('afterbegin',`<button class="resume-card" id="resume-track">${icon('play')}<span><strong>${e(t('resume'))}</strong><small>${e(trackById(resumeState.id).title)} &middot; ${stamp(resumeState.position)}</small></span></button>`);
-  if(route==='studio')$('content').querySelector('.studio-controls').insertAdjacentHTML('afterbegin',`<div class="studio-recipes"><h3>${e(t('presets'))}</h3><div class="recipe-grid">${['clean','warm','night','bright'].map(key=>`<button type="button" class="chip" data-recipe="${key}">${e(t(key))}</button>`).join('')}</div><div class="control-label"><label for="treble">${e(t('treble'))}</label><output>${engine.treble} dB</output></div><input id="treble" class="control-range" type="range" min="-6" max="6" step="1" value="${engine.treble}"><button type="button" class="btn secondary" id="compare-fx" aria-pressed="${engine.bypass}">${e(t(engine.bypass?'dry':'compare'))}</button><div class="studio-advanced"><label>${e(t('format'))}<select id="mix-format">${['mp3','wav'].map(f=>`<option value="${f}" ${f===exportFormat?'selected':''}>${f.toUpperCase()}</option>`).join('')}</select></label><section class="effect-rack"><div class="rack-heading"><h3>${e(t('effectRack'))}</h3><span>${studioEffects.length}/8</span></div><p class="fineprint">${e(t('liveNote'))}</p><div class="effect-grid">${['reverb','echo','delay','lofi','normalize','compressor','equalizer','mastering','pro_reverb','highpass','lowpass','reverse','tremolo','distortion','stereo'].map((f,i)=>`<button type="button" class="effect-tile ${studioEffects.includes(f)?'selected':''}" data-effect="${f}" aria-pressed="${studioEffects.includes(f)}" ${studioEffects.length>=8&&!studioEffects.includes(f)?'disabled':''}><span class="effect-glyph">${['~','&#9678;','///','&#9682;','=','&#8779;','&#9783;','&#10022;','&#8734;','&#8599;','&#8600;','&#8630;','&#8779;','&#9889;','&#8646;'][i]}</span><strong>${e(t(f))}</strong><span class="effect-mode">${e(t(liveEffects.has(f)?'live':'renderOnly'))}</span><small>${studioEffects.includes(f)?'&#10003;':''}</small></button>`).join('')}</div><div class="effect-chain">${studioEffects.length?studioEffects.map((f,i)=>`<span>${i+1}. ${e(t(f))}</span>`).join(''):e(t('none'))}</div></section><label>${e(t('pitch'))}<input id="mix-pitch" type="range" min="-12" max="12" step="0.1" value="${studioPitch}"><output id="pitch-value">${studioPitch}</output></label><p class="fineprint">${e(t('pitchNote'))}</p></div><div class="trim-grid">${['trimStart','trimEnd','fade'].map(key=>`<label>${e(t(key))}<input class="studio-number" type="number" min="0" max="${key==='fade'?10:7200}" step="0.1" data-edit="${key}" value="${engine[key]}"></label>`).join('')}</div><button type="button" class="btn secondary" id="save-mix" ${!trackBlob?'disabled':''}>${e(t('saveMix'))}</button></div>`);
+  if(route==='studio')$('content').querySelector('.studio-controls').insertAdjacentHTML('afterbegin',`<div class="studio-recipes"><h3>${e(t('presets'))}</h3><div class="recipe-grid">${['clean','warm','night','bright'].map(key=>`<button type="button" class="chip" data-recipe="${key}">${e(t(key))}</button>`).join('')}</div><div class="control-label"><label for="treble">${e(t('treble'))}</label><output>${engine.treble} dB</output></div><input id="treble" class="control-range" type="range" min="-6" max="6" step="1" value="${engine.treble}"><button type="button" class="btn secondary" id="compare-fx" aria-pressed="${engine.bypass}">${e(t(engine.bypass?'dry':'compare'))}</button><div class="studio-advanced"><label>${e(t('format'))}<select id="mix-format">${['mp3','wav'].map(f=>`<option value="${f}" ${f===exportFormat?'selected':''}>${f.toUpperCase()}</option>`).join('')}</select></label><section class="effect-rack"><div class="rack-heading"><h3>${e(t('effectRack'))}</h3><span>${studioEffects.length}/8</span></div><p class="fineprint">${e(t('liveNote'))}</p><div class="effect-grid">${['reverb','echo','delay','lofi','normalize','compressor','equalizer','mastering','pro_reverb','highpass','lowpass','reverse','tremolo','distortion','stereo'].map((f,i)=>`<button type="button" class="effect-tile ${studioEffects.includes(f)?'selected':''}" data-effect="${f}" aria-pressed="${studioEffects.includes(f)}" ${studioEffects.length>=8&&!studioEffects.includes(f)?'disabled':''}><span class="effect-glyph">${['~','&#9678;','///','&#9682;','=','&#8779;','&#9783;','&#10022;','&#8734;','&#8599;','&#8600;','&#8630;','&#8779;','&#9889;','&#8646;'][i]}</span><strong>${e(t(f))}</strong><span class="effect-mode">${e(t(liveEffects.has(f)?'live':'renderOnly'))}</span><small>${studioEffects.includes(f)?'&#10003;':''}</small></button>`).join('')}</div><div class="effect-chain">${studioEffects.length?studioEffects.map((f,i)=>`<span>${i+1}. ${e(t(f))}</span>`).join(''):e(t('none'))}</div></section><label>${e(t('pitch'))}<input id="mix-pitch" type="range" min="-12" max="12" step="0.1" value="${studioPitch}"><output id="pitch-value">${studioPitch}</output></label><p class="fineprint">${e(t('pitchNote'))}</p></div><div class="trim-grid">${['trimStart','trimEnd','fade'].map(key=>`<label>${e(t(key))}<input class="studio-number" type="number" min="0" max="${key==='fade'?10:7200}" step="0.1" data-edit="${key}" value="${engine[key]}"></label>`).join('')}</div><button type="button" class="btn secondary" id="save-mix" ${!trackUrl?'disabled':''}>${e(t('saveMix'))}</button></div>`);
   if(route==='studio'){
     $('speed').insertAdjacentHTML('afterend',`<div class="touch-stepper"><button type="button" data-speed-step="-0.05" aria-label="${e(t('speedDown'))}">&minus;</button>${[.75,1,1.25,1.5].map(v=>`<button type="button" data-speed-preset="${v}" aria-pressed="${engine.speed===v}">${v}&times;</button>`).join('')}<button type="button" data-speed-step="0.05" aria-label="${e(t('speedUp'))}">+</button></div>`);
     $('mix-pitch').insertAdjacentHTML('afterend',`<div class="touch-stepper"><button type="button" data-tone-step="-1" aria-label="${e(t('toneDown'))}">&minus;</button>${[-2,0,2].map(v=>`<button type="button" data-tone-preset="${v}" aria-pressed="${studioPitch===v}">${v===0?e(t('original')):v>0?'+'+v:v}</button>`).join('')}<button type="button" data-tone-step="1" aria-label="${e(t('toneUp'))}">+</button></div>`);
@@ -450,13 +450,14 @@ async function playTrack(track) {
   await engine.unlock();
   if(!demo&&!track.local){const ready=await prepareTrack(track);if(!ready)return false;}
   if($('dialog').open&&!$('full-play'))$('dialog').close();
-  let blob;
-  if(track.local)blob=localTracks.get(track.id)?.blob;
+  let blob=null,streamUrl=null;
+  if(track.local&&track.serverTicket)streamUrl=location.origin+'/studio-file/'+track.serverTicket;
+  else if(track.local)blob=localTracks.get(track.id)?.blob;
   else if(demo) {const response=await fetch(`/demo/${track.demo}.wav`);if(!response.ok)throw new Error('invalidAudio');blob=await response.blob();}
-  else blob=await (await api('audio/'+encodeURIComponent(track.id))).blob();
+  else streamUrl=(await(await api('stream',{track:track.id})).json()).url;
   if(ticket!==loadingTrack)return false;
   audio.pause();engine.setProcessed(false);lastRendered=null;engine.trimStart=0;engine.trimEnd=0;engine.fade=0;if(trackUrl)URL.revokeObjectURL(trackUrl);if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=null;}
-  trackBlob=blob;trackUrl=URL.createObjectURL(blob);audio.src=trackUrl;current=track;
+  trackBlob=blob;trackUrl=streamUrl||URL.createObjectURL(blob);audio.src=trackUrl;current=track;
   engine.setBass(engine.bass);engine.setSpeed(engine.speed);
   try{await audio.play();}catch(error){if(error.name==='NotAllowedError')toast('readyToPlay');else throw error;}
   if(playHistory.at(-1)!==track.id)playHistory.push(track.id);playHistory=playHistory.slice(-100);persistSession();
@@ -483,13 +484,15 @@ async function sendTrack(track) {
   await api('send',{track:track.id});$('dialog').close();toast('sent');
 }
 async function downloadTrack(track) {
-  if(track.local&&track.serverTicket){showExportDownload({url:location.origin+'/studio-file/'+track.serverTicket,filename:track.blob.name});nativeExportDownload();return;}
-  if(!await playTrack(track))return;
-  if(!demo&&!track.local&&typeof tg?.downloadFile==='function'&&tg.isVersionAtLeast?.('8.0')!==false) {
+  if(track.local&&track.serverTicket){showExportDownload({url:location.origin+'/studio-file/'+track.serverTicket,filename:track.filename||track.blob?.name||'SwiDJ.mp3'});nativeExportDownload();return;}
+  if(!demo&&!track.local) {
+    if(!await prepareTrack(track))return;
     const ticket=await(await api('download',{track:track.id})).json();
-    tg.downloadFile({url:ticket.url,file_name:ticket.filename});
+    if(typeof tg?.downloadFile==='function'&&tg.isVersionAtLeast?.('8.0')!==false)tg.downloadFile({url:ticket.url,file_name:ticket.filename});
+    else {const a=document.createElement('a');a.href=ticket.url;a.download=ticket.filename;a.click();}
     return;
   }
+  if(!await playTrack(track))return;
   const url=URL.createObjectURL(trackBlob),a=document.createElement('a');
   const extension=trackBlob.type.includes('wav')||demo?'wav':track.local?(track.blob.name.split('.').pop()||'audio'):'mp3';
   a.href=url;a.download=track.title.replace(/[\\/:*?"<>|]/g,'').slice(0,100)+'.'+extension;
@@ -498,7 +501,7 @@ async function downloadTrack(track) {
 let toneTimer=null,toneRevision=0;
 function scheduleTone(){
   clearTimeout(toneTimer);const revision=++toneRevision,track=loadingTrack;
-  if(engine.linked||demo||!trackBlob)return;
+  if(engine.linked||demo||!trackUrl)return;
   const run=async()=>{
     if(revision!==toneRevision||track!==loadingTrack||engine.linked||route!=='studio')return;
     if(renderBusy){toneTimer=setTimeout(run,350);return;}
@@ -627,7 +630,7 @@ async function transcribeVoice(){
 async function renderMix(preview,keepPosition=false) {
   if(renderBusy)return;
   clearTimeout(toneTimer);toneRevision++;
-  if(!trackBlob)return toast('chooseFirst');
+  if(!trackUrl)return toast('chooseFirst');
   engine.setBypass(false);
   const ticket=loadingTrack,bass=engine.bass,speed=engine.speed,treble=engine.treble,bypass=engine.bypass,format=exportFormat,pitch=studioPitch,effect=JSON.stringify(studioEffects),signature=studioSignature();
   renderBusy=true;
@@ -686,7 +689,7 @@ document.addEventListener('click',async event=>{
     if(button.id==='cancel-link'){linkController?.abort();api('link/cancel',{}).catch(()=>{});return;}
     if(button.id==='extract-link-audio'&&linkResult){button.disabled=true;button.textContent=t('rendering');try{document.querySelector('#link-video')?.pause();linkAudioResult=await(await api('link/audio',{ticket:new URL(linkResult.url).pathname.split('/').pop()})).json();}finally{if(route==='search'){render();if(linkAudioResult)document.querySelector('.extracted-result')?.scrollIntoView({block:'start',behavior:'smooth'});}}return;}
     if(button.id==='download-link'&&linkResult){showExportDownload(linkResult);nativeExportDownload();return;}
-    if(button.id==='studio-link'&&linkResult){const source=linkAudioResult||linkResult;document.querySelector('#link-video')?.pause();document.querySelector('.extracted-result audio')?.pause();const response=await fetch(source.url,{credentials:'omit'});if(!response.ok)throw new Error('linkExpired');const blob=await response.blob();const track={id:'local:'+crypto.randomUUID(),title:source.title,artist:source.artist||'',kind:'upload',playable:true,local:true,serverTicket:new URL(source.url).pathname.split('/').pop(),blob:new File([blob],source.filename,{type:blob.type})};localTracks.set(track.id,track);await playTrack(track);return navigate('studio');}
+    if(button.id==='studio-link'&&linkResult){const source=linkAudioResult||linkResult;document.querySelector('#link-video')?.pause();document.querySelector('.extracted-result audio')?.pause();const track={id:'local:'+crypto.randomUUID(),title:source.title,artist:source.artist||'',duration:source.duration,filename:source.filename,kind:'upload',playable:true,local:true,serverTicket:new URL(source.url).pathname.split('/').pop()};localTracks.set(track.id,track);await playTrack(track);return navigate('studio');}
     if(button.dataset.speedPreset!==undefined||button.dataset.speedStep!==undefined){const playing=!audio.paused;invalidateMix();engine.setBypass(false);const value=button.dataset.speedPreset!==undefined?Number(button.dataset.speedPreset):engine.speed+Number(button.dataset.speedStep);setStudioSpeed(Math.round(value*100)/100);render();if(playing)await audio.play();return;}
     if(button.dataset.tonePreset!==undefined||button.dataset.toneStep!==undefined){const playing=!audio.paused;invalidateMix();engine.setBypass(false);setStudioPitch(button.dataset.tonePreset!==undefined?Number(button.dataset.tonePreset):studioPitch+Number(button.dataset.toneStep));render();if(engine.linked&&playing)await audio.play();scheduleTone();return;}
     if(button.matches('.export-link')&&typeof tg?.openLink==='function'){event.preventDefault();tg.openLink(button.href);return;}
@@ -709,7 +712,7 @@ document.addEventListener('click',async event=>{
       return render();
     }
     if(button.id==='save-mix'){
-      if(renderBusy||!trackBlob)return;renderBusy=true;
+      if(renderBusy||!trackUrl)return;renderBusy=true;
       try{
         $('save-mix').disabled=true;$('save-mix').textContent=t('rendering');
         if(!demo){const file=await processMix(false,true);const result=await(await api('studio/save',{ticket:new URL(file.url).pathname.split('/').pop()})).json();state=result.library;extraTracks.set(result.track.id,result.track);studioPitch=0;studioEffects=[];engine.setEffects([]);engine.setLinked(false);engine.setParams({...dspDefaults});engine.setBass(0);engine.setTreble(0);engine.setSpeed(1);await playTrack(result.track);toast('saved');}
@@ -836,3 +839,33 @@ setInterval(refreshVisibleCharts,60000);
 document.addEventListener('visibilitychange',refreshVisibleCharts);
 
 document.addEventListener('keydown',event=>{if(event.key==='Enter'&&event.target.id==='link-url'){event.preventDefault();importLink().catch(report);}});
+
+// Keep editable fields above the phone keyboard without disabling pinch zoom.
+let keyboardFrame=0,keyboardTimer,keyboardBase=window.innerHeight;
+function syncKeyboardViewport(){
+  cancelAnimationFrame(keyboardFrame);
+  keyboardFrame=requestAnimationFrame(()=>{
+    const field=document.activeElement;
+    const editing=field?.matches('input:not([type="range"]):not([type="file"]):not([type="checkbox"]),textarea,select');
+    const viewport=window.visualViewport;
+    const height=viewport?.height||window.innerHeight,top=viewport?.offsetTop||0;
+    if(!editing)keyboardBase=window.innerHeight;
+    const layoutHeight=Math.max(keyboardBase,window.innerHeight,document.documentElement.clientHeight);
+    const inset=Math.max(0,layoutHeight-height-top);
+    const open=!!editing&&inset>120;
+    document.body.classList.toggle('keyboard-open',open);
+    document.documentElement.style.setProperty('--keyboard-inset',open?inset+'px':'0px');
+    if(open&&field){
+      const rect=field.getBoundingClientRect(),bottom=top+height-24;
+      if(rect.bottom>bottom)window.scrollBy({top:rect.bottom-bottom,behavior:'instant'});
+      else if(rect.top<top+16)window.scrollBy({top:rect.top-top-16,behavior:'instant'});
+    }
+  });
+}
+window.visualViewport?.addEventListener('resize',syncKeyboardViewport);
+window.visualViewport?.addEventListener('scroll',syncKeyboardViewport);
+window.addEventListener('resize',syncKeyboardViewport);
+window.addEventListener('orientationchange',()=>{keyboardBase=0;syncKeyboardViewport();});
+tg?.onEvent?.('viewportChanged',syncKeyboardViewport);
+document.addEventListener('focusin',()=>{syncKeyboardViewport();clearTimeout(keyboardTimer);keyboardTimer=setTimeout(syncKeyboardViewport,350);});
+document.addEventListener('focusout',()=>{clearTimeout(keyboardTimer);keyboardTimer=setTimeout(syncKeyboardViewport,100);});

@@ -235,20 +235,24 @@ class BotLibrary:
         except ValueError:
             raise web.HTTPTooManyRequests() from None
 
-    async def download_ticket(self, uid, identifier):
+    async def download_ticket(self, uid, identifier, *, stream=False):
         self.allowed(uid, 'downloads')
         song = await self.find(uid, identifier)
         if not self.audio_path(uid, song) or not public_url():
             raise web.HTTPConflict()
         now = time.monotonic()
         self.download_tickets = {key:item for key,item in self.download_tickets.items() if item['expires'] > now}
+        if stream:
+            for token, item in self.download_tickets.items():
+                if item.get('stream') and item['uid'] == uid and str(item['song']['id']) == str(song['id']) and item['expires'] > now+600:
+                    return {'url':public_url().rstrip('/')+'/stream/'+token, 'filename':item['filename']}
         if len(self.download_tickets) >= 256:
             raise web.HTTPTooManyRequests()
         token = secrets.token_urlsafe(24)
         name = song.get('original_filename') if song.get('kind') == 'upload' else str(song.get('title') or 'SwiDJ')+'.mp3'
         name = re.sub(r'[\x00-\x1f\x7f/\\:*?"<>|]', '', name or 'SwiDJ.audio')[:150]
-        self.download_tickets[token] = {'uid':uid, 'song':dict(song), 'expires':now+120, 'filename':name}
-        return {'url':public_url().rstrip('/')+'/download/'+token, 'filename':name}
+        self.download_tickets[token] = {'uid':uid, 'song':dict(song), 'expires':now+(10800 if stream else 120), 'filename':name, 'stream':stream}
+        return {'url':public_url().rstrip('/')+('/stream/' if stream else '/download/')+token, 'filename':name}
 
     async def change(self, uid, payload):
         from library_ui import clean_name, MAX_TRACKS
@@ -530,16 +534,22 @@ def create_app(*, token='', bridge=None):
         payload = await request.json()
         if not isinstance(payload, dict):
             raise web.HTTPBadRequest()
-        return web.json_response(await bridge.download_ticket(request['user']['id'], str(payload.get('track', ''))))
+        return web.json_response(await bridge.download_ticket(request['user']['id'], str(payload.get('track', '')), stream=request.path == '/api/stream'))
     async def download_file(request):
         item = bridge.download_tickets.get(request.match_info['ticket']) if bridge else None
         if not item or item['expires'] <= time.monotonic():
+            raise web.HTTPNotFound()
+        streaming = request.path.startswith('/stream/')
+        if streaming != bool(item.get('stream')):
             raise web.HTTPNotFound()
         bridge.allowed(item['uid'], 'downloads')
         path = bridge.audio_path(item['uid'], item['song'])
         if not path or path.stat().st_size > MEDIA_BYTES:
             raise web.HTTPNotFound()
-        return web.FileResponse(path, headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote(item['filename'],safe='')})
+        headers = {'Content-Disposition':("inline" if streaming else "attachment")+"; filename*=UTF-8''"+quote(item['filename'],safe='')}
+        if streaming:
+            headers['Content-Type'] = mimetypes.guess_type(item['filename'])[0] or 'audio/mpeg'
+        return web.FileResponse(path, headers=headers)
     async def close_jobs(_):
         if bridge:
             await bridge.audio_jobs.close()
@@ -550,8 +560,10 @@ def create_app(*, token='', bridge=None):
                     web.get('/api/audio/{track:-?\\d{1,20}}', audio), web.post('/api/send', send),
                     web.post('/api/prepare', prepare),
                     web.post('/api/download', download_ticket),
+                    web.post('/api/stream', download_ticket),
                     web.post('/api/upload', upload),
                     web.get('/download/{ticket:[A-Za-z0-9_-]{32}}', download_file),
+                    web.get('/stream/{ticket:[A-Za-z0-9_-]{32}}', download_file),
                     web.get('/api/jobs/{job:[a-f0-9]{24}}', job_status),
                     web.post('/api/jobs/{job:[a-f0-9]{24}}/cancel', job_status)])
     from miniapp_studio import register

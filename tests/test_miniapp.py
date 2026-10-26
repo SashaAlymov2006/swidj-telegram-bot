@@ -268,6 +268,27 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         self.bridge.download_tickets[path.rsplit('/',1)[-1]]['expires']=0
         self.assertEqual((await self.client.get(path)).status,404)
 
+    async def test_stream_tickets_allow_seeking_and_preserve_privacy(self):
+        source=Path(self.tmp.name)/'audio.mp3';source.write_bytes(b'private audio')
+        self.bridge.audio_jobs.retain(77,1,source)
+        self.assertEqual((await self.client.post('/api/stream',json={'track':'1'})).status,401)
+        with patch.dict(os.environ,{'MINIAPP_URL':'https://preview.example.test'}):
+            response=await self.client.post('/api/stream',headers=self.headers,json={'track':'1'})
+            ticket=await response.json()
+            repeated=await (await self.client.post('/api/stream',headers=self.headers,json={'track':'1'})).json()
+            self.assertEqual(repeated,ticket)
+            other={'X-Telegram-Init-Data':signed(78)}
+            self.assertEqual((await self.client.post('/api/stream',headers=other,json={'track':'1'})).status,404)
+        path=urlsplit(ticket['url']).path
+        response=await self.client.get(path,headers={'Range':'bytes=2-5'})
+        self.assertEqual(response.status,206)
+        self.assertEqual(await response.read(),b'ivat')
+        self.assertTrue(response.headers['Content-Type'].startswith('audio/'))
+        self.assertIn('inline',response.headers['Content-Disposition'])
+        self.assertEqual((await self.client.get(path.replace('/stream/','/download/'))).status,404)
+        self.bridge.download_tickets[path.rsplit('/',1)[-1]]['expires']=0
+        self.assertEqual((await self.client.get(path)).status,404)
+
     async def test_upload_saves_own_audio_inside_app_without_chat(self):
         with patch.dict(os.environ,{'AUDIO_CACHE_DIR':str(Path(self.tmp.name)/'audio')}):
             response=await self.client.post('/api/upload',headers=self.headers,data=self.upload_form())

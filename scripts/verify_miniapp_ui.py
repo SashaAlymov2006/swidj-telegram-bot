@@ -210,8 +210,9 @@ async def run():
                 status='failed' if calls['track']=='3' else 'cancelled' if calls['cancel'] else 'ready' if calls['track']=='1' and calls['poll']>=2 else 'downloading'
                 result={'job':'a'*24,'status':status,'track':dict(tracks[0] if calls['track']=='3' else tracks[int(calls['track'])-1],playable=status=='ready')}
             elif path.startswith('audio/'):
-                return await route.fulfill(status=200,body=audio_fixture,content_type='audio/wav')
-            elif path=='download':result={'url':'https://preview.example.test/download/'+'a'*32,'filename':'App recording 1.mp3'}
+                raise AssertionError('Player must stream instead of fetching a complete audio blob')
+            elif path=='stream':result={'url':'http://127.0.0.1:8765/stream/'+'a'*32,'filename':'App recording 1.wav'}
+            elif path=='download':result={'url':'http://127.0.0.1:8765/demo/0.wav','filename':'App recording 1.mp3'}
             elif path=='upload':
                 assert route.request.headers['content-type'].startswith('multipart/form-data')
                 uploaded={'id':'-20000000000000001','title':'My uploaded remix','artist':'','kind':'upload','app_upload':True,'duration':24,'playable':True,'cover':None}
@@ -244,6 +245,7 @@ async def run():
             video=route.request.url.endswith('c'*32)
             await route.fulfill(status=200,body=video_fixture if video else audio_fixture,content_type='video/mp4' if video else 'audio/wav')
         await live.route('**/studio-file/**',media_file)
+        await live.route('**/stream/**',media_file)
         app_page=await live.new_page()
         app_page.on('pageerror',lambda error:errors.append(str(error)))
         await app_page.goto('http://127.0.0.1:8765/#search')
@@ -483,6 +485,7 @@ async def run():
         await safari.route('https://telegram.org/**',lambda route:route.fulfill(status=200,body=''))
         await safari.route('**/api/**',app_api)
         await safari.route('**/studio-file/**',media_file)
+        await safari.route('**/stream/**',media_file)
 
         chart_phone=await safari.new_page()
         chart_phone.on('pageerror',lambda error:errors.append(str(error)))
@@ -497,6 +500,7 @@ async def run():
         iphone=await safari.new_page()
         iphone.on('pageerror',lambda error:errors.append(str(error)))
         await iphone.goto('http://127.0.0.1:8765/#search')
+        assert await iphone.locator('#search-input').evaluate('(el)=>parseFloat(getComputedStyle(el).fontSize)')>=16
         await iphone.locator('#search-input').fill('recording')
         await iphone.locator('#search-form .btn').click()
         await iphone.locator('.track-row').first.locator('[data-action=play]').first.click()
