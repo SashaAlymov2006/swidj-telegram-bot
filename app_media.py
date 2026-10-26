@@ -32,9 +32,11 @@ def validate(payload):
         if not re.fullmatch(r'[A-Za-z0-9_-]{11}',identifier):raise ValueError('Invalid video')
         url='https://www.youtube.com/watch?'+urlencode({'v':identifier})
     platform=classify(url)
+    if host=='www.jamendo.com' and re.fullmatch(r'/track/\d{1,12}(?:/[^?#]*)?',parts.path):
+        platform='jamendo';url='https://www.jamendo.com/track/'+parts.path.split('/')[2]
     if host in ('vimeo.com','www.vimeo.com') and re.fullmatch(r'/(?:\d+|channels/[A-Za-z0-9_-]+/\d+)/?',parts.path):platform='vimeo'
     if host.endswith('.bandcamp.com') and re.fullmatch(r'/track/[^/]+/?',parts.path):platform='bandcamp'
-    if platform not in DIRECT|{'apple','yandex','spotify'}:raise ValueError('Unsupported link')
+    if platform not in DIRECT|{'apple','yandex','spotify','jamendo'}:raise ValueError('Unsupported link')
     if mode=='video' and platform not in {'youtube','tiktok','instagram','vimeo'}:raise ValueError('No video on this platform')
     return url,mode,height,platform
 
@@ -88,6 +90,10 @@ def register(app,bridge):
                         raw=await process([sys.executable,str(Path(__file__).resolve()),'fetch',json.dumps({'url':url,'mode':mode,'height':height,'platform':platform}),directory],600)
                         result=json.loads(raw)
                     if result.get('kind')=='search':return web.json_response(result)
+                    if result.get('error') and mode=='audio':
+                        from media_recovery import recover_audio
+                        cached=await asyncio.to_thread(recover_audio,url,directory,uid)
+                        if cached:result=dict(cached[1],path=cached[0])
                     if result.get('error'):return web.json_response({'reason':result['error']},status=502)
                     source=Path(result['path'])
                     if source.is_symlink() or source.resolve().parent!=Path(directory).resolve() or not source.stat().st_size>0:raise ValueError('Invalid output')
@@ -109,7 +115,7 @@ def register(app,bridge):
                             image_token,_=app['studio_worker'].exports.retain(uid,image,'preview',feature='downloads')
                             poster=public_url().rstrip('/')+'/studio-file/'+image_token
                         except (ValueError,OSError):pass
-                    return web.json_response({'kind':mode,'url':public_url().rstrip('/')+'/studio-file/'+token,
+                    return web.json_response({'source':result.get('source'),'source_url':result.get('source_url'),'license_url':result.get('license_url'), 'kind':mode,'url':public_url().rstrip('/')+'/studio-file/'+token,
                                               'filename':item['filename'],'title':result.get('title','SwiDJ'),
                                               'artist':result.get('artist',''),'duration':duration,'expires_in':int(item['expires']-time.time()),'poster':poster,'has_audio':has_audio})
                 except asyncio.TimeoutError:raise web.HTTPGatewayTimeout() from None
@@ -148,6 +154,10 @@ def register(app,bridge):
 
 def fetch(payload,directory):
     url,mode,height,platform=validate(payload)
+    if platform=='jamendo':
+        from jamendo_source import download
+        path,info=download(url,directory,256*1024**2)
+        return dict(info,path=path)
     if platform in ('apple','yandex'):
         from catalog_links import catalog_metadata
         metadata=catalog_metadata(platform,url)
@@ -224,7 +234,13 @@ def download_app_audio(url):
         from download_cache import restore, retain as cache_retain
         cached=restore(url,'audio-mp3-192',directory)
         if cached:return cached
-        result=fetch({'url':url,'mode':'audio','height':360},directory)
+        try:
+            result=fetch({'url':url,'mode':'audio','height':360},directory)
+        except Exception:
+            from media_recovery import recover_audio
+            recovered=recover_audio(url,directory)
+            if recovered:return recovered
+            raise
         target=Path(directory)/'ready.mp3'
         duration=asyncio.run(normalize(Path(result['path']),target,'audio'))
         result['duration']=duration

@@ -46,6 +46,8 @@ class DownloadCache:
         with sqlite3.connect(self.root/'index.sqlite3', timeout=30) as db:
             db.execute('CREATE TABLE IF NOT EXISTS media (key TEXT PRIMARY KEY, suffix TEXT, metadata TEXT, size INTEGER, touched REAL)')
             db.execute('CREATE TABLE IF NOT EXISTS telegram (key TEXT PRIMARY KEY, file_id TEXT, touched REAL)')
+            db.execute('CREATE TABLE IF NOT EXISTS telegram_metadata (key TEXT PRIMARY KEY, metadata TEXT)')
+            db.execute('CREATE TABLE IF NOT EXISTS searches (key TEXT PRIMARY KEY, records TEXT, touched REAL)')
             yield db
 
     def key(self, uid, url, variant):
@@ -104,14 +106,43 @@ class DownloadCache:
             if row: db.execute('UPDATE telegram SET touched=? WHERE key=?',(time.time(),key))
             return row[0] if row else None
 
-    def telegram_set(self, bot_id, uid, url, file_id, variant='audio-mp3-192'):
+    def telegram_info(self, bot_id, uid, url):
+        key=self.key(uid,url,'telegram:'+str(bot_id)+':audio-mp3-192')
+        if not key:return None
+        with self.db() as db:
+            row=db.execute('SELECT t.file_id,m.metadata FROM telegram t LEFT JOIN telegram_metadata m ON t.key=m.key WHERE t.key=?',(key,)).fetchone()
+            return {'file_id':row[0],'metadata':json.loads(row[1] or '{}')} if row else None
+
+    def telegram_set(self, bot_id, uid, url, file_id, variant='audio-mp3-192', metadata=None):
         key = self.key(uid,url,'telegram:'+str(bot_id)+':'+variant)
         if not key: return
         with self.db() as db:
             if file_id:
                 db.execute('INSERT OR REPLACE INTO telegram VALUES (?,?,?)',(key,str(file_id),time.time()))
+                if metadata is not None:
+                    safe={k:v for k,v in metadata.items() if k in ('title','artist','duration') and isinstance(v,(str,int,float))}
+                    db.execute('INSERT OR REPLACE INTO telegram_metadata VALUES (?,?)',(key,json.dumps(safe)))
                 db.execute('DELETE FROM telegram WHERE key IN (SELECT key FROM telegram ORDER BY touched DESC LIMIT -1 OFFSET 100000)')
-            else: db.execute('DELETE FROM telegram WHERE key=?',(key,))
+                db.execute('DELETE FROM telegram_metadata WHERE key NOT IN (SELECT key FROM telegram)')
+            else:
+                db.execute('DELETE FROM telegram WHERE key=?',(key,))
+                db.execute('DELETE FROM telegram_metadata WHERE key=?',(key,))
+
+    def search(self, query, records=None):
+        key=hashlib.sha256(str(query).strip().casefold()[:240].encode()).hexdigest()
+        with self.db() as db:
+            if records:
+                safe=[]
+                for row in records[:10]:
+                    if not isinstance(row,dict) or not str(source_key(row.get('url')) or '').startswith('youtube:'):continue
+                    safe.append({k:v for k,v in row.items() if k in ('url','title','artist','duration','cover') and isinstance(v,(str,int,float,type(None)))})
+                if safe:
+                    db.execute('INSERT OR REPLACE INTO searches VALUES (?,?,?)',(key,json.dumps(safe),time.time()))
+                    db.execute('DELETE FROM searches WHERE touched<?',(time.time()-7*86400,))
+                    db.execute('DELETE FROM searches WHERE key IN (SELECT key FROM searches ORDER BY touched DESC LIMIT -1 OFFSET 300)')
+                return safe
+            row=db.execute('SELECT records,touched FROM searches WHERE key=?',(key,)).fetchone()
+            return json.loads(row[0]) if row and time.time()-row[1]<=7*86400 else []
 
 
 def configured():
@@ -132,3 +163,10 @@ def retain(url, variant, source, metadata, uid=None):
         cache=configured()
         if cache: cache.retain(uid or operation_uid(),url,variant,source,metadata)
     except (OSError,ValueError,sqlite3.Error): pass
+
+
+def search_cache(query, records=None):
+    try:
+        cache=configured()
+        return cache.search(query,records) if cache else []
+    except (OSError,ValueError,sqlite3.Error):return []

@@ -18,10 +18,20 @@ def find_versions(query, limit=5):
                "extract_flat": "in_playlist", "socket_timeout": 15, "retries": 1,
                "cookiefile": os.getenv("YTDLP_COOKIE_FILE") or None}
     from youtube_session import cookie_snapshot
-    with cookie_snapshot(options.get('cookiefile')) as cookies:
-        options['cookiefile']=cookies
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(f"ytsearch{limit}:" + query[:240], download=False)
+    from download_cache import search_cache
+    try:
+        with cookie_snapshot(options.get('cookiefile')) as cookies:
+            options['cookiefile']=cookies
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(f"ytsearch{limit}:" + query[:240], download=False)
+    except Exception:
+        checkpoint()
+        cached=search_cache(query)
+        if cached:return cached[:limit]
+        from jamendo_source import search
+        reserve=search(query,limit)
+        if reserve:return reserve
+        raise
     checkpoint()
     result, seen = [], set()
     for entry in (info or {}).get("entries") or []:
@@ -41,6 +51,7 @@ def find_versions(query, limit=5):
                        "artist": str(entry.get("uploader") or entry.get("channel") or "")[:120],
                        "duration": round(duration) if isinstance(duration, (int, float)) else None,
                        "cover": "https://i.ytimg.com/vi/" + identifier + "/hqdefault.jpg"})
+    if result:search_cache(query,result)
     return result[:limit]
 
 
@@ -98,7 +109,9 @@ async def show_versions(update, context, token, request, *, exclude=None):
         batch,index=request["queue_ref"]
         rows += [[skip_button(batch,index)],[Button("Отменить очередь",callback_data="batch:stop:"+batch)]]
     rows.append([Button("← Поиск", callback_data="ui:search")])
-    message = await version_screen(update, context, (f"Очередь · трек {request['queue_ref'][1]+1}\n" if request.get("queue_ref") else "") + ("🎧 Выбери другую версию" if exclude is not None else "🎧 Выбери версию") + "\nИсточник записи: YouTube",
+    source='Jamendo' if request['candidates'] and all(item.get('source')=='Jamendo' for item in request['candidates']) else 'YouTube'
+    from i18n_ui import tr
+    message = await version_screen(update, context, (f"Очередь · трек {request['queue_ref'][1]+1}\n" if request.get("queue_ref") else "") + ("🎧 Выбери другую версию" if exclude is not None else "🎧 Выбери версию") + '\n'+tr('Источник записи: YouTube').replace('YouTube',source),
                                                     Markup(rows))
     if type(getattr(message, "message_id", None)) is int:
         request.setdefault("menu_messages", []).append([update.effective_chat.id, message.message_id])
@@ -116,7 +129,8 @@ async def request_versions(update, context, song, *, mode="studio", queue_ref=No
         request["menu_messages"] = [[update.effective_chat.id, origin.message_id]]
     await stage("Ищу версии…")
     try:
-        candidates = await asyncio.to_thread(find_versions, " ".join(
+        from jamendo_source import identifier
+        candidates = [dict(song)] if identifier(song.get('url')) else await asyncio.to_thread(find_versions, " ".join(
             str(song.get(key) or "") for key in ("title", "artist")).strip())
         checkpoint()
     except Exception:
@@ -203,27 +217,28 @@ async def download_selected(update, context, token, request, index, downloader, 
                 request.setdefault('sent_indices',[]).append(index)
                 await retire_download_menus(update,context,request)
                 return True
-        path, info = await asyncio.to_thread(downloader, candidate["url"])
+        from media_recovery import download_with_reserve
+        path, info = await asyncio.to_thread(download_with_reserve,downloader,candidate['url'],candidate)
         checkpoint()
         title, artist = metadata(info)
         title = title or candidate["title"]
         artist = artist or candidate["artist"] or request["song"].get("artist")
         await stage("Отправляю…")
         resolved = dict(request["song"], title=title, artist=artist or "",
-                        url=candidate["url"], cover=candidate.get("cover") or request["song"].get("cover"))
+                        url=info.get('source_url') or candidate["url"], source=info.get('source') or candidate.get('source','YouTube'),license_url=info.get('license_url'), cover=candidate.get("cover") or request["song"].get("cover"))
         kwargs = {}
         if request.get("mode") in ("listen", "queue"):
             from track_card import card_keyboard
             kwargs["reply_markup"] = card_keyboard(context, resolved, delivered=True)
         await send_music(context.bot, update.effective_chat.id, path, title, artist,
-                         resolved.get("cover"), source_url=candidate['url'], **kwargs)
+                         resolved.get("cover"), source_url=resolved['url'],license_url=resolved.get('license_url'), **kwargs)
         sent = True
         request.setdefault("sent_indices", []).append(index)
         from track_card import retire_download_menus
         await retire_download_menus(update, context, request)
         await retain(context, update.effective_user.id, path)
         context.user_data["downloaded_song"] = dict(request["song"], title=title, artist=artist or "",
-                                                   url=candidate["url"])
+                                                   url=resolved['url'],source=resolved.get('source'),license_url=resolved.get('license_url'))
         context.user_data["pending_effects"] = []
         if request.get("mode") not in ("listen", "queue"):
             await studio(update, context)

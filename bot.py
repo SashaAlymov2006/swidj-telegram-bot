@@ -218,6 +218,13 @@ def _extract_media(options, query, directory):
 
 def download_youtube_audio(query: str):
     from pathlib import Path
+    from jamendo_source import identifier,download as download_catalog
+    if identifier(query):
+        directory=tempfile.mkdtemp(dir=scratch_root(),prefix='yt_audio_catalog_')
+        try:return download_catalog(query,directory)
+        except BaseException:
+            shutil.rmtree(directory,ignore_errors=True)
+            raise
     check_ffmpeg()
     temp_dir = tempfile.mkdtemp(dir=scratch_root(), prefix="yt_audio_")
     from download_cache import restore, retain as cache_retain
@@ -249,6 +256,9 @@ def download_youtube_audio(query: str):
         info = _extract_media(ydl_opts, query, temp_dir)
 
     except Exception as e:
+        from media_recovery import recover_audio
+        recovered=recover_audio(query,temp_dir)
+        if recovered:return recovered
         msg = str(e)
 
         # 🎯 GRACEFUL FALLBACK — ВАЖНЕЙШАЯ ЧАСТЬ
@@ -764,7 +774,13 @@ def download_soundcloud_audio(url: str) -> dict:
         }],
     }
 
-    info = _extract_media(ydl_opts, url, temp_dir)
+    try:
+        info = _extract_media(ydl_opts, url, temp_dir)
+    except Exception:
+        from media_recovery import recover_audio
+        recovered=recover_audio(url,temp_dir)
+        if recovered:return dict(recovered[1],path=recovered[0])
+        raise
 
     title = clean_title(info.get("title"))
     artist = info.get("uploader") or info.get("creator")

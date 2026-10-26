@@ -56,7 +56,10 @@ def public_song(song, playable=False):
     cover = song.get('cover')
     if not isinstance(cover, str) or not re.fullmatch(r'https://i\.ytimg\.com/vi/[A-Za-z0-9_-]{11}/(?:hqdefault|mqdefault|default)\.jpg', cover):
         cover = None
-    return {'id': str(song['id']), 'title': str(song.get('title') or 'Audio')[:180],
+    from jamendo_source import identifier,license_url
+    catalog=bool(identifier(song.get('url')) and license_url(song.get('license_url')))
+    return {**({'source':'Jamendo','source_url':song['url'],'license_url':license_url(song.get('license_url'))} if catalog else {}),
+            'id': str(song['id']), 'title': str(song.get('title') or 'Audio')[:180],
             'artist': str(song.get('artist') or '')[:120],
             'duration': song.get('duration') if isinstance(song.get('duration'), (int, float)) else None,
             'kind': 'upload' if song.get('kind') == 'upload' else 'track', 'playable': playable, 'cover':cover,
@@ -217,7 +220,8 @@ class BotLibrary:
             return {'status':'ready', 'track':public_song(song, True)}
         if song.get('kind') == 'upload':
             raise web.HTTPGone()
-        if not re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', song.get('url', '')):
+        from jamendo_source import identifier as jamendo_id
+        if not re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', song.get('url', '')) and not jamendo_id(song.get('url')):
             self.allowed(uid, 'search')
             from versions import find_versions
             async with self.search_slots:
@@ -352,14 +356,15 @@ class BotLibrary:
                         filename=song.get('original_filename') or 'SwiDJ.audio', caption=song['title'])
             else:
                 from audio_presentation import send_music
-                await send_music(self.application.bot, uid, path, song['title'], song.get('artist'), source_url=song.get('url'))
+                await send_music(self.application.bot, uid, path, song['title'], song.get('artist'), source_url=song.get('url'),license_url=song.get('license_url'))
         else:
             # Use existing download/retry/card handlers; never accept a URL from the browser.
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
             token = secrets.token_hex(5)
             data = self.data(uid)
             requests = data.setdefault('version_requests', {})
-            if song.get('url', '').startswith('https://www.youtube.com/watch?v='):
+            from jamendo_source import identifier as jamendo_id
+            if song.get('url', '').startswith('https://www.youtube.com/watch?v=') or jamendo_id(song.get('url')):
                 candidates = [dict(song)]
             else:
                 from versions import find_versions

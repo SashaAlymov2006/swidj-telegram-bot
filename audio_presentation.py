@@ -117,7 +117,7 @@ async def send_cached_music(bot, chat_id, source_url, title=None, artist=None, *
         return None
 
 
-async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *, reply_markup=None, source_url=None):
+async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *, reply_markup=None, source_url=None, license_url=None):
     if source_url:
         reused=await send_cached_music(bot,chat_id,source_url,title,artist,reply_markup=reply_markup)
         if reused:return reused
@@ -128,6 +128,9 @@ async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *,
         "caption": f"🎵 <b>{escape(title)}</b>\n{escape(artist)}\n\n♪ SwiDJ",
         "parse_mode": "HTML",
     }
+    from jamendo_source import identifier,license_url as checked_license
+    if identifier(source_url) and checked_license(license_url):
+        kwargs['caption']+='\n<a href="'+escape(source_url,quote=True)+'">Jamendo</a> · <a href="'+escape(checked_license(license_url),quote=True)+'">Creative Commons</a>'
     if reply_markup is not None:
         kwargs["reply_markup"] = reply_markup
     if thumbnail:
@@ -142,6 +145,6 @@ async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *,
             from download_cache import configured
             cache=configured()
             if cache and type(bot.id) is int and getattr(message,'audio',None) and isinstance(message.audio.file_id,str):
-                await asyncio.to_thread(cache.telegram_set,bot.id,chat_id,source_url,message.audio.file_id)
+                await asyncio.to_thread(cache.telegram_set,bot.id,chat_id,source_url,message.audio.file_id,metadata={'title':title,'artist':artist,'duration':duration})
         except Exception:pass
     return message
