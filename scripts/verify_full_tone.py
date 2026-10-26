@@ -8,6 +8,7 @@ async def main():
     root=Path('/src/miniapp');app=web.Application();calls=[];preferred_language='en'
     track={'id':'1','title':'Full tone fixture','artist':'Artist','duration':60}
     async def asset(request):
+        if request.match_info.get('name')=='SoundTouchNode.js':raise web.HTTPNotFound() # Explicit compatibility-path coverage.
         if 'name' not in request.match_info:
             html=(root/'index.html').read_text().replace('<script src="https://telegram.org/js/telegram-web-app.js" defer></script>','')
             return web.Response(text=html,content_type='text/html')
@@ -67,6 +68,7 @@ async def main():
                 await page.wait_for_timeout(750)
                 assert 'pitch=2' in await page.locator('#audio').get_attribute('src'),'An obsolete render must not replace the playing track'
                 await page.wait_for_function("() => document.querySelector('#audio').src.includes('pitch=4')")
+                await page.wait_for_function("() => document.querySelector('#audio').readyState>=2&&!document.querySelector('#audio').paused")
                 assert await page.locator('#audio').evaluate('(el)=>el.playbackRate===1.5&&!el.paused')
                 await page.locator('[data-linked=true]').click()
                 await page.wait_for_function("() => document.querySelector('#audio').readyState>=2&&!document.querySelector('#audio').paused")

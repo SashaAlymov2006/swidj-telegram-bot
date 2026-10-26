@@ -11,7 +11,7 @@ function impulse(context,wide,seconds){
  cache[key]=buffer;return buffer;
 }
 export function connectLive(context,input,output,effects,ambience=100,settings={}){
- input.disconnect();const nodes=[],wetNodes=[],updaters=[],oscillators=[];let tail=input;const params={...dspDefaults,...settings};
+ const nodes=[],wetNodes=[],updaters=[],oscillators=[];const entry=context.createGain(),exit=context.createGain();input.connect(entry);let tail=entry;const params={...dspDefaults,...settings};
  const keep=node=>{nodes.push(node);return node;};
  const smooth=(parameter,value)=>parameter.setTargetAtTime(value,context.currentTime,.03);
  const filter=(type,frequency,gain=0,key=null,gainKey=null)=>{const n=keep(context.createBiquadFilter());n.type=type;n.frequency.value=frequency;n.gain.value=gain;tail.connect(n);tail=n;if(key)updaters.push(p=>smooth(n.frequency,p[key]));if(gainKey)updaters.push(p=>smooth(n.gain,p[gainKey]));};
@@ -25,7 +25,7 @@ export function connectLive(context,input,output,effects,ambience=100,settings={
    const n=keep(context.createDynamicsCompressor());n.knee.value=6;
    const update=p=>{smooth(n.threshold,p.comp_threshold);smooth(n.ratio,p.comp_ratio);smooth(n.attack,p.comp_attack/1000);smooth(n.release,p.comp_release/1000);};update(params);updaters.push(update);tail.connect(n);tail=n;
   }else if(effect==='distortion'){
-   const n=keep(context.createWaveShaper());n.oversample='2x';const update=p=>{const curve=new Float32Array(2048);for(let i=0;i<curve.length;i++)curve[i]=Math.tanh((i*2/(curve.length-1)-1)*p.drive);n.curve=curve;};update(params);updaters.push(update);tail.connect(n);tail=n;
+   const n=keep(context.createWaveShaper());n.oversample='2x';let lastDrive;const update=p=>{if(p.drive===lastDrive)return;lastDrive=p.drive;const curve=new Float32Array(2048);for(let i=0;i<curve.length;i++)curve[i]=Math.tanh((i*2/(curve.length-1)-1)*p.drive);n.curve=curve;};update(params);updaters.push(update);tail.connect(n);tail=n;
   }else if(effect==='tremolo'){
    const n=keep(context.createGain()),osc=keep(context.createOscillator()),depth=keep(context.createGain());oscillators.push(osc);
    const update=p=>{smooth(osc.frequency,p.tremolo_rate);smooth(n.gain,1-p.tremolo_depth/2);smooth(depth.gain,p.tremolo_depth/2);};update(params);updaters.push(update);osc.connect(depth).connect(n.gain);osc.start();tail.connect(n);tail=n;
@@ -43,8 +43,9 @@ export function connectLive(context,input,output,effects,ambience=100,settings={
    }tail=mix;
   }
  }
- tail.connect(output);
- const cleanup=()=>{input.disconnect();for(const osc of oscillators)try{osc.stop();}catch{}for(const n of nodes)n.disconnect();};
+ tail.connect(exit);exit.connect(output);
+ const cleanup=()=>{try{input.disconnect(entry);}catch{}entry.disconnect();exit.disconnect();for(const osc of oscillators)try{osc.stop();}catch{}for(const n of nodes)n.disconnect();};
+ cleanup.gain=exit.gain;
  cleanup.setAmbience=value=>wetNodes.forEach(({wet,amount})=>smooth(wet.gain,amount*value/100));
  cleanup.setParams=value=>updaters.forEach(update=>update({...dspDefaults,...value}));return cleanup;
 }

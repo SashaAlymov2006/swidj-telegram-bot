@@ -65,7 +65,7 @@ async def run():
         await page.reload()
         await page.locator('#resume-track').click()
         await page.wait_for_function("() => document.querySelector('#now-title').textContent==='Sunset circuit'")
-        assert await page.evaluate('document.querySelector("audio").currentTime>=6')
+        await page.wait_for_function('() => document.querySelector("audio").currentTime>=6',timeout=2000)
         await page.locator('#desktop-nav [data-go=studio]').click()
         await page.locator('[data-recipe=warm]').click()
         assert await page.locator('#bass-value').inner_text()=='+3 dB'
@@ -279,15 +279,12 @@ async def run():
         await app_page.locator('#compare-fx[aria-pressed=true]').wait_for()
         await app_page.locator('#compare-fx').click()
         assert await app_page.evaluate('!document.querySelector("#audio").paused')
+        before_tone=dict(calls['studioSettings'])
         await app_page.locator('#mix-pitch').fill('2')
         await app_page.locator('#mix-pitch').dispatch_event('change')
-        await app_page.locator('#toast').filter(has_text='Full track tone applied').wait_for()
-        assert calls['studioSettings']['preview'] is False
-        assert calls['studioSettings']['speed']==1
-        assert calls['studioSettings']['start']==0 and calls['studioSettings']['end']==0
-        assert calls['studioSettings']['effects']==[]
-        assert calls['studioSettings']['pitch']==2
-        assert calls['studioSettings']['linked'] is False
+        await app_page.wait_for_function("() => document.querySelector('#audio').readyState>=2&&!document.querySelector('#audio').paused")
+        await app_page.wait_for_timeout(700)
+        assert calls['studioSettings']==before_tone,'Live independent pitch should not request a new file'
         assert await app_page.evaluate('document.querySelector("#audio").playbackRate===1')
         await app_page.evaluate("window.Telegram.WebApp.downloadFile=(value)=>{window.nativeExport=value};window.Telegram.WebApp.isVersionAtLeast=()=>true")
         await app_page.locator('#export-mix').click()
@@ -405,7 +402,7 @@ async def run():
         await app_page.locator('[data-linked=true]').click()
         await app_page.locator('[data-speed-preset="1.5"]').click()
         assert abs(float(await app_page.locator('#mix-pitch').input_value())-7.02)<.1
-        assert not await app_page.evaluate('document.querySelector("#audio").preservesPitch')
+        assert await app_page.evaluate('Math.abs(document.querySelector("#audio").playbackRate-1.5)<.01')
         await app_page.locator('[data-tone-preset="0"]').click()
         assert float(await app_page.locator('#speed').input_value())==1
         await app_page.locator('[data-linked=false]').click()

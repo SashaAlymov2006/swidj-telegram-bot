@@ -1,0 +1,17 @@
+{
+  "package": "@soundtouchjs/audio-worklet",
+  "version": "2.1.1",
+  "license": "MPL-2.0",
+  "git_commit": null,
+  "integrity": "sha512-itxSW62gbtDKoFo6eEr4PXzVz3oF+wCVREupFi5JiUR31tWWwCizr+2XezYD1SnkrSDfdmZvvviTtoyejYeD0Q==",
+  "source": "https://github.com/cutterbl/SoundTouchJS",
+  "local_modifications": {
+    "soundtouch-processor.js": [
+      "swidj-reset clears queued samples on explicit seek/source change",
+      "4096-frame startup reserve for changing WSOLA windows",
+      "128-frame fade-in after startup/reset"
+    ]
+  },
+  "modified_processor_sha256": "5c2167046a5763b731a9edaa156946ffb631735353042ee0d6f4681b37a56e1b",
+  "source_form": "third_party/soundtouchjs/sources.json"
+}

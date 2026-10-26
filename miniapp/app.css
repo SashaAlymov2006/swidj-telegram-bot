@@ -99,3 +99,10 @@ dialog[open]{animation:sheet-enter .2s ease-out}dialog::backdrop{background:#050
  body.keyboard-open .shell{padding-bottom:calc(var(--keyboard-inset,0px) + 32px)}
  html{scroll-padding-block:24px}
 }
+
+/* Prioritize phone audio and controls over decorative studio compositing. */
+@media(pointer:coarse){
+ .studio-open .visual-wave rect,.studio-open .hero-disc{animation:none!important}
+ .studio-open .player,.studio-open .mobile-nav{backdrop-filter:none;-webkit-backdrop-filter:none;background:#15151f}
+ .studio-open .studio-visual{display:none}
+}

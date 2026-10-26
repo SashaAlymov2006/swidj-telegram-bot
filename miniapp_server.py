@@ -441,7 +441,7 @@ def create_app(*, token='', bridge=None):
     app = web.Application(middlewares=[boundary], client_max_size=16*1024)
     async def asset(request):
         name = request.match_info.get('name', 'index.html')
-        if name not in ('index.html', 'app.css', 'app.js', 'audio.js', 'live.js'):
+        if name not in ('index.html', 'app.css', 'app.js', 'audio.js', 'live.js', 'SoundTouchNode.js', 'constants.js', 'soundtouch-processor.js', 'soundtouch-LICENSE.txt', 'soundtouch-NOTICE.json'):
             raise web.HTTPNotFound()
         return web.FileResponse(ASSETS / name)
     async def demo(request):

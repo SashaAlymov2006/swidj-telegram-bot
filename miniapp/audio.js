@@ -31,27 +31,88 @@ export function chain(context, source, destination, bass, treble = 0) {
   const compressor = context.createDynamicsCompressor();
   compressor.threshold.value = -2; compressor.knee.value = 0; compressor.ratio.value = 20;
   compressor.attack.value = .002; compressor.release.value = .1;
-  source.connect(headroom).connect(filter).connect(high).connect(compressor).connect(destination);
-  return {headroom, filter, high, compressor};
+  const master=context.createGain();
+  source.connect(headroom).connect(filter).connect(high).connect(compressor).connect(master).connect(destination);
+  return {headroom, filter, high, compressor, master};
 }
 
 export class AudioEngine {
-  constructor(element) { this.element = element; this.bass = 0; this.speed = 1; this.treble=0; this.bypass=false; this.trimStart=0; this.trimEnd=0; this.fade=0; this.effects=[]; this.params={...dspDefaults}; this.linked=false; this.ambience=100; this.processed=false; }
+  constructor(element,{mobile=globalThis.matchMedia?.('(pointer: coarse)').matches||false}={}) {
+    this.element=element;
+    this.mobile=mobile;
+    const agent=globalThis.navigator?.userAgent||'';
+    this.webkit=/AppleWebKit/.test(agent)&&!/(Chrome|Chromium|Edg|OPR)\//.test(agent);
+    this.rateAt=-Infinity;
+    this.bass=0;this.speed=1;this.treble=0;this.pitch=0;
+    this.bypass=false;this.processed=false;this.linked=false;
+    this.trimStart=0;this.trimEnd=0;this.fade=0;
+    this.effects=[];this.params={...dspDefaults};this.ambience=100;
+  }
   async unlock() {
     if (!this.context) {
-      this.context = new AudioContext();
-      this.nodes = chain(this.context, this.context.createMediaElementSource(this.element), this.context.destination, this.bypass?0:this.bass, this.bypass?0:this.treble);
+      this.context = new AudioContext({latencyHint:this.mobile?'playback':'interactive'});
+      this.source=this.context.createMediaElementSource(this.element);
+      this.nodes = chain(this.context, this.source, this.context.destination, this.bypass?0:this.bass, this.bypass?0:this.treble);
+      this.nodes.high.disconnect(this.nodes.compressor);
       this.rebuildLive();
+      this.element.addEventListener('emptied',()=>this.resetPitch());
+      this.pitchReady=this.initializePitch();
     }
     await this.context.resume();
+    await this.pitchReady;
+  }
+  async initializePitch(){
+    if(!this.context.audioWorklet)return;
+    let node;
+    try{
+      const {SoundTouchNode}=await import('./SoundTouchNode.js');
+      await SoundTouchNode.register(this.context,new URL('./soundtouch-processor.js',import.meta.url).href);
+      node=new SoundTouchNode({context:this.context});
+      node.setStretchParameters({sequenceMs:80,seekWindowMs:20,overlapMs:8,quickSeek:true});
+      this.source.disconnect(this.nodes.headroom);this.source.connect(node).connect(this.nodes.headroom);
+      this.pitchNode=node;this.livePitch=true;this.setSpeed(this.speed);
+      node.onprocessorerror=()=>{
+        try{this.source.disconnect(node);node.disconnect();this.source.connect(this.nodes.headroom);}catch{}
+        this.pitchNode=null;this.livePitch=false;this.setSpeed(this.speed);
+        globalThis.dispatchEvent?.(new Event('swidj-pitch-fallback'));
+      };
+    }catch{
+      if(node){try{this.source.disconnect(node);node.disconnect();this.source.connect(this.nodes.headroom);}catch{}}
+      this.livePitch=false;
+    } // Existing server processing remains the compatibility path.
+  }
+  resetPitch(){this.pitchNode?.port.postMessage({type:'swidj-reset'});}
+  setPitch(value){this.pitch=Number(value)||0;this.syncPitch();}
+  syncPitch(){
+    if(!this.pitchNode)return;
+    const rate=this.element.playbackRate,neutral=this.bypass||this.processed;
+    const desired=neutral?1:this.linked?rate:2**((this.pitch||0)/12);
+    // Native tempo preserves input pitch. The worklet shifts that stable-pitch
+    // stream, avoiding browser-dependent resampling/preservesPitch=false behavior.
+    if(this.pitchRate!==1){this.pitchNode.playbackRate.value=1;this.pitchRate=1;}
+    if(this.pitchTarget!==desired){
+      const param=this.pitchNode.pitch,now=this.context.currentTime;
+      if(param.cancelAndHoldAtTime)param.cancelAndHoldAtTime(now);else param.cancelScheduledValues(now);
+      if(neutral)param.setValueAtTime(desired,now);else param.setTargetAtTime(desired,now,.02);
+      this.pitchTarget=desired;
+    }
   }
   rebuildLive(){
     if(!this.nodes)return;
-    if(this.disconnectLive)this.disconnectLive();
-    this.disconnectLive=connectLive(this.context,this.nodes.high,this.nodes.compressor,this.bypass||this.processed?[]:this.effects,this.ambience,this.params);
+    clearTimeout(this.rackTimer);
+    const previous=this.disconnectLive,now=this.context.currentTime;
+    const next=connectLive(this.context,this.nodes.high,this.nodes.compressor,this.bypass||this.processed?[]:this.effects,this.ambience,this.params);
+    this.disconnectLive=next;
+    if(previous){
+      next.gain.setValueAtTime(0,now);next.gain.linearRampToValueAtTime(1,now+.045);
+      if(previous.gain.cancelAndHoldAtTime)previous.gain.cancelAndHoldAtTime(now);
+      else {previous.gain.cancelScheduledValues(now);previous.gain.setValueAtTime(previous.gain.value,now);}
+      previous.gain.linearRampToValueAtTime(0,now+.045);
+      setTimeout(previous,100);
+    }
   }
   setLinked(value){this.linked=value;this.setSpeed(this.speed);}
-  setParams(values){const room=values.room_s??this.params.room_s;const oldRoom=this.params.room_s;Object.assign(this.params,values);if(room!==oldRoom)this.rebuildLive();else this.disconnectLive?.setParams?.(this.params);}
+  setParams(values){const room=values.room_s??this.params.room_s;const oldRoom=this.params.room_s;Object.assign(this.params,values);if(room!==oldRoom){clearTimeout(this.rackTimer);this.rackTimer=setTimeout(()=>this.rebuildLive(),160);}else this.disconnectLive?.setParams?.(this.params);}
   setEffects(effects){this.effects=[...effects];this.rebuildLive();}
   setAmbience(value){this.ambience=value;this.disconnectLive?.setAmbience?.(value);}
   setProcessed(value){if(this.processed===value)return;this.processed=value;this.rebuildLive();this.applyTone();this.setSpeed(this.speed);}
@@ -68,10 +129,52 @@ export class AudioEngine {
   setSpeed(value) {
     this.speed = value;
     const rate=this.bypass||this.processed?1:value;
-    if(Math.abs(this.element.playbackRate-rate)>0.000001)this.element.playbackRate=rate;
     // Keep live tempo independent of pitch, matching server exports.
-    if(this.element.preservesPitch!==!this.linked)this.element.preservesPitch=!this.linked;
-    if('webkitPreservesPitch' in this.element&&this.element.webkitPreservesPitch!==!this.linked)this.element.webkitPreservesPitch=!this.linked;
+    const preserve=this.livePitch||!this.linked;
+    if(this.element.preservesPitch!==preserve)this.element.preservesPitch=preserve;
+    if('webkitPreservesPitch' in this.element&&this.element.webkitPreservesPitch!==preserve)this.element.webkitPreservesPitch=preserve;
+    this.pendingRate=rate;
+    clearTimeout(this.rateTimer);
+    const delay=this.mobile||this.webkit?Math.max(0,40-(performance.now()-this.rateAt)):0;
+    if(delay)this.rateTimer=setTimeout(()=>this.flushRate(),delay);else this.flushRate();
+  }
+  flushRate(){clearTimeout(this.rateTimer);if(this.pendingRate!==undefined&&Math.abs(this.element.playbackRate-this.pendingRate)>.000001)this.element.playbackRate=this.pendingRate;this.rateAt=performance.now();this.syncPitch();}
+  fadeOutput(value,seconds=.035){
+    const gain=this.nodes?.master?.gain;if(!gain)return;
+    const now=this.context.currentTime;
+    if(gain.cancelAndHoldAtTime)gain.cancelAndHoldAtTime(now);else gain.cancelScheduledValues(now);
+    gain.linearRampToValueAtTime(value,now+seconds);
+  }
+  cancelSourceSwitch(){this.sourceSwitch=(this.sourceSwitch||0)+1;this.fadeOutput(1);}
+  async switchSource(url,{position=0,playing=false,valid=()=>true}={}){
+    const revision=(this.sourceSwitch||0)+1;this.sourceSwitch=revision;
+    const audio=this.element,started=performance.now();
+    const active=()=>revision===this.sourceSwitch;
+    const waitFor=(events,ready)=>new Promise((resolve,reject)=>{
+      if(ready()){resolve();return;}
+      let timeout;
+      const clean=()=>{clearTimeout(timeout);for(const event of events)audio.removeEventListener(event,check);audio.removeEventListener('error',failed);};
+      const check=()=>{if(!active()||ready()){clean();resolve();}};
+      const failed=()=>{clean();if(active())reject(new Error('invalidAudio'));else resolve();};
+      for(const event of events)audio.addEventListener(event,check);
+      audio.addEventListener('error',failed);
+      timeout=setTimeout(()=>{clean();if(active())reject(new Error('invalidAudio'));else resolve();},15000);
+    });
+    this.fadeOutput(0,.015);
+    try{
+      await new Promise(resolve=>setTimeout(resolve,20));
+      if(!active()||!valid())return false;
+      audio.pause();audio.src=url;
+      await waitFor(['loadedmetadata'],()=>audio.readyState>=1);
+      if(!active())return false;
+      const elapsed=playing?(performance.now()-started)/1000*this.speed:0;
+      audio.currentTime=Math.max(0,Math.min(position+elapsed,Number.isFinite(audio.duration)?Math.max(0,audio.duration-.01):position+elapsed));
+      await waitFor(['seeked','canplay'],()=>!audio.seeking&&audio.readyState>=2);
+      if(!active())return false;
+      this.flushRate();
+      if(playing)await audio.play();
+      return true;
+    }finally{if(active())this.fadeOutput(1,.04);}
   }
   async render(blob, preview = false, sourceDuration = this.element.duration) {
     const bass = this.bypass?0:this.bass, treble=this.bypass?0:this.treble, speed = this.bypass?1:this.speed;
