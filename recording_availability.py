@@ -168,11 +168,14 @@ def available(item,uid=None):
     finally:_slots.release()
 
 
-def verified_choices(items,query,uid=None,limit=3):
+def verified_choices(items,query,uid=None,limit=3,*,artist_query=False):
     from search_quality import recording_choices
     if type(limit) is not int or not 1<=limit<=5:raise ValueError('Invalid choice limit')
     choices=[];deadline=time.monotonic()+18
-    ranked=recording_choices(items,query,limit=10 if limit>3 else 6)
+    if artist_query:
+        from artist_catalog import matches
+        ranked=list({item['url']:item for item in items if matches(query,item)}.values())[:10]
+    else:ranked=recording_choices(items,query,limit=10 if limit>3 else 6)
     if limit==1:
         for item in ranked:
             checkpoint()

@@ -62,9 +62,20 @@ def public_song(song, playable=False):
     audius=canonical(song.get('source_url') or song.get('url'))
     from soundcloud_source import public_url as soundcloud_url
     soundcloud=soundcloud_url(song.get('source_url') or song.get('url'))
+    details={}
+    if soundcloud:
+        from urllib.parse import urlsplit
+        details={'creator_url':'https://soundcloud.com/'+urlsplit(song.get('source_url') or song['url']).path.strip('/').split('/')[0],
+                 'creator_name':str(song.get('creator_name') or song.get('artist') or '')[:120]}
+    from artist_catalog import details as track_details
+    known=track_details(song)
+    if known.get('source'):details['recording_url']=known['url']
+    for field in ('album','release_date','upload_date'):
+        if field in known:details[field]=known[field]
     return {**({'source':'Jamendo','source_url':song['url'],'license_url':license_url(song.get('license_url'))} if catalog else {}),
             **({'source':'Audius','source_url':audius} if audius else {}),
             **({'source':'SoundCloud'} if soundcloud else {}),
+            **details,
             'id': str(song['id']), 'title': str(song.get('title') or 'Audio')[:180],
             'artist': str(song.get('artist') or '')[:120],
             'duration': song.get('duration') if isinstance(song.get('duration'), (int, float)) else None,
@@ -213,7 +224,10 @@ class BotLibrary:
             if not sc_url(exclude):raise web.HTTPBadRequest()
         def present(rows,groups,available):
             def output(song):return public_song(song,bool(self.audio_path(uid,song)))
+            from artist_catalog import matches as artist_matches
+            artist=next((row for row in rows if artist_matches(query,row)),None)
             return {'tracks':[output(s) for s in rows], 'available_sources':list(available),
+                    'artist_suggestion':dict(output(artist),artist=query) if artist else None,
                     'groups':[{'source':name,'tracks':[output(s) for s in items]} for name,items in groups.items()]}
         cache_key=(uid,query,source,exclude)
         cached=self.search_results.get(cache_key)
@@ -550,7 +564,7 @@ def create_app(*, token='', bridge=None):
                 uid = user['id']
                 bridge.allowed(uid)
                 from dispatch import user_lock
-                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts','/api/charts/resolve','/api/versions','/api/dj/analysis'):
+                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts','/api/charts/resolve','/api/artist','/api/versions','/api/dj/analysis'):
                     response=await handler(request)
                 else:
                     async with user_lock(uid):
@@ -736,6 +750,8 @@ def create_app(*, token='', bridge=None):
     register_charts(app,bridge)
     from app_lyrics import register as register_lyrics
     register_lyrics(app, bridge)
+    from artist_catalog import register as register_artists
+    register_artists(app,bridge)
     from app_media import register as register_media
     register_media(app, bridge)
     return app

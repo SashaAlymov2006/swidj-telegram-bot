@@ -15,7 +15,7 @@ from audio_presentation import send_music
 
 
 def find_versions(query, limit=5):
-    if type(limit) is not int or not 1<=limit<=10:raise ValueError('Invalid search limit')
+    if type(limit) is not int or not 1<=limit<=50:raise ValueError('Invalid search limit')
     checkpoint()
     options = {"quiet": True, "no_warnings": True, "skip_download": True,
                "extract_flat": "in_playlist", "socket_timeout": 15, "retries": 1,
@@ -112,6 +112,9 @@ def source_search(song, source):
         with _metadata_lock:
             _source_metadata[key] = (time.monotonic()+(60 if rows else 20),deepcopy(rows))
             while len(_source_metadata)>128:_source_metadata.pop(next(iter(_source_metadata)))
+    from artist_catalog import normalized
+    artist_query=any(normalized(query)==normalized(row.get('artist','')) for row in rows)
+    if artist_query:return verified_choices(rows,query,song.get('_availability_uid'),limit=limit,artist_query=True)
     return verified_choices(rows,query,song.get('_availability_uid'),limit=limit)
 
 

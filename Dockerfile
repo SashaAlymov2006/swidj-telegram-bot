@@ -26,6 +26,7 @@ COPY --chmod=0444 recording_availability.py ./
 COPY --chmod=0444 audius_source.py ./
 COPY --chmod=0444 video_reserve.py ./
 COPY --chmod=0444 lyrics_ui.py ./
+COPY --chmod=0444 artist_catalog.py artist_ui.py ./
 COPY --chmod=0444 jamendo_source.py ./
 COPY --chmod=0444 tiktok_photos.py ./
 COPY --chmod=0444 studio_presets.py studio_presets_bot.py dj_studio.py recording_match.py soundcloud_source.py ./

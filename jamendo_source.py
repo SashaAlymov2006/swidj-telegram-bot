@@ -46,13 +46,14 @@ def track(row):
     duration=row.get('duration')
     if not title or not artist or type(duration) not in (int,float) or not 0<duration<=7200:return None
     return {'title':title,'artist':artist,'duration':round(duration),'url':'https://www.jamendo.com/track/'+tid,
-            'source':'Jamendo','source_url':'https://www.jamendo.com/track/'+tid,'license_url':license,'cover':None}
+            'source':'Jamendo','source_url':'https://www.jamendo.com/track/'+tid,'license_url':license,'cover':None,
+            'album':str(row.get('album_name') or '')[:160],'release_date':str(row.get('releasedate') or '')[:40]}
 
 
 def search(query,limit=5):
     try:
         result=[]
-        for item in rows({'search':str(query)[:240],'limit':min(10,limit*2)}):
+        for item in rows({'search':str(query)[:240],'limit':min(100 if limit>10 else 10,limit*2)}):
             value=track(item)
             if value:result.append(value)
             if len(result)>=limit:break

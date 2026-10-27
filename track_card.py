@@ -34,6 +34,7 @@ def card_keyboard(context, song, saved=False, extra_rows=None, *, delivered=Fals
             rows.append([Button(label,web_app=WebAppInfo(url))])
     if song.get("kind") != "upload":
         rows.append([button("📄 Текст", "lyrics")])
+        rows.append([button("О треке / автор", "info")])
     return Markup(rows + list(extra_rows or []))
 
 def search_navigation(context, song):
@@ -125,6 +126,6 @@ async def show_card(update, context, song, *, saved=False, extra_rows=None, noti
     return result
 
 def selected_song(context, data):
-    match = re.fullmatch(r"track:(listen|save|playlist|studio|lyrics):([0-9a-f]{10})", data or "")
+    match = re.fullmatch(r"track:(listen|save|playlist|studio|lyrics|info):([0-9a-f]{10})", data or "")
     song = context.user_data.get("track_cards", {}).get(match[2]) if match else None
     return (match[1], dict(song)) if song else (None, None)

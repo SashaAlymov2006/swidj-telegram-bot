@@ -51,7 +51,8 @@ def track(row):
     title=str(row.get('title') or '').strip()[:180];artist=str(user.get('name') or '').strip()[:120]
     if not title or not artist:return None
     return {'title':title,'artist':artist,'duration':duration,'url':url,'source_url':url,
-            'source':'Audius','cover':None,'_audius_id':tid}
+            'source':'Audius','cover':None,'_audius_id':tid,
+            'release_date':str(row.get('release_date') or '')[:40],'creator_name':artist}
 
 
 def _pace():
@@ -106,7 +107,7 @@ def api(path,params=None):
 def search(query,limit=5):
     if not enabled():return []
     try:
-        rows=api('/tracks/search',{'query':str(query)[:240],'limit':min(20,max(1,limit*2)),
+        rows=api('/tracks/search',{'query':str(query)[:240],'limit':min(100,max(1,limit*2)),
                                  'only_downloadable':'true','has_downloads':'true','sort_method':'relevant'})
         return [item for row in (rows or []) if (item:=track(row))][:limit]
     except Exception:

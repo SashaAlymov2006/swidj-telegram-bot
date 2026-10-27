@@ -33,18 +33,44 @@ def row(info):
     duration=info.get('duration')
     if not artist or type(duration) not in (int,float) or not 0<duration<=7200:return None
     return {'url':url,'source_url':url,'source':'SoundCloud','title':str(info.get('track') or info.get('title') or '')[:180],
-            'artist':str(artist)[:120],'duration':duration,'cover':None}
+            'artist':str(artist)[:120],'duration':duration,'cover':None,
+            'creator_name':str(info.get('uploader') or artist)[:120],
+            'album':str(info.get('album') or '')[:160],'release_date':str(info.get('release_date') or '')[:40],
+            'upload_date':str(info.get('upload_date') or '')[:40],
+            'creator_url':'https://soundcloud.com/'+urlsplit(url).path.strip('/').split('/')[0]}
 
 def search(query,limit=5):
     checkpoint()
     try:
         settings=dict(options(),skip_download=True,extract_flat='in_playlist')
-        with yt_dlp.YoutubeDL(settings) as ydl:info=ydl.extract_info('scsearch'+str(min(10,limit))+':'+str(query)[:240],download=False)
+        with yt_dlp.YoutubeDL(settings) as ydl:info=ydl.extract_info('scsearch'+str(min(50,limit))+':'+str(query)[:240],download=False)
         result=[];seen=set()
         for entry in (info or {}).get('entries') or []:
             checkpoint();item=row(entry)
             if item and item['url'] not in seen:seen.add(item['url']);result.append(item)
         return result[:limit]
+    except Exception:return []
+
+
+def artist_tracks(track_url,limit=50,artist_name=''):
+    if not public_url(track_url):return []
+    profile='https://soundcloud.com/'+urlsplit(track_url).path.strip('/').split('/')[0]
+    try:
+        settings=dict(options(),skip_download=True,extract_flat='in_playlist',noplaylist=False,playlistend=min(50,limit))
+        with yt_dlp.YoutubeDL(settings) as ydl:info=ydl.extract_info(profile+'/tracks',download=False)
+        result=[]
+        for item in (info or {}).get('entries') or []:
+            checkpoint();value=row(item)
+            # User feeds can expose only a public permalink/title in flat mode.
+            # Do not fabricate a duration or fetch every audio stream just to list it.
+            if not value and isinstance(item,dict) and artist_name:
+                link=item.get('webpage_url') or item.get('url')
+                if public_url(link) and urlsplit(link).path.strip('/').split('/')[0]==urlsplit(profile).path.strip('/') and item.get('title'):
+                    value={'url':link,'source_url':link,'source':'SoundCloud','title':str(item['title'])[:180],
+                           'artist':artist_name[:120],'creator_name':artist_name[:120],'creator_url':profile,'duration':None,'cover':None}
+            if value and value['creator_url']==profile:result.append(value)
+            if len(result)>=limit:break
+        return result
     except Exception:return []
 
 def matching_track(hint):

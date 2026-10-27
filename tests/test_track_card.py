@@ -32,7 +32,7 @@ class TrackCardTests(unittest.IsolatedAsyncioTestCase):
         caption=context.bot.send_photo.call_args.kwargs["caption"]
         self.assertIn("&lt;Song&gt;",caption)
         self.assertIn("A &amp; B",caption)
-        self.assertEqual(len(context.bot.send_photo.call_args.kwargs["reply_markup"].inline_keyboard),5)
+        self.assertEqual(len(context.bot.send_photo.call_args.kwargs["reply_markup"].inline_keyboard),6)
 
     async def test_new_song_replaces_cover_in_existing_photo_card(self):
         update,context=self.fixture(NS(photo=[True],text=None))
@@ -75,7 +75,7 @@ class TrackCardTests(unittest.IsolatedAsyncioTestCase):
         payload=str(keyboard.to_dict())
         self.assertNotIn("track:listen:",payload)
         self.assertNotIn("srch:",payload)
-        self.assertEqual(len(keyboard.inline_keyboard),4)
+        self.assertEqual(len(keyboard.inline_keyboard),5)
         self.assertIn("track:save:",payload)
         self.assertIn("track:studio:",payload)
 
@@ -133,7 +133,7 @@ class TrackCardTests(unittest.IsolatedAsyncioTestCase):
         context=NS(user_data={})
         song={"id":1,"title":"Song & more","artist":"Artist","url":"https://genius.com/artist-song-lyrics"}
         rows=card_keyboard(context,song).inline_keyboard
-        self.assertTrue(rows[-1][0].callback_data.startswith('track:lyrics:'))
+        self.assertTrue(any(b.callback_data and b.callback_data.startswith('track:lyrics:') for row in rows for b in row))
         song["url"]="https://example.com/track"
-        self.assertTrue(card_keyboard(context,song).inline_keyboard[-1][0].callback_data.startswith('track:lyrics:'))
+        self.assertTrue(any(b.callback_data and b.callback_data.startswith('track:lyrics:') for row in card_keyboard(context,song).inline_keyboard for b in row))
         self.assertTrue(all(not b.url for row in card_keyboard(context,song,delivered=True).inline_keyboard for b in row))

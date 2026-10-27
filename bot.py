@@ -1567,6 +1567,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         genius, deezer = await asyncio.gather(search_songs(query), search_deezer(query))
         songs = merge_catalog_results(genius, deezer, query=query)
+        if not songs:
+            from artist_catalog import browse
+            found=await asyncio.to_thread(browse,{'artist':query},'all',0)
+            songs=found['tracks']
+            if songs:
+                import hashlib
+                for item in songs:item['id']=10**15+int.from_bytes(hashlib.sha256(item['url'].encode()).digest()[:6],'big')
     checkpoint()
     if not songs:
         await update.message.reply_text("❌ Не удалось найти песню. Попробуй другой фрагмент.")
@@ -2209,6 +2216,9 @@ async def track_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not song:
         return await update.effective_message.reply_text("Открой трек ещё раз — эта карточка уже недоступна.")
     uid = update.effective_user.id
+    if action == 'info':
+        from artist_ui import info
+        return await info(update,context,song)
     if action == 'lyrics':
         from lyrics_ui import show
         return await show(update,context,song)
@@ -2454,6 +2464,8 @@ def build_application(*, request=None, updates_request=None):
     app.add_handler(CallbackQueryHandler(serialize_user(track_callback), pattern=r"^track:"))
     from lyrics_ui import callback as lyrics_page_callback
     app.add_handler(CallbackQueryHandler(serialize_user(lyrics_page_callback), pattern=r"^lyr:"))
+    from artist_ui import callback as artist_page_callback
+    app.add_handler(CallbackQueryHandler(serialize_user(artist_page_callback), pattern=r"^(art|arp):"))
     app.add_handler(CallbackQueryHandler(serialize_user(library_callback), pattern=r"^lib:"))
     app.add_handler(CallbackQueryHandler(serialize_user(upload_callback), pattern=r"^upload:(save|studio):-?[0-9]{1,19}$"))
     app.add_handler(CommandHandler("clearfavorites", serialize_user(clearfavorites_command)))
