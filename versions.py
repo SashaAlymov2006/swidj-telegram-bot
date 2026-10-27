@@ -28,9 +28,14 @@ def find_versions(query, limit=5):
         checkpoint()
         cached=search_cache(query)
         if cached:return cached[:limit]
-        from jamendo_source import search
-        reserve=search(query,limit)
-        if reserve:return reserve
+        from soundcloud_source import search as sc_search
+        reserve=sc_search(query,limit)
+        if not reserve:
+            from jamendo_source import search
+            reserve=search(query,limit)
+        if reserve:
+            search_cache(query,reserve)
+            return reserve
         raise
     checkpoint()
     result, seen = [], set()
@@ -51,6 +56,12 @@ def find_versions(query, limit=5):
                        "artist": str(entry.get("uploader") or entry.get("channel") or "")[:120],
                        "duration": round(duration) if isinstance(duration, (int, float)) else None,
                        "cover": "https://i.ytimg.com/vi/" + identifier + "/hqdefault.jpg"})
+    if not result:
+        from soundcloud_source import search as sc_search
+        result=sc_search(query,limit)
+        if not result:
+            from jamendo_source import search
+            result=search(query,limit)
     if result:search_cache(query,result)
     return result[:limit]
 

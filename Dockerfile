@@ -24,7 +24,7 @@ COPY --chmod=0444 download_cache.py ./
 COPY --chmod=0444 media_recovery.py ./
 COPY --chmod=0444 jamendo_source.py ./
 COPY --chmod=0444 tiktok_photos.py ./
-COPY --chmod=0444 studio_presets.py studio_presets_bot.py dj_studio.py ./
+COPY --chmod=0444 studio_presets.py studio_presets_bot.py dj_studio.py recording_match.py soundcloud_source.py ./
 COPY --chmod=0555 miniapp/ ./miniapp/
 USER bot
 CMD ["python", "bot.py"]

@@ -66,6 +66,22 @@ async def normalize(source,target,mode,height=0):
     if not 0<target.stat().st_size<budget:raise OSError('Not enough disk space')
     return duration
 
+async def audio_worker(uid,function,*args):
+    """Keep the worker slot until cancelled recovery/download actually stops."""
+    from operations import Operation,_current
+    from scratch import remove_owned_file
+    operation=Operation(uid);marker=_current.set(operation)
+    worker=asyncio.create_task(asyncio.to_thread(function,*args))
+    try:return await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        operation.stopped.set()
+        try:
+            result=await asyncio.shield(worker)
+            if result:remove_owned_file(result[0])
+        except BaseException:pass
+        raise
+    finally:_current.reset(marker)
+
 def register(app,bridge):
     slots=asyncio.Semaphore(1)
     running={}
@@ -84,6 +100,9 @@ def register(app,bridge):
                     from download_cache import restore, retain as cache_retain
                     variant='audio-mp3-192' if mode=='audio' else f'app-video-{height}'
                     cached=await asyncio.to_thread(restore,url,variant,directory,uid)
+                    if not cached and mode=='audio':
+                        from media_recovery import recover_audio
+                        cached=await audio_worker(uid,recover_audio,url,directory,uid)
                     if cached:
                         path,metadata=cached
                         result=dict(metadata,path=path)
@@ -91,10 +110,19 @@ def register(app,bridge):
                         raw=await process([sys.executable,str(Path(__file__).resolve()),'fetch',json.dumps({'url':url,'mode':mode,'height':height,'platform':platform}),directory],600)
                         result=json.loads(raw)
                     if result.get('kind')=='search':return web.json_response(result)
-                    if result.get('error') and mode=='audio':
-                        from media_recovery import recover_audio
-                        cached=await asyncio.to_thread(recover_audio,url,directory,uid)
-                        if cached:result=dict(cached[1],path=cached[0])
+                    if result.get('error') in ('sourceUnavailable','sourceAuth','sourceRestricted','sourceRateLimit','sourceLogin') and mode=='audio' and platform=='youtube':
+                        from media_recovery import download_with_reserve
+                        def unavailable(_):raise RuntimeError('Source unavailable')
+                        from scratch import remove_owned_file
+                        reserved=None
+                        try:reserved=await audio_worker(uid,download_with_reserve,unavailable,url,{},None,uid)
+                        except Exception:pass
+                        if reserved:
+                            path,metadata=reserved
+                            target=Path(directory)/'reserved.mp3'
+                            try:shutil.copyfile(path,target)
+                            finally:remove_owned_file(path)
+                            cached=(str(target),metadata);result=dict(metadata,path=str(target))
                     if result.get('error'):return web.json_response({'reason':result['error']},status=502)
                     source=Path(result['path'])
                     if source.is_symlink() or source.resolve().parent!=Path(directory).resolve() or not source.stat().st_size>0:raise ValueError('Invalid output')
@@ -213,7 +241,8 @@ def fetch(payload,directory):
     files=[p for p in Path(directory).glob('source.*') if p.is_file() and p.suffix not in ('.part','.ytdl','.json')]
     if len(files)!=1:raise ValueError('No complete media')
     return {'path':str(files[0]),'title':str(info.get('track') or info.get('title') or 'SwiDJ')[:180],
-            'artist':str(info.get('artist') or info.get('uploader') or '')[:120]}
+            'artist':str(info.get('artist') or info.get('uploader') or '')[:120],
+            '_public_source':info.get('availability')=='public' or platform=='soundcloud'}
 
 if __name__=='__main__':
     try:

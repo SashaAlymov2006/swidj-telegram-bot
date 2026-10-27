@@ -232,13 +232,19 @@ def download_youtube_audio(query: str):
     if cached and Path(cached[0]).stat().st_size <= 49*1024*1024:
         return cached
 
+    from media_recovery import recover_audio
+    recovered=recover_audio(query,temp_dir)
+    if recovered:return recovered
+
+    from soundcloud_source import public_url as sc_url
+    is_sc=sc_url(query)
     ydl_opts = {
         "format": "bestaudio/best",
         "noplaylist": True,
         "socket_timeout": 15,
         "retries": 2,
         "quiet": True,
-        "cookiefile": os.getenv("YTDLP_COOKIE_FILE") or None,
+        "cookiefile": None if is_sc else os.getenv("YTDLP_COOKIE_FILE") or None,
         "user_agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -286,7 +292,7 @@ def download_youtube_audio(query: str):
             if os.path.getsize(os.path.join(temp_dir, f)) > 49 * 1024 * 1024:
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 raise ValueError("Файл слишком большой. Выбери более короткий трек или меньшее качество видео.")
-            cache_retain(query, 'audio-mp3-192', os.path.join(temp_dir, f), info)
+            cache_retain(query, 'audio-mp3-192', os.path.join(temp_dir, f), dict(info,_public_source=is_sc or info.get('availability')=='public'))
             return os.path.join(temp_dir, f), info
 
     shutil.rmtree(temp_dir)
@@ -644,7 +650,8 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await retire_download_menus(update,context)
                     return
             if platform == 'youtube':
-                mp3, info = await asyncio.to_thread(download_youtube_audio, url)
+                from media_recovery import download_with_reserve
+                mp3, info = await asyncio.to_thread(download_with_reserve,download_youtube_audio,url,{})
                 title, performer = extract_youtube_metadata(info)
 
 
@@ -803,7 +810,7 @@ def download_soundcloud_audio(url: str) -> dict:
             if os.path.getsize(os.path.join(temp_dir, f)) > 49 * 1024 * 1024:
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 raise ValueError("Файл слишком большой. Выбери более короткий трек или меньшее качество видео.")
-            cache_retain(url,'audio-mp3-192',os.path.join(temp_dir,f),{'title':title,'artist':artist,'duration':info.get('duration')})
+            cache_retain(url,'audio-mp3-192',os.path.join(temp_dir,f),{'title':title,'artist':artist,'duration':info.get('duration'),'_public_source':True})
             return {
                 "path": os.path.join(temp_dir, f),
                 "title": title,

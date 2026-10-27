@@ -72,7 +72,8 @@ async def run(update,context,token,bot_module):
             from audio_presentation import send_music
             from track_card import card_keyboard
             if item["platform"]=="youtube":
-                path,info=await asyncio.to_thread(bot_module.download_youtube_audio,item["url"])
+                from media_recovery import download_with_reserve
+                path,info=await asyncio.to_thread(download_with_reserve,bot_module.download_youtube_audio,item["url"],{})
                 title,artist=bot_module.extract_youtube_metadata(info);cover=info.get("thumbnail")
             else:
                 data=await asyncio.to_thread(bot_module.download_soundcloud_audio,item["url"])

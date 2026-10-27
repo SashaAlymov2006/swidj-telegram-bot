@@ -67,7 +67,7 @@ class SearchRecoveryTests(unittest.TestCase):
     def test_versions_uses_same_query_cache_only_after_source_error(self):
         from versions import find_versions
         with tempfile.TemporaryDirectory() as folder,patch.dict(os.environ,DOWNLOAD_CACHE_DIR=folder,YTDLP_COOKIE_FILE=''):
-            with patch('versions.yt_dlp.YoutubeDL') as downloader:
+            with patch('soundcloud_source.search',return_value=[]),patch('versions.yt_dlp.YoutubeDL') as downloader:
                 extract=downloader.return_value.__enter__.return_value.extract_info
                 extract.side_effect=[{'entries':[{'id':'liRLUgaUwh4','title':'Song','uploader':'Artist','duration':5}]},RuntimeError('Source down'),RuntimeError('Source down')]
                 original=find_versions('Artist Song')

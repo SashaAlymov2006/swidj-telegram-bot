@@ -18,6 +18,7 @@ SwiDJ brings music discovery, personal audio tools and public video retrieval in
 | Mini App DJ room | Two decks, waveform and estimated beat grid, independent pitch/tempo, bar loops, filter/bass/Echo Out transitions, named projects and MP3 set recording |
 | Personal library | Favourites, playlists and saving users' own uploaded audio |
 | Experience | Russian/English UI, remembered language, compact result navigation, retries and cancellation |
+| Audio recovery | Exact cached audio / Telegram reuse, independent SoundCloud reserve, then optional Jamendo; shared public media stays separate from personal uploads |
 | Operations | Owner controls, persistent state, bounded per-user media cache, Telegram file reuse and source/runtime backup utilities |
 
 Catalog links do **not** extract protected audio from subscription services. When the title and artist match, the bot can automatically download a corresponding full YouTube recording; ambiguous results retain recording choices. Yandex metadata has an additional public Songlink fallback that validates the exact track ID. Availability depends on the source and network region.
@@ -65,7 +66,7 @@ Keep `.env`, cookies, user databases and backups private. Persistent data and mo
 
 ## Verification
 
-The current source passed **290 offline tests**, including Telegram SDK flows, language isolation, playlists, cancellation, recovery, media cleanup and DJ analysis/project isolation. Mobile Chromium/WebKit checks exercise the actual audio worklets, transitions, recordings and project restore. Physical-device testing remains separate. This is functional test coverage, not a large-scale performance benchmark.
+The current source passed **306 offline tests**, including Telegram SDK flows, language isolation, playlists, cancellation, recovery, media cleanup, public-cache privacy and DJ analysis/project isolation. Mobile Chromium/WebKit checks exercise the actual audio worklets, transitions, recordings and project restore. Physical-device testing remains separate. This is functional test coverage, not a large-scale performance benchmark.
 
 ```sh
 docker build -t swidj:test .
@@ -96,3 +97,5 @@ A local-first RU/EN web interface now complements the bot: persistent player, se
 The normal Telegram command menu remains available. Mini App search, recording choices, preparation, playback, device downloads and own-file saving run in the app without automatically messaging or navigating to chat. The app has its own library/recent history and bounded media preparation workers. An explicit Send to chat action remains optional.
 
 Persistent media reuse is optional and bounded to 20 GiB by default. See [cache setup and limitations](deploy/DOWNLOAD_CACHE.md). Cached files help repeat requests; they do not remove upstream access restrictions.
+
+[Audio recovery chain and privacy](deploy/AUDIO_RESERVES.md)

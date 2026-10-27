@@ -120,7 +120,7 @@ class AudioJobs:
                 checkpoint()
                 job.state = 'downloading'
                 from media_recovery import download_with_reserve
-                worker = asyncio.create_task(asyncio.to_thread(download_with_reserve,self.downloader,job.song['url'],job.song))
+                worker = asyncio.create_task(asyncio.to_thread(download_with_reserve,self.downloader,job.song['url'],job.song,256*1024**2))
                 done, _ = await asyncio.wait([worker], timeout=self.download_timeout)
                 if not done:
                     timed_out = True
@@ -130,8 +130,8 @@ class AudioJobs:
                     # Reporting the timeout must not spawn more unbounded download threads.
                 source, metadata = await asyncio.shield(worker)
                 checkpoint()
-                if metadata.get('source')=='Jamendo':
-                    job.song.update({k:metadata[k] for k in ('title','artist','duration','source','license_url')})
+                if metadata.get('source') in ('Jamendo','SoundCloud'):
+                    job.song.update({k:metadata[k] for k in ('title','artist','duration','source','license_url') if k in metadata})
                     job.song['url']=metadata['source_url']
                 # One event loop serializes all budget checks and atomic cache promotions.
                 self.retain(job.uid, job.song['id'], source)

@@ -42,7 +42,8 @@ def recover_audio(url,directory,uid=None):
         if total!=size:return None
         target=Path(directory)/'recovered.mp3';os.replace(pending,target)
         metadata=saved['metadata']
-        retain(url,'audio-mp3-192',target,metadata,uid)
+        retain(url,'audio-mp3-192',target,dict(metadata,_public_source=saved.get('public') is True),uid)
+        if saved.get('public') and metadata.get('source_url'):cache.alias_public(metadata['source_url'],url)
         return str(target),metadata
     except Exception:
         # Request exceptions can contain the bot token: never propagate or log them.
@@ -50,20 +51,55 @@ def recover_audio(url,directory,uid=None):
     finally:pending.unlink(missing_ok=True)
 
 
-def download_with_reserve(downloader,url,hint):
-    try:return downloader(url)
+def download_with_reserve(downloader,url,hint,max_bytes=49*1024**2,uid=None):
+    import tempfile,shutil
+    from scratch import scratch_root
+    from download_cache import restore,source_key
+    directory=None
+    def room():
+        nonlocal directory
+        if directory is None:directory=tempfile.mkdtemp(dir=scratch_root(),prefix='yt_audio_reserve_')
+        return directory
+    def checked(result):
+        if max_bytes and Path(result[0]).stat().st_size>max_bytes:raise ValueError('File too large')
+        return result
+    try:
+        checkpoint()
+        cached=restore(url,'audio-mp3-192',room(),uid)
+        if cached:return checked(cached)
+        recovered=recover_audio(url,room(),uid)
+        if recovered:return checked(recovered)
+        shutil.rmtree(directory,ignore_errors=True);directory=None
+    except BaseException:
+        if directory:shutil.rmtree(directory,ignore_errors=True)
+        raise
+    try:
+        result=downloader(url)
+        if result[1].get('source')=='Jamendo':retain(url,'audio-mp3-192',result[0],dict(result[1],_public_source=True),uid)
+        return result
     except Exception as original:
         # Never substitute a shorter file to get around product limits or a full disk.
-        if isinstance(original,(OSError,ValueError)) or not os.getenv('JAMENDO_CLIENT_ID'):raise
-        from jamendo_source import matching_track,download
-        item=matching_track(hint)
-        if not item:raise
-        import tempfile,shutil
-        from scratch import scratch_root
-        directory=tempfile.mkdtemp(dir=scratch_root(),prefix='yt_audio_reserve_')
-        try:return download(item['url'],directory)
-        except BaseException:
-            shutil.rmtree(directory,ignore_errors=True)
-            import sys
-            if not isinstance(sys.exception(),Exception):raise
-            raise original from None
+        if isinstance(original,(OSError,ValueError)) or not str(source_key(url)).startswith('youtube:'):raise
+        from download_cache import configured,alias_public
+        try:
+            cache=configured();known=cache.hint(url) if cache else {}
+        except Exception:known={}
+        hint=dict(known,**{k:v for k,v in hint.items() if v not in (None,'')})
+        from soundcloud_source import matching_track as sc_match,download as sc_download
+        from jamendo_source import matching_track as jam_match,download as jam_download
+        for match,download in ((sc_match,lambda item,folder:sc_download(item,folder,max_bytes)),
+                               (jam_match,lambda item,folder:jam_download(item['url'],folder,max_bytes or 256*1024**2))):
+            checkpoint()
+            try:
+                item=match(hint)
+                if not item:continue
+                result=checked(download(item,room()))
+                retain(item['url'],'audio-mp3-192',result[0],dict(result[1],_public_source=True),uid)
+                alias_public(url,item['url'])
+                return result
+            except Exception:
+                if directory:shutil.rmtree(directory,ignore_errors=True);directory=None
+            except BaseException:
+                if directory:shutil.rmtree(directory,ignore_errors=True)
+                raise
+        raise original from None

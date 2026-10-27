@@ -61,16 +61,12 @@ def search(query,limit=5):
 
 
 def matching_track(hint):
-    import unicodedata
-    def norm(value):return ' '.join(re.findall(r'[^\W_]+',unicodedata.normalize('NFKC',str(value)).casefold()))
-    title=str(hint.get('title') or '');artist=re.sub(r'\s*-\s*Topic$','',str(hint.get('artist') or ''),flags=re.I)
-    title=re.sub(r'\([^)]*(?:official|video|audio|lyrics)[^)]*\)|\[[^]]*(?:official|video|audio|lyrics)[^]]*\]','',title,flags=re.I).strip()
-    prefix=re.split(r'\s+[-–—]\s+',title,maxsplit=1)
-    if len(prefix)==2 and norm(prefix[0])==norm(artist):title=prefix[1]
-    duration=hint.get('duration')
-    if not title or not artist or type(duration) not in (int,float) or duration<=0:return None
-    matches=[item for item in search(artist+' '+title) if norm(item['title'])==norm(title) and norm(item['artist'])==norm(artist) and abs(item['duration']-duration)<=2]
-    return matches[0] if len(matches)==1 else None
+    from recording_match import identity,matches
+    title,artist=identity(hint)
+    if not title or not artist or type(hint.get('duration')) not in (int,float):return None
+    found=[item for item in search(artist+' '+title) if matches(hint,item)]
+    return found[0] if len(found)==1 else None
+
 
 
 def download(url,directory,max_bytes=49*1024**2):

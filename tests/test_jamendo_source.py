@@ -14,6 +14,9 @@ def fixture():
 
 
 class JamendoReserveTests(unittest.TestCase):
+    def setUp(self):
+        blocked=patch('soundcloud_source.matching_track',return_value=None);blocked.start();self.addCleanup(blocked.stop)
+
     def test_public_credit_contains_only_validated_catalog_links(self):
         from miniapp_server import public_song
         song=dict(track(fixture()),id=123,private_token='never-public')
@@ -39,7 +42,8 @@ class JamendoReserveTests(unittest.TestCase):
     def test_exact_reserve_is_used_after_primary_source_error(self):
         song=track(fixture())
         def unavailable(url):raise RuntimeError('Primary source unavailable')
-        with patch.dict(os.environ,JAMENDO_CLIENT_ID='fixture'),patch('jamendo_source.matching_track',return_value=song),patch('jamendo_source.download',return_value=('fixture.mp3',song)) as reserve:
+        with tempfile.TemporaryDirectory() as root,patch.dict(os.environ,JAMENDO_CLIENT_ID='fixture'),patch('jamendo_source.matching_track',return_value=song),patch('jamendo_source.download') as reserve:
+            audio=Path(root)/'fixture.mp3';audio.write_bytes(b'fixture');reserve.return_value=(str(audio),song)
             result=download_with_reserve(unavailable,'https://www.youtube.com/watch?v=liRLUgaUwh4',song)
             self.assertEqual(result[1]['source'],'Jamendo')
             self.assertEqual(reserve.call_args.args[0],song['url'])

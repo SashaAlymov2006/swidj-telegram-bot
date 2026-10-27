@@ -93,7 +93,7 @@ def prepare_music(path, title, artist, cover=None):
     return title, artist, filename, thumbnail, duration
 
 
-async def send_cached_music(bot, chat_id, source_url, title=None, artist=None, *, reply_markup=None):
+async def send_cached_music(bot, chat_id, source_url, title=None, artist=None, *, reply_markup=None, allow_public=True):
     """Reuse only this bot's file sent to the same private chat; no provider request."""
     from download_cache import configured
     from telegram.error import BadRequest
@@ -101,14 +101,21 @@ async def send_cached_music(bot, chat_id, source_url, title=None, artist=None, *
         bot_id=bot.id
         if type(bot_id) is not int or type(chat_id) is not int or chat_id<=0:return None
         cache=configured()
-        file_id=await asyncio.to_thread(cache.telegram_get,bot_id,chat_id,source_url) if cache else None
+        file_id=await asyncio.to_thread(cache.telegram_get,bot_id,chat_id,source_url,allow_public=allow_public) if cache else None
+        cached_info=await asyncio.to_thread(cache.telegram_info,bot_id,chat_id,source_url) if file_id else None
     except Exception:return None
     if not file_id:return None
+    credit=cached_info['metadata'] if cached_info and cached_info['file_id']==file_id else {}
+    title=title or credit.get('title');artist=artist or credit.get('artist')
     kwargs={'chat_id':chat_id,'audio':file_id}
     if reply_markup is not None:kwargs['reply_markup']=reply_markup
     if title:
         label,performer,_=music_labels(title,artist)
         kwargs.update(title=label,performer=performer,caption=f'🎵 <b>{escape(label)}</b>\n{escape(performer)}\n\n♪ SwiDJ',parse_mode='HTML')
+    from jamendo_source import identifier,license_url as checked_license
+    if identifier(credit.get('source_url')) and checked_license(credit.get('license_url')):
+        kwargs['caption']=kwargs.get('caption','♪ SwiDJ')+'\n<a href="'+escape(credit['source_url'],quote=True)+'">Jamendo</a> · <a href="'+escape(checked_license(credit['license_url']),quote=True)+'">Creative Commons</a>'
+        kwargs['parse_mode']='HTML'
     checkpoint()
     try:return await bot.send_audio(**kwargs)
     except BadRequest as error:
@@ -118,8 +125,21 @@ async def send_cached_music(bot, chat_id, source_url, title=None, artist=None, *
 
 
 async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *, reply_markup=None, source_url=None, license_url=None):
+    known_public=False;public_copy=False;credit_url=source_url;credit_license=license_url
     if source_url:
-        reused=await send_cached_music(bot,chat_id,source_url,title,artist,reply_markup=reply_markup)
+        try:
+            from download_cache import configured
+            cache=configured()
+            if cache:
+                known_public=await asyncio.to_thread(cache.public_file,source_url)
+                if known_public:public_copy=await asyncio.to_thread(cache.public_file,source_url,path)
+                if public_copy:
+                    provenance=await asyncio.to_thread(cache.public_metadata,source_url)
+                    if provenance.get('source') in ('SoundCloud','Jamendo'):
+                        credit_url=provenance.get('source_url') or source_url;credit_license=provenance.get('license_url') or license_url
+        except Exception:pass
+    if source_url and (not known_public or public_copy):
+        reused=await send_cached_music(bot,chat_id,source_url,title,artist,reply_markup=reply_markup,allow_public=public_copy)
         if reused:return reused
     title, artist, filename, thumbnail, duration = await asyncio.to_thread(
         prepare_music, path, title, artist, cover)
@@ -129,8 +149,8 @@ async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *,
         "parse_mode": "HTML",
     }
     from jamendo_source import identifier,license_url as checked_license
-    if identifier(source_url) and checked_license(license_url):
-        kwargs['caption']+='\n<a href="'+escape(source_url,quote=True)+'">Jamendo</a> · <a href="'+escape(checked_license(license_url),quote=True)+'">Creative Commons</a>'
+    if identifier(credit_url) and checked_license(credit_license):
+        kwargs['caption']+='\n<a href="'+escape(credit_url,quote=True)+'">Jamendo</a> · <a href="'+escape(checked_license(credit_license),quote=True)+'">Creative Commons</a>'
     if reply_markup is not None:
         kwargs["reply_markup"] = reply_markup
     if thumbnail:
@@ -140,11 +160,12 @@ async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *,
     checkpoint()
     with open(path, "rb") as audio:
         message=await bot.send_audio(audio=InputFile(audio, filename=filename), **kwargs)
-    if source_url:
+    if source_url and (not known_public or public_copy):
         try:
             from download_cache import configured
             cache=configured()
             if cache and type(bot.id) is int and getattr(message,'audio',None) and isinstance(message.audio.file_id,str):
-                await asyncio.to_thread(cache.telegram_set,bot.id,chat_id,source_url,message.audio.file_id,metadata={'title':title,'artist':artist,'duration':duration})
+                source='Jamendo' if identifier(credit_url) else 'SoundCloud' if str(credit_url).startswith('https://soundcloud.com/') else None
+                await asyncio.to_thread(cache.telegram_set,bot.id,chat_id,source_url,message.audio.file_id,metadata={'title':title,'artist':artist,'duration':duration,'source':source,'source_url':credit_url,'license_url':credit_license},public=public_copy)
         except Exception:pass
     return message

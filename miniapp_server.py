@@ -226,7 +226,8 @@ class BotLibrary:
         if song.get('kind') == 'upload':
             raise web.HTTPGone()
         from jamendo_source import identifier as jamendo_id
-        if not re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', song.get('url', '')) and not jamendo_id(song.get('url')):
+        from soundcloud_source import public_url as sc_url
+        if not re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', song.get('url', '')) and not jamendo_id(song.get('url')) and not sc_url(song.get('url')):
             self.allowed(uid, 'search')
             from versions import find_versions
             async with self.search_slots:
