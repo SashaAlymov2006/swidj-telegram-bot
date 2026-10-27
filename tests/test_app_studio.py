@@ -125,7 +125,7 @@ class AppStudioTests(unittest.IsolatedAsyncioTestCase):
             response=await self.client.get('/api/lyrics?track=1',headers=self.headers)
             self.assertEqual(response.status,200)
             self.assertEqual((await response.json())['matches'][0]['text'],'Original fixture words')
-            lookup.assert_awaited_once_with('Fixture song','Fixture artist')
+            lookup.assert_awaited_once_with('Fixture song','Fixture artist',None)
             response=await self.client.get('/api/lyrics?track=1',headers={'X-Telegram-Init-Data':signed(78)})
             self.assertEqual(response.status,404)
         self.bridge.application.bot.send_message.assert_not_called()

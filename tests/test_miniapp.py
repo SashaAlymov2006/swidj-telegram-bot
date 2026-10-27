@@ -190,7 +190,7 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual([g['source'] for g in payload['groups']],['SoundCloud'])
             identifier=payload['tracks'][0]['id']
             self.assertEqual((await self.bridge.find(77,identifier))['_search_query'],'original song')
-            self.assertEqual(searcher.call_count,2)
+            self.assertEqual(searcher.call_count,4)
             response=await self.client.get('/api/search?q=original+song&source=sc',headers=self.headers)
             self.assertEqual(response.status,200)
             self.assertEqual((await response.json())['tracks'][0]['title'],'Original song')
@@ -232,15 +232,15 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(job.song['url'],url)
         self.bridge.application.bot.send_message.assert_not_awaited()
 
-    async def test_main_search_is_compact_and_keeps_jamendo_as_reserve(self):
+    async def test_main_search_has_five_choices_from_all_four_catalogs(self):
         def search(song,source):
-            return [dict(title='Song',artist='Artist',url=f'https://example.test/{source}/{index}',source='YouTube' if source=='yt' else 'SoundCloud') for index in range(3)]
+            return [dict(title='Song',artist='Artist',url=f'https://example.test/{source}/{index}',source={'yt':'YouTube','sc':'SoundCloud','aud':'Audius','jam':'Jamendo'}[source]) for index in range(3)]
         with patch('versions.source_search',side_effect=search) as find:
             response=await self.client.get('/api/search?q=Song+Artist',headers=self.headers)
             data=await response.json()
-        self.assertEqual(len(data['tracks']),3)
-        self.assertEqual({g['source'] for g in data['groups']},{'YouTube','SoundCloud'})
-        self.assertEqual({call.args[1] for call in find.call_args_list},{'yt','sc'})
+        self.assertEqual(len(data['tracks']),5)
+        self.assertEqual({g['source'] for g in data['groups']},{'YouTube','SoundCloud','Audius','Jamendo'})
+        self.assertEqual({call.args[1] for call in find.call_args_list},{'yt','sc','aud','jam'})
 
     async def test_main_search_uses_jamendo_if_both_primary_sources_have_no_choices(self):
         def search(song,source):
@@ -249,7 +249,7 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
             response=await self.client.get('/api/search?q=Song+Artist',headers=self.headers)
             data=await response.json()
         self.assertEqual([g['source'] for g in data['groups']],['Jamendo'])
-        self.assertEqual(find.call_count,3)
+        self.assertEqual(find.call_count,4)
 
     async def test_failed_soundcloud_source_is_excluded_from_new_primary_choices(self):
         failed='https://soundcloud.com/singer/shivers'

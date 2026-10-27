@@ -68,14 +68,14 @@ class TrackCardTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(context.user_data["track_cards"]),40)
         self.assertEqual(selected_song(context,callback),(None,None))
 
-    def test_delivered_audio_has_only_save_playlist_and_studio(self):
+    def test_delivered_audio_keeps_save_playlist_studio_and_inline_lyrics(self):
         context=NS(user_data={"search_pages":{"abcdef1234":[{"id":1},{"id":2}]}})
         song={"id":1,"_search_page":["abcdef1234",0]}
         keyboard=card_keyboard(context,song,delivered=True)
         payload=str(keyboard.to_dict())
         self.assertNotIn("track:listen:",payload)
         self.assertNotIn("srch:",payload)
-        self.assertEqual(len(keyboard.inline_keyboard),3)
+        self.assertEqual(len(keyboard.inline_keyboard),4)
         self.assertIn("track:save:",payload)
         self.assertIn("track:studio:",payload)
 
@@ -129,11 +129,11 @@ class TrackCardTests(unittest.IsolatedAsyncioTestCase):
         context.bot.send_message.assert_not_awaited()
 
 
-    async def test_lyrics_button_uses_song_page_or_encoded_search(self):
+    async def test_lyrics_button_reads_inside_chat_even_after_download(self):
         context=NS(user_data={})
         song={"id":1,"title":"Song & more","artist":"Artist","url":"https://genius.com/artist-song-lyrics"}
         rows=card_keyboard(context,song).inline_keyboard
-        self.assertEqual(rows[-1][0].url,song["url"])
+        self.assertTrue(rows[-1][0].callback_data.startswith('track:lyrics:'))
         song["url"]="https://example.com/track"
-        self.assertEqual(card_keyboard(context,song).inline_keyboard[-1][0].url,"https://genius.com/search?q=Song%20%26%20more%20Artist")
+        self.assertTrue(card_keyboard(context,song).inline_keyboard[-1][0].callback_data.startswith('track:lyrics:'))
         self.assertTrue(all(not b.url for row in card_keyboard(context,song,delivered=True).inline_keyboard for b in row))

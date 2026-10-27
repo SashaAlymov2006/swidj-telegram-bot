@@ -1998,18 +1998,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("Песня не найдена в результатах.")
             return
 
-        await query.message.reply_text("⏳ Загружаю текст песни...")
-        lyrics = await get_lyrics(song['url'])
-        if lyrics:
-            if len(lyrics) > 4000:
-                # Разбиваем длинные тексты на части
-                for i in range(0, len(lyrics), 3900):
-                    await query.message.reply_text(lyrics[i:i + 3900])
-            else:
-                await query.message.reply_text(lyrics)
-        else:
-            await query.message.reply_text("Не удалось получить текст песни.")
-        return
+        from lyrics_ui import show
+        return await show(update,context,song)
 
     # Скачивание аудио
     if data.startswith("download_") or data == "recognized_download":
@@ -2219,6 +2209,9 @@ async def track_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not song:
         return await update.effective_message.reply_text("Открой трек ещё раз — эта карточка уже недоступна.")
     uid = update.effective_user.id
+    if action == 'lyrics':
+        from lyrics_ui import show
+        return await show(update,context,song)
     folders = await collections(context, uid, state_store)
     current = next((item for item in all_saved(uid, user_favorites, folders, context.user_data.get('miniapp_library',[])) if item["id"] == song["id"]), None)
     if song.get("kind") == "upload" and current:
@@ -2459,6 +2452,8 @@ def build_application(*, request=None, updates_request=None):
     app.add_handler(CommandHandler("collection", serialize_user(collection_command)))
     app.add_handler(CallbackQueryHandler(serialize_user(search_result_callback), pattern=r"^srch:"))
     app.add_handler(CallbackQueryHandler(serialize_user(track_callback), pattern=r"^track:"))
+    from lyrics_ui import callback as lyrics_page_callback
+    app.add_handler(CallbackQueryHandler(serialize_user(lyrics_page_callback), pattern=r"^lyr:"))
     app.add_handler(CallbackQueryHandler(serialize_user(library_callback), pattern=r"^lib:"))
     app.add_handler(CallbackQueryHandler(serialize_user(upload_callback), pattern=r"^upload:(save|studio):-?[0-9]{1,19}$"))
     app.add_handler(CommandHandler("clearfavorites", serialize_user(clearfavorites_command)))

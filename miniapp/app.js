@@ -168,31 +168,23 @@ function showChartChoices(item,tracks,key,source='YouTube',saved=false,available
  const country=key.split(':')[0];
  const links=[['yt','YouTube'],['sc','SoundCloud'],['aud','Audius'],['jam','Jamendo']].filter(([provider,name])=>available.includes(provider)&&(saved||name!==source)).map(([provider,name])=>`<button type="button" class="btn secondary" data-chart-source="${e(item.id)}" data-chart-country="${e(country)}" data-chart-provider="${provider}">${e(t('versionsFrom'))} ${name}</button>`).join('');
  $('dialog-form').onsubmit=null;
- dialog(t('chooseVersion')+(saved?'':' ? '+source),`<p class="dialog-copy">${e(item.artist+' / '+item.title)}</p>${tracks.length?tracks.map(track=>`<button type="button" class="dialog-option" data-chart-version="${e(track.id)}">${icon('play')}<span><strong>${saved?e(t('keepVersion')):e(track.title)}</strong><small class="version-artist">${e(track.artist)} / ${stamp(track.duration)}${track.playable?' ? '+e(t('alreadyLoaded')):''}</small></span></button>`).join(''):`<p class="dialog-copy">${e(t('chartRecordingUnavailable'))}</p>`}${links}`);
+ dialog(t('chooseVersion')+(saved?'':' / '+(source==='All sources'?t('allSources'):source)),`<p class="dialog-copy">${e(item.artist+' / '+item.title)}</p>${tracks.length?tracks.map(track=>`<button type="button" class="dialog-option" data-chart-version="${e(track.id)}">${icon('play')}<span><strong>${saved&&track.playable?e(t('keepVersion')):e(track.title)}</strong><small class="version-artist">${e(track.artist)} / ${e(track.source||'YouTube')} / ${stamp(track.duration)}${track.playable?' ? '+e(t('alreadyLoaded')):''}</small></span></button>`).join(''):`<p class="dialog-copy">${e(t('chartRecordingUnavailable'))}</p>`}${links}`);
 }
 async function playChart(index){
  if(chartBusy)return;const item=chartData?.tracks[Number(index)];if(!item)return;
  const country=chartCountry,key=chartKey(item);chartBusy=key;render();
  try{
   await engine.unlock();
-  let candidates=null,alternatives=[],available=[];
+  let candidates=null,alternatives=[],available=[],resolvedSource=null;
   if(!candidates){
    const resolved=await(await api('charts/resolve',{country,track:item.id})).json();
-   candidates=resolved.tracks||[];alternatives=resolved.alternatives||[];available=resolved.available_sources||[];
+   candidates=resolved.tracks||[];alternatives=resolved.alternatives||[];available=resolved.available_sources||[];resolvedSource=resolved.source;
    const saved=candidates.find(recording=>recording.playable);
-   if(saved){chartResolved.set(key,saved);showChartChoices(item,[saved],key,'',true,available);return;}
+   if(saved){chartResolved.set(key,saved);showChartChoices(item,[saved,...candidates.filter(row=>row.id!==saved.id)].slice(0,5),key,'',true,available);return;}
    if(!candidates.length){showChartChoices(item,alternatives,key,'YouTube',false,available);return;}
   }
-  let lastError;
-  for(const recording of candidates.slice(0,3)){
-   extraTracks.set(recording.id,recording);chartOriginKeys.set(recording.id,key);
-   try{if(await playTrack(recording))chartResolved.set(key,recording);return;}
-   catch(error){lastError=error;chartResolved.delete(key);
-    if(!['prepareFailed','sourceUnavailable','sourceLogin','sourceRateLimit','invalidAudio'].includes(error.message)&&error.name!=='NotSupportedError')throw error;
-   }
-  }
-  if(alternatives.length){showChartChoices(item,alternatives,key,'YouTube',false,available);return;}
-  if(lastError)throw lastError;
+  showChartChoices(item,candidates.length?candidates.slice(0,5):alternatives.slice(0,5),key,resolvedSource||'YouTube',false,available);
+
  }catch(error){report(error);}finally{chartBusy=null;if(route==='charts')render();}
 }
 
@@ -729,6 +721,7 @@ const easyEffectSettings={
 function easyEffectControls(){return `<section class="easy-effect-controls"><h3>${e(t('effectStrength'))}</h3>${studioEffects.filter(f=>easyEffectSettings[f]).map(f=>`<div class="easy-effect-row"><strong>${e(t(f))}</strong><div class="touch-stepper">${['gentleFx','balancedFx','strongFx'].map((key,i)=>`<button type="button" data-easy-effect="${f}" data-strength="${i}" aria-pressed="${Object.entries(easyEffectSettings[f][i]).every(([k,v])=>engine.params[k]===v)}">${e(t(key))}</button>`).join('')}</div></div>`).join('')}</section>`;}
 function dspControls(){const seen=new Set();return `<details class="dsp-panel"><summary>${e(t('fineTune'))}</summary><button type="button" class="text-btn" id="reset-effect-controls">${e(t('resetEffectControls'))}</button>${studioEffects.map(f=>{const keys=(paramGroups[f]||[]).filter(k=>!seen.has(k));keys.forEach(k=>seen.add(k));return keys.length?`<section><h3>${e(t(f))}</h3>${keys.map(k=>`<label for="param-${k}">${e(t(k))}<output id="value-${k}">${engine.params[k]}</output></label><input id="param-${k}" data-param="${k}" type="range" min="${paramRanges[k][0]}" max="${paramRanges[k][1]}" step="${paramRanges[k][2]}" value="${engine.params[k]}">`).join('')}</section>`:'';}).join('')}</details>`;}
 let lyricMatches=[];
+Object.assign(copy.en,{anotherLyrics:'Another version',lyricsSource:'Open source'});Object.assign(copy.ru,{anotherLyrics:'\u0414\u0440\u0443\u0433\u043e\u0439 \u0442\u0435\u043a\u0441\u0442',lyricsSource:'\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a'});
 async function showLyrics(track){
   if(demo)return toast('needsTelegram');
   dialog(t('lyrics'),`<p>${e(t('lyricsLoading'))}</p>`);
@@ -738,7 +731,7 @@ async function showLyrics(track){
     dialog(t('lyricsChoose'),lyricMatches.map((m,i)=>`<button type="button" class="dialog-option" data-lyric="${i}"><span>${e(m.title)}<small>${e(m.artist)}</small></span></button>`).join(''));
   }catch(error){$('dialog').close();throw error;}
 }
-function readLyrics(index){const item=lyricMatches[index];if(item)dialog(item.title,`<p class="lyric-artist">${e(item.artist)} / LRCLIB</p><pre class="lyrics-text">${e(item.text)}</pre>`);}
+function readLyrics(index){const item=lyricMatches[index];if(item)dialog(item.title,`<p class="lyric-artist">${e(item.artist)} / ${e(item.source||'')}</p><pre class="lyrics-text">${e(item.text)}</pre>${lyricMatches.length>1?`<button type="button" class="btn secondary" data-lyric="${(index+1)%lyricMatches.length}">${e(t('anotherLyrics'))}</button>`:''}${/^https:\/\/(?:lrclib\.net|api\.lyrics\.ovh)\//.test(item.source_url||'')?`<a class="btn secondary" href="${e(item.source_url)}" target="_blank" rel="noopener noreferrer">${e(t('lyricsSource'))}</a>`:''}`);}
 let currentExport=null;
 function showExportDownload(file){
   currentExport=file;

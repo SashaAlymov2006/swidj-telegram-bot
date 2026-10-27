@@ -623,6 +623,7 @@ assert 78 not in h
         with patch.object(self.bot, 'search_songs', new_callable=AsyncMock, return_value=songs), \
              patch.object(self.bot, 'search_deezer', new_callable=AsyncMock, return_value=[]), \
              patch.object(self.bot, 'get_lyrics', new_callable=AsyncMock, return_value='lyrics fixture'), \
+             patch('app_lyrics.shared.lookup',new_callable=AsyncMock,return_value={'matches':[{'title':'Needle','artist':'Artist','text':'lyrics fixture','source':'LRCLIB','source_url':'https://lrclib.net/api/get/1'}]}), \
              patch.object(self.bot, 'download_youtube_audio', side_effect=download):
             await self.app.process_update(self.message('Needle'))
             for choice in ['next_1', 'prev_0', 'lyrics_1', 'fav_1', 'fav_1', 'download_1', 'enhance_1']:
@@ -632,7 +633,7 @@ assert 78 not in h
             await self.app.process_update(self.message('/download 1'))
             await self.choose_latest_version()
         self.assertEqual(len(self.bot.user_favorites[77]), 1)
-        self.assertTrue(any('lyrics fixture' == text for text in self.texts()))
+        self.assertTrue(any('lyrics fixture' in text for text in self.texts()))
         self.assertEqual(sum(op == 'sendAudio' for op, _ in self.request.calls), 3)
         self.assertTrue(Path(self.app.user_data[77]['last_audio_path']).exists())
 

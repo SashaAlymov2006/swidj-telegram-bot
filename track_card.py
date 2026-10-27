@@ -32,12 +32,8 @@ def card_keyboard(context, song, saved=False, extra_rows=None, *, delivered=Fals
             url=urlunsplit((parsed.scheme,parsed.netloc,parsed.path,urlencode(query),'studio'))
             label='Studio in app' if context.user_data.get('language')=='en' else 'Студия в приложении'
             rows.append([Button(label,web_app=WebAppInfo(url))])
-    if not delivered and song.get("kind") != "upload":
-        source = str(song.get("url") or "")
-        parsed = urlparse(source)
-        lyrics_url = source if parsed.scheme == "https" and parsed.hostname in ("genius.com", "www.genius.com") and parsed.path.endswith("-lyrics") else (
-            "https://genius.com/search?q=" + quote(" ".join(str(song.get(key) or "") for key in ("title", "artist")).strip(), safe=""))
-        rows.append([Button("📄 Текст", url=lyrics_url)])
+    if song.get("kind") != "upload":
+        rows.append([button("📄 Текст", "lyrics")])
     return Markup(rows + list(extra_rows or []))
 
 def search_navigation(context, song):
@@ -129,6 +125,6 @@ async def show_card(update, context, song, *, saved=False, extra_rows=None, noti
     return result
 
 def selected_song(context, data):
-    match = re.fullmatch(r"track:(listen|save|playlist|studio):([0-9a-f]{10})", data or "")
+    match = re.fullmatch(r"track:(listen|save|playlist|studio|lyrics):([0-9a-f]{10})", data or "")
     song = context.user_data.get("track_cards", {}).get(match[2]) if match else None
     return (match[1], dict(song)) if song else (None, None)

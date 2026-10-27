@@ -87,8 +87,8 @@ def remember_request(context, song, mode):
 def source_search(song, source):
     """A new, user-visible search uses the catalog identity, not a failed video."""
     origin = song.get('_catalog_song') or song
-    query = song.get('_search_query') or ' '.join(str(origin.get(k) or '') for k in ('title', 'artist')).strip()
-    limit = max(1, min(3, int(song.get('_availability_limit', 3))))
+    query = (None if song.get('_catalog_song') else song.get('_search_query')) or ' '.join(str(origin.get(k) or '') for k in ('title', 'artist')).strip()
+    limit = max(1, min(5, int(song.get('_availability_limit', 5))))
     key = (song.get('_availability_uid'), query, source)
     cached = _source_checks.get(key)
     if cached and cached[0] > time.monotonic() and (len(cached)<3 or cached[2]>=limit):
@@ -130,17 +130,18 @@ _metadata_lock = threading.Lock()
 async def source_inventory(song, uid, known=None):
     """Only advertise providers with checked recordings for this exact query/owner."""
     origin = song.get('_catalog_song') or song
-    query = song.get('_search_query') or ' '.join(str(origin.get(k) or '') for k in ('title', 'artist')).strip()
+    query = (None if song.get('_catalog_song') else song.get('_search_query')) or ' '.join(str(origin.get(k) or '') for k in ('title', 'artist')).strip()
     async def check(source):
+        wanted=max(1,min(5,int(song.get('_inventory_limit',1))))
         key = (uid, query, source)
         cached = _source_checks.get(key)
         if known is not None and source in known:
             rows = known[source]
-        elif cached and cached[0] > time.monotonic():
+        elif cached and cached[0] > time.monotonic() and (len(cached)<3 or cached[2]>=wanted):
             return source, deepcopy(cached[1])
         else:
             try:
-                rows = await asyncio.to_thread(source_search, dict(song, _availability_uid=uid, _availability_limit=1), source)
+                rows = await asyncio.to_thread(source_search, dict(song, _availability_uid=uid, _availability_limit=wanted), source)
             except Exception:
                 checkpoint()
                 rows = []
@@ -154,7 +155,7 @@ async def source_inventory(song, uid, known=None):
                 (source == 'jam' and identifier(row.get('url'))) or
                 (source == 'aud' and canonical(row.get('url'))) or
                 (source == 'yt' and re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', row.get('url', '')))]
-        checked_limit = song.get('_availability_limit',3) if known is not None and source in known else 1
+        checked_limit = song.get('_availability_limit',5) if known is not None and source in known else wanted
         _source_checks[key] = (time.monotonic() + (60 if rows else 20), deepcopy(rows),checked_limit)
         while len(_source_checks) > 1000:
             _source_checks.pop(next(iter(_source_checks)))
@@ -162,6 +163,24 @@ async def source_inventory(song, uid, known=None):
     from audius_source import enabled
     sources=('yt','sc','jam')+(('aud',) if enabled() else ())
     return dict(await asyncio.gather(*(check(source) for source in sources)))
+
+
+async def catalog_choices(song,uid,limit=5):
+    inventory=await source_inventory(dict(song,_inventory_limit=2),uid)
+    result=[];seen=set()
+    for index in range(5):
+        for source in ('yt','sc','aud','jam'):
+            rows=inventory.get(source,[])
+            if index<len(rows) and rows[index]['url'] not in seen:
+                item=dict(rows[index]);item.setdefault('source',{'yt':'YouTube','sc':'SoundCloud','aud':'Audius','jam':'Jamendo'}[source])
+                seen.add(item['url']);result.append(item)
+    if not result:
+        from recording_availability import verified_choices
+        from download_cache import search_cache
+        query=song.get('_search_query') or ' '.join(str((song.get('_catalog_song') or song).get(k) or '') for k in ('title','artist')).strip()
+        rows=search_cache(query) or await asyncio.to_thread(find_versions,query,limit=10)
+        result=await asyncio.to_thread(verified_choices,rows,query,uid,limit=limit)
+    return result[:limit],inventory
 
 
 def queue_recovery(request):
@@ -202,8 +221,9 @@ async def show_versions(update, context, token, request, *, exclude=None):
         seconds = round(duration) if isinstance(duration, (int, float)) else 0
         stamp = f" · {seconds // 60}:{seconds % 60:02d}" if seconds else ""
         label = item['title'][:45]
-        if request.get('source') in ('sc', 'jam'):
+        if request.get('source') in ('sc', 'jam','aud') or not request.get('source'):
             label = item['title'][:32] + ' · ' + str(item.get('artist') or '')[:24]
+        if not request.get('source'):label+=' / '+item.get('source','YouTube')
         rows.append([Button(f"{index + 1}. {label}{stamp}",
                             callback_data=f"ver:pick:{token}:{index}")])
     if not rows:
@@ -215,7 +235,7 @@ async def show_versions(update, context, token, request, *, exclude=None):
     rows += source_rows(token, request)
     rows.append([Button("← Поиск", callback_data="ui:search")])
     sources = {item.get('source', 'YouTube') for item in request['candidates']}
-    source = next(iter(sources)) if len(sources) == 1 else 'YouTube'
+    source = ' / '.join(sorted(sources))
     from i18n_ui import tr
     message = await version_screen(update, context, (f"Очередь · трек {request['queue_ref'][1]+1}\n" if request.get("queue_ref") else "") + ("🎧 Выбери другую версию" if exclude is not None else "🎧 Выбери версию") + '\n'+tr('Источник записи: YouTube').replace('YouTube',source),
                                                     Markup(rows))
@@ -238,12 +258,10 @@ async def request_versions(update, context, song, *, mode="studio", queue_ref=No
     try:
         from jamendo_source import identifier
         if source:
-            candidates = await asyncio.to_thread(source_search, dict(song,_availability_uid=update.effective_user.id), source)
+            candidates = await asyncio.to_thread(source_search, dict(song,_availability_uid=update.effective_user.id,_availability_limit=5), source)
+            inventory=await source_inventory(song,update.effective_user.id,{source:candidates})
         else:
-            candidates = [dict(song)] if identifier(song.get('url')) else await asyncio.to_thread(find_versions, " ".join(
-                str(song.get(key) or "") for key in ("title", "artist")).strip(),limit=10)
-            from recording_availability import verified_choices
-            candidates=await asyncio.to_thread(verified_choices,candidates,' '.join(str(song.get(k) or '') for k in ('title','artist')),update.effective_user.id)
+            candidates,inventory=await catalog_choices(song,update.effective_user.id)
         checkpoint()
     except Exception:
         inventory = await source_inventory(song, update.effective_user.id, {source or 'yt': []})
@@ -253,8 +271,6 @@ async def request_versions(update, context, song, *, mode="studio", queue_ref=No
                 [Button("🔄 Повторить поиск", callback_data=f"ver:refresh:{token}", style="primary")],
                 [Button("← Поиск", callback_data="ui:search")]]))
     request["candidates"] = candidates
-    known = {source or 'yt': candidates}
-    inventory = await source_inventory(song, update.effective_user.id, known)
     request['available_sources'] = [key for key, rows in inventory.items() if rows]
     if not candidates:
         return await version_screen(update, context,

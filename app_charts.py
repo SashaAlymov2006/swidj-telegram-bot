@@ -160,7 +160,7 @@ class Charts:
                     extra=await asyncio.to_thread(find_versions,(artist+' '+title+' official audio')[:240],limit=10)
                     seen={row['url'] for row in result};result+= [row for row in extra if row['url'] not in seen]
             from recording_availability import verified_choices
-            result=await asyncio.to_thread(verified_choices,result,item['query'])
+            result=await asyncio.to_thread(verified_choices,result,item['query'],limit=5)
             for song in result:
                 song['id']=10**15+int.from_bytes(hashlib.sha256(song['url'].encode()).digest()[:6],'big')
                 song['_catalog_song']={k:item.get(k,'') for k in ('title','artist')}
@@ -200,6 +200,19 @@ def register(app,bridge):
         if source not in (None,'yt','sc','aud','jam'):raise web.HTTPBadRequest()
         if country not in COUNTRIES or not identifier.isdigit() or len(identifier)>20:raise web.HTTPBadRequest()
         item,recordings=await service.resolve(country,identifier,bridge,source)
+        from versions import source_inventory
+        inventory=await source_inventory(dict(item,_inventory_limit=2),uid,{source or 'yt':recordings})
+        if source is None:
+            merged=[];seen=set()
+            for index in range(5):
+                for provider in ('yt','sc','aud','jam'):
+                    rows=inventory.get(provider,[])
+                    if index<len(rows) and rows[index]['url'] not in seen:
+                        seen.add(rows[index]['url']);merged.append(dict(rows[index]))
+            recordings=merged+[row for row in recordings if row['url'] not in seen]
+            for row in recordings:
+                row['id']=10**15+int.from_bytes(hashlib.sha256(row['url'].encode()).digest()[:6],'big')
+                row['_catalog_song']={k:item.get(k,'') for k in ('title','artist')}
         saved=[]
         if source is None:
             origin={k:item.get(k,'') for k in ('title','artist')}
@@ -214,12 +227,10 @@ def register(app,bridge):
             bridge.chart_recordings[uid]=list({row['id']:row for row in recordings+current}.values())[:100]
             while len(bridge.chart_recordings)>1000:bridge.chart_recordings.pop(next(iter(bridge.chart_recordings)))
         from miniapp_server import public_song
-        choices=recordings if source else list({row['id']:row for row in saved+matching_versions(item,recordings)}.values())
-        from versions import source_inventory
-        inventory=await source_inventory(item,uid)
+        choices=(recordings if source else list({row['id']:row for row in saved+matching_versions(item,recordings)}.values()))[:5]
         return web.json_response({'tracks':[public_song(row,bool(bridge.audio_path(uid,row))) for row in choices],
-                                  'alternatives':[public_song(row,bool(bridge.audio_path(uid,row))) for row in recordings],
+                                  'alternatives':[public_song(row,bool(bridge.audio_path(uid,row))) for row in recordings[:5]],
                                   'available_sources':[key for key,rows in inventory.items() if rows],
-                                  'source':{'yt':'YouTube','sc':'SoundCloud','aud':'Audius','jam':'Jamendo'}.get(source,'YouTube')})
+                                  'source':{'yt':'YouTube','sc':'SoundCloud','aud':'Audius','jam':'Jamendo'}.get(source,'All sources')})
     app.router.add_get('/api/charts',chart)
     app.router.add_post('/api/charts/resolve',resolve)

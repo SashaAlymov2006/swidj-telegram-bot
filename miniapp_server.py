@@ -60,8 +60,11 @@ def public_song(song, playable=False):
     from audius_source import canonical
     catalog=bool(identifier(song.get('url')) and license_url(song.get('license_url')))
     audius=canonical(song.get('source_url') or song.get('url'))
+    from soundcloud_source import public_url as soundcloud_url
+    soundcloud=soundcloud_url(song.get('source_url') or song.get('url'))
     return {**({'source':'Jamendo','source_url':song['url'],'license_url':license_url(song.get('license_url'))} if catalog else {}),
             **({'source':'Audius','source_url':audius} if audius else {}),
+            **({'source':'SoundCloud'} if soundcloud else {}),
             'id': str(song['id']), 'title': str(song.get('title') or 'Audio')[:180],
             'artist': str(song.get('artist') or '')[:120],
             'duration': song.get('duration') if isinstance(song.get('duration'), (int, float)) else None,
@@ -230,24 +233,24 @@ class BotLibrary:
         async def provider(key):
             try:
                 async with self.search_slots:
-                    rows=await asyncio.to_thread(source_search, {'_search_query':query,'_availability_uid':uid,'_availability_limit':2 if source=='all' else 3}, key)
+                    rows=await asyncio.to_thread(source_search, {'_search_query':query,'_availability_uid':uid,'_availability_limit':2 if source=='all' else 5}, key)
                     return key,[row for row in rows if row['url']!=exclude]
             except Exception:
                 return key, []
-        groups = await asyncio.gather(*(provider(key) for key in (('yt','sc') if source=='all' else (source,))))
+        groups = await asyncio.gather(*(provider(key) for key in (('yt','sc','aud','jam') if source=='all' else (source,))))
         from versions import source_inventory
-        inventory = await source_inventory({'_search_query':query,'_availability_limit':2 if source=='all' else 3}, uid, dict(groups))
+        inventory = await source_inventory({'_search_query':query,'_availability_limit':2 if source=='all' else 5}, uid, dict(groups))
         inventory = {key:[row for row in rows if row['url']!=exclude] for key,rows in inventory.items()}
         available_sources = [key for key,rows in inventory.items() if rows]
         if source=='all':
             # Primary providers stay independent; offer a compact alternating list.
             primary=[];seen_primary=set()
-            for index in range(3):
+            for index in range(5):
                 for key,items in groups:
                     if index<len(items) and items[index]['url'] not in seen_primary:
                         seen_primary.add(items[index]['url']);primary.append((key,items[index]))
             if primary:
-                groups=[(key,[item for name,item in primary[:3] if name==key]) for key in ('yt','sc')]
+                groups=[(key,[item for name,item in primary[:5] if name==key]) for key in ('yt','sc','aud','jam')]
             else:
                 groups=[await provider('aud')] if inventory.get('aud') else [await provider('jam')]
         result=[];seen=set();public_groups={}
