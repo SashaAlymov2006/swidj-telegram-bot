@@ -79,7 +79,7 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         self.headers = {'X-Telegram-Init-Data': signed()}
 
     async def test_static_assets_and_demo_do_not_expose_authenticated_library(self):
-        for path in ['/', '/assets/app.css', '/assets/app.js', '/assets/audio.js', '/assets/dj.js', '/assets/dj-loop-processor.js', '/assets/dj-recorder.js', '/assets/dj-recorder-processor.js', '/assets/SoundTouchNode.js', '/assets/constants.js', '/assets/soundtouch-processor.js', '/assets/soundtouch-LICENSE.txt', '/assets/soundtouch-NOTICE.json', '/demo/0.wav']:
+        for path in ['/', '/assets/app.css', '/assets/app.js', '/assets/audio.js', '/assets/dj.js', '/assets/dj-effects.js', '/assets/dj-loop-processor.js', '/assets/dj-recorder.js', '/assets/dj-recorder-processor.js', '/assets/SoundTouchNode.js', '/assets/constants.js', '/assets/soundtouch-processor.js', '/assets/soundtouch-LICENSE.txt', '/assets/soundtouch-NOTICE.json', '/demo/0.wav']:
             response = await self.client.get(path)
             self.assertEqual(response.status, 200, path)
         response = await self.client.get('/api/library')

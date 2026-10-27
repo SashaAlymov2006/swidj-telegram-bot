@@ -4,11 +4,23 @@ class SwiDJRoll extends AudioWorkletProcessor {
   constructor(){
     super();this.capacity=Math.ceil(sampleRate*8);this.buffers=[new Float32Array(this.capacity),new Float32Array(this.capacity)];
     this.write=0;this.captured=0;this.frames=0;this.wanted=0;this.cursor=0;this.fade=0;this.last=[0,0];this.playing=false;this.feeding=false;
+    this.beatLoop=null;
     this.port.onmessage=({data})=>{
-      if(data.type==='reset'){this.write=0;this.captured=0;this.frames=0;this.wanted=0;this.fade=128;}
+      if(data.type==='reset'){this.beatLoop=null;this.write=0;this.captured=0;this.frames=0;this.wanted=0;this.fade=128;}
+      if(data.type==='loop'){
+        this.frames=0;this.wanted=0;this.beatLoop=null;this.fade=128;this.write=0;this.captured=0;
+        if(Number.isFinite(data.seconds)&&data.seconds>=.2&&data.seconds<=64){
+          const length=Math.round(data.seconds*sampleRate);
+          const transferred=Array.isArray(data.buffers)&&data.buffers.length===2&&data.buffers.every(b=>b instanceof ArrayBuffer&&b.byteLength===length*4);
+          this.beatLoop={buffers:transferred?data.buffers.map(b=>new Float32Array(b)):[new Float32Array(length),new Float32Array(length)],length,
+            delay:Math.max(0,Math.min(4*sampleRate,Math.round((data.delay||0)*sampleRate))),write:0,cursor:0};
+        }
+        this.port.postMessage({active:false});
+      }
       if(data.type==='transport'){this.playing=!!data.playing;this.feeding=!!data.feeding;this.fade=128;this.stopSample=[...this.last];}
       if(data.type==='feeding')this.feeding=!!data.feeding;
       if(data.type==='roll'){
+        this.beatLoop=null;
         this.wanted=[2,4,8].includes(data.seconds)?Math.floor(data.seconds*sampleRate):0;
         if(this.wanted)this.frames=0;
         if(!this.wanted){this.frames=0;this.fade=128;this.port.postMessage({active:false});}
@@ -20,6 +32,26 @@ class SwiDJRoll extends AudioWorkletProcessor {
     const step=parameters.rate[0];
     for(let i=0;i<output[0].length;i++){
       if(!this.playing){for(let c=0;c<output.length;c++){output[c][i]=(this.stopSample?.[Math.min(c,1)]||0)*this.fade/128;this.last[Math.min(c,1)]=output[c][i];}if(this.fade>0)this.fade--;continue;}
+      const loop=this.beatLoop;
+      if(loop){
+        if(loop.delay>0){if(this.feeding)loop.delay--;}
+        else if(loop.write<loop.length&&this.feeding){
+          for(let c=0;c<2;c++)loop.buffers[c][loop.write]=input?.[c]?.[i]??input?.[0]?.[i]??0;
+          loop.write++;
+          if(loop.write===loop.length)this.port.postMessage({active:true,loop:true,seconds:loop.length/sampleRate});
+        }
+        const ready=loop.write===loop.length;
+        for(let c=0;c<output.length;c++){
+          let value=this.feeding?(input?.[c]?.[i]??input?.[0]?.[i]??0):0;
+          if(ready){const buffer=loop.buffers[Math.min(c,1)],base=Math.floor(loop.cursor),fraction=loop.cursor-base;
+            value=buffer[base]*(1-fraction)+buffer[(base+1)%loop.length]*fraction;
+            value*=Math.min(1,loop.cursor/64,(loop.length-loop.cursor)/64);
+          }
+          output[c][i]=value;this.last[Math.min(c,1)]=value;
+        }
+        if(ready)loop.cursor=(loop.cursor+step)%loop.length;
+        continue;
+      }
       if(!this.frames&&this.feeding){
         for(let c=0;c<2;c++)this.buffers[c][this.write]=input?.[c]?.[i]??input?.[0]?.[i]??0;
         this.write=(this.write+1)%this.capacity;this.captured=Math.min(this.capacity,this.captured+1);

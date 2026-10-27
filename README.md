@@ -15,6 +15,7 @@ SwiDJ brings music discovery, personal audio tools and public video retrieval in
 | Music links | YouTube and SoundCloud audio; Spotify, Apple Music and Yandex Music links resolve song metadata and search for an available recording |
 | Video | Public YouTube videos, TikTok videos and photo slideshows with audio; Instagram videos/Reels |
 | Audio studio | Trim, convert, speed up, slowed/reverb, adjustable bass with preview, reverse, loops and phone ringtone exports |
+| Mini App DJ room | Two decks, waveform and estimated beat grid, independent pitch/tempo, bar loops, filter/bass/Echo Out transitions, named projects and MP3 set recording |
 | Personal library | Favourites, playlists and saving users' own uploaded audio |
 | Experience | Russian/English UI, remembered language, compact result navigation, retries and cancellation |
 | Operations | Owner controls, persistent state, bounded per-user media cache, Telegram file reuse and source/runtime backup utilities |
@@ -64,7 +65,7 @@ Keep `.env`, cookies, user databases and backups private. Persistent data and mo
 
 ## Verification
 
-The current source passed **185 offline tests**, including Telegram SDK flows, language isolation, playlists, cancellation, recovery and media cleanup. This is functional test coverage, not a large-scale performance benchmark.
+The current source passed **290 offline tests**, including Telegram SDK flows, language isolation, playlists, cancellation, recovery, media cleanup and DJ analysis/project isolation. Mobile Chromium/WebKit checks exercise the actual audio worklets, transitions, recordings and project restore. Physical-device testing remains separate. This is functional test coverage, not a large-scale performance benchmark.
 
 ```sh
 docker build -t swidj:test .
@@ -82,7 +83,7 @@ Offline tests use fake Telegram transport and fixture data. They never poll the 
 
 ## Project status
 
-A working portfolio prototype, developed iteratively with AI assistance. It currently runs on a developer-managed machine; this repository does not promise an always-on public service. Payments and a Telegram Mini App are future work.
+A working portfolio prototype, developed iteratively with AI assistance. The bot and Telegram Mini App run on a developer-managed VPS; this repository does not promise an always-on public service. Payments are not enabled. The optional [DJ room](deploy/DJ_ROOM.md) uses local rhythm analysis and browser audio processing, with manual beat-grid correction and no paid music API.
 
 Only retrieve or process media you are authorized to use. Private posts, login-restricted content and unsupported carousel entries may be unavailable; video output is capped at 49 MiB.
 

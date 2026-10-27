@@ -185,6 +185,9 @@ class BotLibrary:
         sources.extend(self.searches.get(uid, []))
         sources.extend(self.chart_recordings.get(uid, []))
         sources.extend(await self.app_history(uid))
+        from dj_studio import projects
+        for project in await projects(self.store,uid):
+            sources.extend(deck['track'] for deck in project.get('decks',{}).values() if deck.get('track'))
         # Bot cards are immutable, per-user snapshots and survive session restores.
         sources.extend(self.data(uid).get('track_cards', {}).values())
         sources.extend(job.song for job in self.audio_jobs.jobs.values() if job.uid == uid)
@@ -421,7 +424,7 @@ def create_app(*, token='', bridge=None):
                 uid = user['id']
                 bridge.allowed(uid)
                 from dispatch import user_lock
-                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts','/api/charts/resolve'):
+                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts','/api/charts/resolve','/api/dj/analysis'):
                     response=await handler(request)
                 else:
                     async with user_lock(uid):
@@ -441,7 +444,7 @@ def create_app(*, token='', bridge=None):
     app = web.Application(middlewares=[boundary], client_max_size=16*1024)
     async def asset(request):
         name = request.match_info.get('name', 'index.html')
-        if name not in ('index.html', 'app.css', 'app.js', 'audio.js', 'live.js', 'dj.js', 'dj-loop-processor.js', 'dj-recorder.js', 'dj-recorder-processor.js', 'SoundTouchNode.js', 'constants.js', 'soundtouch-processor.js', 'soundtouch-LICENSE.txt', 'soundtouch-NOTICE.json'):
+        if name not in ('index.html', 'app.css', 'app.js', 'audio.js', 'live.js', 'dj.js', 'dj-effects.js', 'dj-loop-processor.js', 'dj-recorder.js', 'dj-recorder-processor.js', 'SoundTouchNode.js', 'constants.js', 'soundtouch-processor.js', 'soundtouch-LICENSE.txt', 'soundtouch-NOTICE.json'):
             raise web.HTTPNotFound()
         return web.FileResponse(ASSETS / name)
     async def demo(request):
@@ -593,6 +596,8 @@ def create_app(*, token='', bridge=None):
     if bridge:
         from studio_presets import register as register_presets
         register_presets(app,bridge)
+        from dj_studio import register as register_dj
+        register_dj(app,bridge)
     from app_recognition import register as register_recognition
     register_recognition(app)
     from app_charts import register as register_charts

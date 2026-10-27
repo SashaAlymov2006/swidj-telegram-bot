@@ -120,7 +120,7 @@ let demoState;
 try { demoState = JSON.parse(localStorage.getItem('swidj-demo-library') || 'null'); } catch {}
 const api = async (path, payload) => {
   const multipart=payload instanceof FormData;
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),multipart?1200000:path.startsWith('charts')?90000:30000);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),multipart?1200000:path.startsWith('dj/analysis')?600000:path.startsWith('charts')?90000:30000);
   let response;try {response = await fetch('/api/' + path, {method:payload ? 'POST':'GET', headers:{'X-Telegram-Init-Data':initData,...(payload&&!multipart ? {'Content-Type':'application/json'}:{})},body:payload ? multipart?payload:JSON.stringify(payload):undefined, credentials:'omit',signal:controller.signal});}catch(error){if(error.name==='AbortError')throw new Error('requestTimeout');throw error;}finally{clearTimeout(timer);}
   if (!response.ok) throw new Error(({401:'expired',403:'unavailable',409:'capacity',410:'missingFile',429:'rateLimit',503:'unavailable'})[response.status] || 'error');
   return response;
@@ -653,7 +653,7 @@ async function removeSoundPreset(id){
 async function mountDJ(root){
   if(!djModule)djModule=import('./dj.js');
   const {DJRoom}=await djModule;
-  if(!djRoom)djRoom=new DJRoom({language:()=>language,getContext:async()=>{await engine.unlock();return engine.context;},pauseMain:()=>{audio.pause();document.querySelector('.link-result video')?.pause();document.querySelector('.link-result audio')?.pause();},choose:chooseDJTrack,request:api,onError:report,notify:message=>{clearTimeout(toastTimer);$('toast').textContent=message;$('toast').classList.add('show');toastTimer=setTimeout(()=>$('toast').classList.remove('show'),4500);},getSource:async (track,{cancelled=()=>false}={})=>{
+  if(!djRoom)djRoom=new DJRoom({openDialog:dialog,demoKey:demo?sessionKey+'-dj-projects':null,language:()=>language,getContext:async()=>{await engine.unlock();return engine.context;},pauseMain:()=>{audio.pause();document.querySelector('.link-result video')?.pause();document.querySelector('.link-result audio')?.pause();},choose:chooseDJTrack,request:api,onError:report,notify:message=>{clearTimeout(toastTimer);$('toast').textContent=message;$('toast').classList.add('show');toastTimer=setTimeout(()=>$('toast').classList.remove('show'),4500);},getSource:async (track,{cancelled=()=>false}={})=>{
     if(demo)return {track,url:location.origin+'/demo/'+track.demo+'.wav'};
     if(track.local)return {track,url:track.serverTicket?location.origin+'/studio-file/'+track.serverTicket:URL.createObjectURL(track.blob)};
     while(preparation){if(cancelled())return null;await new Promise(resolve=>setTimeout(resolve,150));}

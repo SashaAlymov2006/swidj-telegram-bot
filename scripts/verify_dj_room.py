@@ -1,11 +1,11 @@
 """Exercise the actual Mini App presets, shared-context decks, roll and recording."""
-import asyncio,json,base64
+import asyncio,json,base64,math
 from pathlib import Path
 from aiohttp import web
 from playwright.async_api import async_playwright
 
 async def main():
-    root=Path('/src/miniapp');app=web.Application();presets=[];studio_calls=[];saved=[]
+    root=Path('/src/miniapp');app=web.Application();presets=[];studio_calls=[];saved=[];projects=[]
     tracks=[{'id':str(i),'title':'Deck '+key,'artist':'Fixture','duration':60,'playable':True} for i,key in [(1,'A'),(2,'B')]]
     async def asset(request):
         name=request.match_info.get('name')
@@ -13,11 +13,21 @@ async def main():
         return web.FileResponse(root/name)
     async def media(request):return web.FileResponse('/fixture-b.mp3' if request.match_info.get('id')=='2' else '/fixture.mp3')
     async def api(request):
-        nonlocal presets
+        nonlocal presets,projects
         name=request.match_info['name']
         if name=='library':result={'tracks':tracks,'favorites':[],'playlists':[],'language':'en'}
         elif name=='prepare':result={'status':'ready','track':tracks[int((await request.json())['track'])-1]}
         elif name=='stream':result={'url':'http://127.0.0.1:8765/source-'+str((await request.json())['track'])+'.mp3'}
+        elif name=='dj/analysis':result={'duration':60,'bpm':120 if request.query.get('track')=='1' else 100,'offset':.17,'confidence':.9,'peaks':[.1+.5*abs(math.sin(i/17)) for i in range(1200)]}
+        elif name=='dj/projects':
+            if request.method=='POST':
+                payload=await request.json()
+                if payload['action']=='save':
+                    item=dict(payload['project'],id=payload.get('id') or 'abcdef123456',name=payload['name'])
+                    for deck in item['decks'].values():deck['track']=next((t for t in tracks if t['id']==deck['track']),None)
+                    projects=[p for p in projects if p['id']!=item['id']]+[item]
+                else:projects=[p for p in projects if p['id']!=payload['id']]
+            result={'projects':projects}
         elif name=='presets':
             if request.method=='POST':
                 payload=await request.json()
@@ -40,7 +50,7 @@ async def main():
     try:
         async with async_playwright() as p:
             for kind in (p.chromium,p.webkit):
-                presets=[];studio_calls.clear();saved.clear()
+                presets=[];projects=[];studio_calls.clear();saved.clear()
                 browser=await kind.launch();page=await browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
                 errors=[];page.on('pageerror',lambda err:errors.append(str(err)))
                 await page.add_init_script('''window.Telegram={WebApp:{initData:'fixture',ready(){},expand(){},isVersionAtLeast(){return true},downloadFile(file){window.qaDownload=file}}};
@@ -63,14 +73,17 @@ if(globalThis.MediaRecorder){const NativeRecorder=MediaRecorder;window.MediaReco
                 await page.locator('[data-studio-mode=dj]').click()
                 await page.locator('[data-dj-deck=A]').wait_for()
                 for key,identifier in [('A','1'),('B','2')]:
+                    await page.locator(f'[data-dj-action=focus][data-deck={key}]').click()
                     await page.locator(f'[data-dj-action=load][data-deck={key}]').click()
                     await page.locator(f'[data-dj-pick="{identifier}"]').click()
                     await page.locator(f'[data-dj-title={key}]').filter(has_text='Deck '+key).wait_for()
+                await page.wait_for_function("() => document.querySelector('[data-dj-bpm=A]').textContent.includes('120')")
                 await page.locator('[data-dj-action=start-all]').click()
                 await page.wait_for_function('() => qaAudio.length===2&&qaAudio.every(a=>!a.paused&&a.currentTime>.2)')
                 assert await page.evaluate('qaContexts===1'),'Decks created separate contexts'
                 assert await page.evaluate('qaAudio[0].src.includes("source-1")&&qaAudio[1].src.includes("source-2")')
                 assert await page.locator('#audio').evaluate('(el)=>el.paused')
+                await page.locator('[data-dj-action=focus][data-deck=A]').click()
                 await page.locator('#language').click();await page.wait_for_timeout(100);await page.evaluate('window.scrollTo(0,0)')
                 assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 await page.screenshot(path=str(out/('dj-room-initial-'+kind.name+'.png')))
@@ -84,12 +97,17 @@ if(globalThis.MediaRecorder){const NativeRecorder=MediaRecorder;window.MediaReco
                 await page.locator('[data-dj-action=center]').click()
                 await page.locator('[data-dj-action=cue][data-deck=A][data-cue="0"]').click()
                 assert ' · ' in await page.locator('[data-dj-action=cue][data-deck=A][data-cue="0"]').inner_text()
-                for key in ['A','B']:await page.locator(f'[data-dj-deck={key}] summary').click()
+                for key in ['A','B']:
+                    await page.locator(f'[data-dj-action=focus][data-deck={key}]').click()
+                    await page.locator(f'[data-dj-deck={key}] summary').click()
+                await page.locator('[data-dj-action=focus][data-deck=A]').click()
                 await page.locator('[data-dj-control=bpm][data-deck=A]').fill('120')
+                await page.locator('[data-dj-action=focus][data-deck=B]').click()
                 await page.locator('[data-dj-control=bpm][data-deck=B]').fill('100')
                 await page.locator('[data-dj-action=sync][data-deck=B]').click()
                 assert abs(float(await page.locator('[data-dj-control=speed][data-deck=B]').input_value())-1.2)<.01
                 await page.wait_for_timeout(2200)
+                await page.locator('[data-dj-action=focus][data-deck=A]').click()
                 await page.locator('[data-dj-action=roll][data-deck=A][data-seconds="2"]').click()
                 await page.wait_for_timeout(500)
                 assert await page.locator('[data-dj-action=roll][data-deck=A][data-seconds="2"]').evaluate('(el)=>el.classList.contains("active")')
@@ -115,6 +133,61 @@ if(globalThis.MediaRecorder){const NativeRecorder=MediaRecorder;window.MediaReco
                 await page.locator('[data-dj-action=save]').click()
                 await page.wait_for_function('() => document.querySelector("#dj-record-state").textContent.includes("ready")')
                 assert len(studio_calls)==1 and len(saved)==1
+                # Transition controls preserve the same streamed source and both live decks.
+                source=await page.evaluate('qaAudio[0].src')
+                await page.locator('#dj-cross').fill('0');await page.wait_for_timeout(500)
+                baseline=await page.locator('[data-dj-deck=A] meter').evaluate('(el)=>el.value')
+                await page.locator('[data-dj-control=filter][data-deck=A]').fill('1');await page.wait_for_timeout(500)
+                reduced=await page.locator('[data-dj-deck=A] meter').evaluate('(el)=>el.value')
+                assert reduced<baseline*.3,(baseline,reduced)
+                await page.locator('[data-dj-action=reset-fx][data-deck=A]').click()
+                await page.locator('[data-dj-control=bassCut][data-deck=A]').fill('0.8')
+                await page.locator('[data-dj-action=echo][data-deck=A]').click()
+                await page.wait_for_timeout(250)
+                assert await page.locator('[data-dj-action=echo][data-deck=A]').evaluate('(el)=>el.classList.contains("active")')
+                await page.locator('[data-dj-action=echo][data-deck=A]').click()
+                await page.locator('[data-dj-action=reset-fx][data-deck=A]').click()
+                assert await page.evaluate('qaAudio[0].src')==source
+                # Exit roll, align phases, and capture a full one-bar loop.
+                await page.locator('[data-dj-action=roll][data-deck=A][data-seconds="0"]').click()
+                await page.locator('[data-dj-action=focus][data-deck=B]').click()
+                await page.locator('[data-dj-action=align][data-deck=B]').click()
+                await page.wait_for_function("() => !document.querySelector('[data-dj-action=align][data-deck=B]').disabled",timeout=10000)
+                await page.wait_for_timeout(150)
+                phases=await page.evaluate('qaAudio.map((a,i)=>(a.currentTime-.17)/(60/(i?100:120))%1)')
+                delta=abs(phases[0]-phases[1]);assert min(delta,1-delta)<.15,(phases,await page.evaluate('qaAudio.map(a=>({time:a.currentTime,rate:a.playbackRate,paused:a.paused,ended:a.ended}))'))
+                await page.locator('[data-dj-action=focus][data-deck=A]').click()
+                await page.locator('[data-dj-action=loop][data-deck=A][data-bars="1"]').click()
+                await page.wait_for_function("() => document.querySelector('[data-loop-status=A]').textContent.includes('playing')",timeout=10000)
+                await page.locator('[data-dj-action=loop][data-deck=A][data-bars="0"]').click()
+                await page.locator('[data-dj-action=pause-all]').click()
+                await page.locator('[data-dj-action=project-save]').click()
+                await page.locator('#dj-project-name').fill('')
+                await page.locator('#dialog-actions button[value=cancel]').click()
+                assert not await page.locator('#dialog').evaluate('(el)=>el.open')
+                await page.locator('[data-dj-action=project-save]').click()
+                await page.locator('#dj-project-name').fill('My <live> set')
+                await page.locator('#dj-project-name').press('Enter')
+                await page.wait_for_function('() => document.querySelector(".dj-project-head strong").textContent.includes("<live>")')
+                assert len(projects)==1 and projects[0]['decks']['A']['pitch']==-3
+                assert await page.locator('.dj-project-head live').count()==0
+                await page.reload()
+                await page.locator('[data-studio-mode=dj]').click()
+                await page.locator('#dj-project-list summary').click()
+                await page.locator('[data-dj-action=project-open]').click()
+                await page.locator('#dialog-form button[value=confirm]').click()
+                await page.wait_for_function('() => document.querySelector(".dj-project-head strong").textContent.includes("<live>")',timeout=30000)
+                assert await page.evaluate('qaAudio.length===2&&qaAudio.every(a=>a.paused)')
+                await page.locator('[data-dj-deck=A] summary').click()
+                assert abs(float(await page.locator('[data-dj-control=pitch][data-deck=A]').input_value())+3)<.01
+                assert abs(float(await page.locator('#dj-cross').input_value()))<.01
+                await page.locator('[data-dj-action=start-all]').click()
+                await page.wait_for_function('() => qaAudio.every(a=>!a.paused&&a.currentTime>0)')
+                await page.locator('[data-dj-action=pause-all]').click()
+                await page.locator('#dj-project-list summary').click()
+                await page.locator('[data-dj-action=project-delete]').click()
+                await page.locator('#dialog-form button[value=confirm]').click()
+                await page.wait_for_timeout(200);assert projects==[]
                 assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 await page.screenshot(path=str(out/('dj-room-'+kind.name+'.png')),full_page=True)
                 await page.locator('[data-studio-mode=sound]').click()
@@ -135,7 +208,7 @@ if(globalThis.MediaRecorder){const NativeRecorder=MediaRecorder;window.MediaReco
 }""")
                 assert 190<roll['frequency']<430 and roll['pausedPeak']<.00001,roll
                 assert not errors,errors
-                print(json.dumps({'browser':kind.name,'mobile':True,'named_presets':True,'shared_audio_context':True,'crossfader':True,'cue_roll_and_tempo_match':True,'recorded_audio_seconds':round(recording['duration'],2),'recorded_audio_rms':round(recording['rms'],4),'single_mp3_export_and_shared_library_save':True,'js_errors':errors}),flush=True)
+                print(json.dumps({'browser':kind.name,'mobile':True,'named_presets':True,'shared_audio_context':True,'crossfader':True,'cue_roll_and_tempo_match':True,'wave_bpm_bar_loop_align_fx_project_reload':True,'recorded_audio_seconds':round(recording['duration'],2),'recorded_audio_rms':round(recording['rms'],4),'single_mp3_export_and_shared_library_save':True,'js_errors':errors}),flush=True)
                 await browser.close()
     finally:await runner.cleanup()
 
