@@ -127,5 +127,23 @@ class ChartDataTests(unittest.IsolatedAsyncioTestCase):
                         from aiohttp import web
                         with self.assertRaises(web.HTTPNotFound):await bridge.find(78,identifier)
                         self.assertEqual(search.call_args.kwargs,{'limit':10})
+                    cover={'title':'Song Cover','artist':'Singer','url':'https://soundcloud.com/singer/song-cover','source':'SoundCloud','duration':180}
+                    with patch('versions.source_search',return_value=[cover]) as source_search,patch('versions.find_versions') as youtube:
+                        response=await client.post('/api/charts/resolve',headers={'X-Telegram-Init-Data':signed()},json={'country':'de','track':'101','source':'sc'})
+                        self.assertEqual(response.status,200)
+                        selected=await response.json();self.assertEqual(selected['source'],'SoundCloud')
+                        chosen=selected['tracks'][0]
+                        self.assertEqual(chosen['title'],'Song Cover')
+                        actual=await bridge.find(77,chosen['id'])
+                        self.assertEqual(actual['_catalog_song'],{'title':'Song','artist':'Artist'})
+                        fixture_audio=Path(folder)/'cached.mp3';fixture_audio.write_bytes(b'cached recording')
+                        bridge.audio_jobs.retain(77,chosen['id'],fixture_audio)
+                        repeated=await(await client.post('/api/charts/resolve',headers={'X-Telegram-Init-Data':signed()},json={'country':'de','track':'101','source':'sc'})).json()
+                        self.assertTrue(repeated['tracks'][0]['playable'])
+                        source_search.assert_called_once();youtube.assert_not_called()
+                    await bridge.remember_app_track(77,actual)
+                    restored=await(await client.post('/api/charts/resolve',headers={'X-Telegram-Init-Data':signed()},json={'country':'de','track':'101'})).json()
+                    self.assertEqual(restored['tracks'][0]['id'],chosen['id'])
+                    self.assertTrue(restored['tracks'][0]['playable'])
                 self.assertEqual((await client.get('/api/charts?country=invalid',headers={'X-Telegram-Init-Data':signed()})).status,400)
             finally:await client.close()

@@ -169,6 +169,26 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status,200)
         self.assertTrue(self.favorites[77][-1]['url'].startswith('https://www.youtube.com/'))
 
+    async def test_all_source_search_survives_youtube_failure_and_can_switch_immediately(self):
+        recording=dict(title='Original song',artist='Singer',url='https://soundcloud.com/singer/original',source='SoundCloud')
+        def search(song,source):
+            self.assertEqual(song['_search_query'],'original song')
+            if source=='yt':raise RuntimeError('YouTube unavailable')
+            return [dict(recording)] if source=='sc' else []
+        with patch('versions.source_search',side_effect=search) as searcher:
+            response=await self.client.get('/api/search?q=original+song',headers=self.headers)
+            self.assertEqual(response.status,200)
+            payload=await response.json()
+            self.assertEqual([g['source'] for g in payload['groups']],['SoundCloud'])
+            identifier=payload['tracks'][0]['id']
+            self.assertEqual((await self.bridge.find(77,identifier))['_search_query'],'original song')
+            self.assertEqual(searcher.call_count,3)
+            response=await self.client.get('/api/search?q=original+song&source=sc',headers=self.headers)
+            self.assertEqual(response.status,200)
+            self.assertEqual((await response.json())['tracks'][0]['title'],'Original song')
+            self.assertEqual((await self.client.get('/api/search?q=original+song&source=sc',headers=self.headers)).status,429)
+        self.assertEqual((await self.client.get('/api/search?q=original+song&source=invalid',headers=self.headers)).status,400)
+
     async def test_bot_and_miniapp_share_per_user_lock(self):
         from dispatch import user_lock
         lock=user_lock(77)
@@ -189,6 +209,16 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request['mode'],'listen')
         self.assertEqual(request['candidates'][0]['url'],'https://www.youtube.com/watch?v=abcdefghijk')
         self.assertEqual((await self.client.post('/api/send',headers=self.headers,json={'track':'1'})).status,429)
+
+    async def test_send_soundcloud_choice_preserves_its_source_without_youtube_lookup(self):
+        song=dict(id=90,title='Selected SC recording',artist='Singer',url='https://soundcloud.com/singer/selected',source='SoundCloud')
+        self.bridge.searches[77]=[song]
+        self.bridge.application.bot.send_message.return_value=SimpleNamespace(message_id=10)
+        with patch('versions.find_versions') as youtube:
+            response=await self.client.post('/api/send',headers=self.headers,json={'track':'90'})
+        self.assertEqual(response.status,200);youtube.assert_not_called()
+        request=next(iter(self.store.load_named('sessions')[77]['version_requests'].values()))
+        self.assertEqual(request['candidates'],[song]);self.assertEqual(request['source'],'sc')
 
     async def test_invalid_json_and_auth_have_no_side_effects_or_secret_echo(self):
         response=await self.client.post('/api/library',headers=self.headers,data='{')

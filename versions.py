@@ -83,6 +83,8 @@ def source_search(song, source):
         from soundcloud_source import search
     elif source == 'jam':
         from jamendo_source import search
+    elif source == 'yt':
+        return find_versions(query)
     else:
         raise ValueError('Invalid recording source')
     return search(query, 5)
@@ -91,7 +93,8 @@ def source_search(song, source):
 def source_rows(token, request):
     selected = request.get('source')
     return [[Button('Версии ' + name, callback_data=f'ver:source:{token}:{source}')]
-            for source, name in (('sc', 'SoundCloud'), ('jam', 'Jamendo')) if source != selected]
+            for source, name in (('yt', 'YouTube'), ('sc', 'SoundCloud'), ('jam', 'Jamendo'))
+            if source != selected and (source != 'yt' or selected in ('sc', 'jam'))]
 
 
 def queue_recovery(request):
@@ -211,7 +214,7 @@ async def choose_version(update, context, downloader, metadata, retain, studio):
     if duplicate and int(duplicate[2]) in previous.get("sent_indices", []):
         return await query.answer("Этот трек уже отправлен выше.")
     await query.answer()
-    provider = re.fullmatch(r'ver:source:([0-9a-f]{10}):(sc|jam)', query.data or '')
+    provider = re.fullmatch(r'ver:source:([0-9a-f]{10}):(yt|sc|jam)', query.data or '')
     if provider:
         request = context.user_data.get('version_requests', {}).get(provider[1])
         if not request:
@@ -307,7 +310,7 @@ async def download_selected(update, context, token, request, index, downloader, 
             if index not in request.setdefault('failed_indices', []): request['failed_indices'].append(index)
             from diagnostics import source_access_blocked, SOURCE_ACCESS_MESSAGE
             if source_access_blocked(error):
-                if not request.get('source'):
+                if request.get('source') not in ('sc', 'jam'):
                     # Preserve the original catalog song; these are explicit new choices,
                     # never a silent replacement for the failed YouTube recording.
                     await request_versions(update, context, request['song'], mode=request.get('mode', 'studio'),

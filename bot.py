@@ -703,6 +703,16 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.message.reply_text("Аудио отправлено, но студию открыть не удалось.",
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎛 Открыть студию", callback_data="studio:home")]]))
             else:
+                if platform in ('soundcloud', 'youtube'):
+                    try:
+                        from catalog_links import soundcloud_metadata, youtube_metadata
+                        from versions import request_versions
+                        meta = await asyncio.to_thread(soundcloud_metadata if platform=='soundcloud' else youtube_metadata, url)
+                    except Exception:
+                        pass
+                    else:
+                        song=dict(download_song(platform, url, meta['title'], meta['artist'], None),_search_query=meta['query'])
+                        return await request_versions(update, context, song, mode='listen', source='sc')
                 from diagnostics import source_access_blocked, SOURCE_ACCESS_MESSAGE
                 if source_access_blocked(e):
                     await query.message.reply_text(SOURCE_ACCESS_MESSAGE,

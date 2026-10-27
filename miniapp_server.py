@@ -197,28 +197,46 @@ class BotLibrary:
             raise web.HTTPNotFound()
         return song
 
-    async def search(self, uid, query):
+    async def search(self, uid, query, source='all'):
         self.allowed(uid, 'search')
-        if time.monotonic() - self.search_times.get(uid, 0) < 3:
+        if source not in ('all', 'yt', 'sc', 'jam'):
+            raise web.HTTPBadRequest()
+        rate_key=(uid,source)
+        if time.monotonic() - self.search_times.get(rate_key, 0) < 3:
             raise web.HTTPTooManyRequests()
-        self.search_times[uid] = time.monotonic()
+        self.search_times[rate_key] = time.monotonic()
         if len(self.search_times) > 1000:
             oldest = min(self.search_times, key=self.search_times.get)
             self.search_times.pop(oldest, None)
-            self.searches.pop(oldest, None)
-        from versions import find_versions
-        async with self.search_slots:
-            result = await asyncio.to_thread(find_versions, query)
+            self.searches.pop(oldest[0], None)
+        from versions import source_search
+        async def provider(key):
+            try:
+                async with self.search_slots:
+                    return key, await asyncio.to_thread(source_search, {'_search_query':query}, key)
+            except Exception:
+                return key, []
+        groups = await asyncio.gather(*(provider(key) for key in (('yt','sc','jam') if source=='all' else (source,))))
+        result=[];seen=set();public_groups={}
+        names={'yt':'YouTube','sc':'SoundCloud','jam':'Jamendo'}
+        for key, items in groups:
+            for item in items:
+                if item['url'] in seen:continue
+                seen.add(item['url']);result.append(item)
+                label=item.get('source') or names[key]
+                public_groups.setdefault(label,[]).append(item)
         for song in result:
             song['id'] = 10**15 + int.from_bytes(hashlib.sha256(song['url'].encode()).digest()[:6], 'big')
             song['_search_query'] = query
         self.searches[uid] = result
-        return {'tracks': [public_song(s) for s in result]}
+        def output(song):return public_song(song,bool(self.audio_path(uid,song)))
+        return {'tracks': [output(s) for s in result], 'groups':[
+            {'source':name, 'tracks':[output(s) for s in items]} for name,items in public_groups.items()]}
 
     async def source_versions(self, uid, identifier, source):
         self.allowed(uid, 'search')
         self.allowed(uid, 'downloads')
-        if source not in ('next', 'sc', 'jam'):
+        if source not in ('next', 'yt', 'sc', 'jam'):
             raise web.HTTPBadRequest()
         song = await self.find(uid, identifier)
         if song.get('kind') == 'upload':
@@ -251,8 +269,10 @@ class BotLibrary:
                 previous = self.chart_recordings.get(uid, [])
                 self.chart_recordings[uid] = list({item['id']:item for item in previous+candidates}.values())[-100:]
                 while len(self.chart_recordings)>1000:self.chart_recordings.pop(next(iter(self.chart_recordings)))
-            return {'status': 'choices', 'tracks': [public_song(s) for s in candidates],
-                    'source': 'SoundCloud' if source == 'sc' else 'Jamendo', 'origin': identifier}
+            sources={s.get('source') or 'YouTube' for s in candidates}
+            label=next(iter(sources)) if len(sources)==1 else {'yt':'YouTube','sc':'SoundCloud','jam':'Jamendo'}[source]
+            return {'status': 'choices', 'tracks': [public_song(s,bool(self.audio_path(uid,s))) for s in candidates],
+                    'source': label, 'origin': identifier}
         finally:
             self.source_searching.discard(uid)
 
@@ -433,7 +453,8 @@ class BotLibrary:
             data = self.data(uid)
             requests = data.setdefault('version_requests', {})
             from jamendo_source import identifier as jamendo_id
-            if song.get('url', '').startswith('https://www.youtube.com/watch?v=') or jamendo_id(song.get('url')):
+            from soundcloud_source import public_url as sc_url
+            if song.get('url', '').startswith('https://www.youtube.com/watch?v=') or jamendo_id(song.get('url')) or sc_url(song.get('url')):
                 candidates = [dict(song)]
             else:
                 from versions import find_versions
@@ -442,10 +463,13 @@ class BotLibrary:
             if not candidates:
                 raise web.HTTPNotFound()
             requests[token] = {'song': dict(song), 'mode': 'listen', 'candidates': candidates}
+            if sc_url(song.get('url')):requests[token]['source']='sc'
             while len(requests) > 8:
                 requests.pop(next(iter(requests)))
             rows = [[InlineKeyboardButton(s['title'][:60], callback_data=f'ver:pick:{token}:{i}')]
                     for i, s in enumerate(candidates)]
+            from versions import source_rows
+            rows += source_rows(token,requests[token])
             message = await self.application.bot.send_message(uid, song['title'], reply_markup=InlineKeyboardMarkup(rows))
             requests[token]['menu_messages'] = [[uid, message.message_id]]
             sessions = await asyncio.to_thread(self.store.load_named, 'sessions')
@@ -511,7 +535,7 @@ def create_app(*, token='', bridge=None):
         query = request.query.get('q', '').strip()
         if not 2 <= len(query) <= 120:
             raise web.HTTPBadRequest()
-        return web.json_response(await bridge.search(request['user']['id'], query))
+        return web.json_response(await bridge.search(request['user']['id'], query, request.query.get('source','all')))
     async def audio(request):
         uid = request['user']['id']
         bridge.allowed(uid, 'downloads')

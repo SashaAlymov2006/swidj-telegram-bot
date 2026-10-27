@@ -52,6 +52,29 @@ def extract_links(text):
             result.append({"url":url,"platform":platform});seen.add(url)
     return result
 
+def soundcloud_metadata(url):
+    """Public title/creator only; no audio, account or YouTube lookup."""
+    if classify(url) != 'soundcloud':raise ValueError('Invalid SoundCloud link')
+    response=requests.get('https://soundcloud.com/oembed',params={'url':url,'format':'json'},timeout=12,allow_redirects=False)
+    response.raise_for_status();data=response.json()
+    title=str(data.get('title') or '').strip();artist=str(data.get('author_name') or '').strip()
+    if artist and title.casefold().endswith((' by '+artist).casefold()):title=title[:-len(' by '+artist)].strip()
+    if not title:raise ValueError('SoundCloud title unavailable')
+    return {'title':title[:180],'artist':artist[:120],'query':(title+' '+artist).strip()[:240]}
+
+
+def youtube_metadata(url):
+    """Public recording label for explicit alternative search after audio fails."""
+    if classify(url)!='youtube':raise ValueError('Invalid YouTube link')
+    response=requests.get('https://www.youtube.com/oembed',params={'url':url,'format':'json'},timeout=12,allow_redirects=False)
+    response.raise_for_status();data=response.json()
+    title=str(data.get('title') or '').strip()[:180];artist=str(data.get('author_name') or '').strip()[:120]
+    if not title:raise ValueError('Recording title unavailable')
+    from recording_match import identity
+    clean_title,clean_artist=identity({'title':title,'artist':artist})
+    return {'title':title,'artist':artist,'query':(clean_title+' '+clean_artist).strip()[:240]}
+
+
 def apple_metadata(url):
     if classify(url)!="apple":
         raise ValueError("Нужна ссылка на отдельную песню Apple Music.")

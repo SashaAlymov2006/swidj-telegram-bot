@@ -66,7 +66,7 @@ Keep `.env`, cookies, user databases and backups private. Persistent data and mo
 
 ## Verification
 
-The current source passed **312 offline tests**, including Telegram SDK flows, language isolation, playlists, cancellation, recovery, media cleanup, public-cache privacy and DJ analysis/project isolation. Mobile Chromium/WebKit checks exercise the actual audio worklets, transitions, recordings and project restore. Physical-device testing remains separate. This is functional test coverage, not a large-scale performance benchmark.
+The current source passed **320 offline tests**, including Telegram SDK flows, language isolation, playlists, cancellation, recovery, media cleanup, public-cache privacy and DJ analysis/project isolation. Mobile Chromium/WebKit checks exercise the actual audio worklets, transitions, recordings and project restore. Physical-device testing remains separate. This is functional test coverage, not a large-scale performance benchmark.
 
 ```sh
 docker build -t swidj:test .

@@ -139,18 +139,22 @@ class Charts:
                 if entry and time.monotonic()-entry[0]<7*86400:return dict(entry[1],stale=True)
                 raise web.HTTPServiceUnavailable() from None
 
-    async def resolve(self,country,identifier,bridge):
+    async def resolve(self,country,identifier,bridge,source=None):
         chart=await self.get(country)
         item=next((row for row in chart['tracks'] if row['id']==identifier),None)
         if not item:raise web.HTTPNotFound()
-        key=(country,identifier)
+        key=(country,identifier,source)
         async with self.resolve_lock:
             cached=self.recordings.get(key)
             if cached and time.monotonic()-cached[0]<300:return item,cached[1]
             from versions import find_versions
             async with bridge.search_slots:
-                result=await asyncio.to_thread(find_versions,item['query'],limit=10)
-                if not matching_versions(item,result):
+                if source:
+                    from versions import source_search
+                    result=await asyncio.to_thread(source_search,item,source)
+                else:
+                    result=await asyncio.to_thread(find_versions,item['query'],limit=10)
+                if not source and not matching_versions(item,result):
                     title=re.sub(r'[\(\[]\s*(?:feat|ft|with)\.?[^\)\]]*[\)\]]','',item['title'],flags=re.I)
                     artist=re.split(r'\s+(?:&|x|and|feat\.?|ft\.?|with)\s+|,\s*',item['artist'],flags=re.I)[0]
                     extra=await asyncio.to_thread(find_versions,(artist+' '+title+' official audio')[:240],limit=10)
@@ -190,8 +194,17 @@ def register(app,bridge):
         value=await request.json()
         if not isinstance(value,dict):raise web.HTTPBadRequest()
         country=value.get('country','de');identifier=str(value.get('track',''))
+        source=value.get('source')
+        if source not in (None,'yt','sc','jam'):raise web.HTTPBadRequest()
         if country not in COUNTRIES or not identifier.isdigit() or len(identifier)>20:raise web.HTTPBadRequest()
-        item,recordings=await service.resolve(country,identifier,bridge)
+        item,recordings=await service.resolve(country,identifier,bridge,source)
+        saved=[]
+        if source is None:
+            origin={k:item.get(k,'') for k in ('title','artist')}
+            for row in await bridge.app_history(uid):
+                if row.get('kind')!='upload' and row.get('_catalog_song')==origin and bridge.audio_path(uid,row):
+                    saved.append(row)
+            recordings=list({row['id']:row for row in recordings+saved}.values())
         from dispatch import user_lock
         async with user_lock(uid):
             current=bridge.chart_recordings.get(uid,[])
@@ -199,7 +212,9 @@ def register(app,bridge):
             bridge.chart_recordings[uid]=list({row['id']:row for row in recordings+current}.values())[:100]
             while len(bridge.chart_recordings)>1000:bridge.chart_recordings.pop(next(iter(bridge.chart_recordings)))
         from miniapp_server import public_song
-        return web.json_response({'tracks':[public_song(row) for row in matching_versions(item,recordings)],
-                                  'alternatives':[public_song(row) for row in recordings]})
+        choices=recordings if source else list({row['id']:row for row in saved+matching_versions(item,recordings)}.values())
+        return web.json_response({'tracks':[public_song(row,bool(bridge.audio_path(uid,row))) for row in choices],
+                                  'alternatives':[public_song(row,bool(bridge.audio_path(uid,row))) for row in recordings],
+                                  'source':{'yt':'YouTube','sc':'SoundCloud','jam':'Jamendo'}.get(source,'YouTube')})
     app.router.add_get('/api/charts',chart)
     app.router.add_post('/api/charts/resolve',resolve)

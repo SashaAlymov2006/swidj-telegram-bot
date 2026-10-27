@@ -151,3 +151,5 @@ body.keyboard-open .dj-mixer{visibility:hidden;pointer-events:none}
  [data-focus=A] .deck-b,[data-focus=B] .deck-a{display:none}
  .dj-deck h2{margin:12px 0 4px;font-size:17px}.dj-artist{margin-bottom:8px}.dj-play{margin:6px 0 4px;min-height:44px}.dj-wave{margin-top:10px}
 }
+
+.search-providers{flex-wrap:wrap;gap:6px;margin-top:-8px}.search-providers button{padding:10px 13px;font-size:13px}.source-results{margin-bottom:24px}

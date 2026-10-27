@@ -97,3 +97,28 @@ versus video, direct SoundCloud preparation and cancellation. Existing voice/cha
 SDK tests exercise the common search path. `verify_audio_reserve_live.py` is an
 opt-in anonymous live check: an intentionally failed primary must recover a full
 public SoundCloud fixture. It does not send Telegram messages or require cookies.
+
+## Search and saved-recording controls
+
+The Mini App main search defaults to all three sources. YouTube, SoundCloud and
+Jamendo metadata queries run under the existing two search-worker slots, results
+are grouped by their actual provider, and duplicate URLs are removed. Explicit
+source filters can be switched immediately; repeated queries to one source still
+have a per-owner rate limit. Only the chosen recording is downloaded.
+
+A cached chart selection offers the saved recording and new version searches.
+The same choice works after an app restart when an owned cached recording in
+recent history retains the original chart/catalog identity. Cache availability
+is owner-scoped. Choosing a recording while downloading or opening the studio
+preserves that action instead of silently switching to playback. Unprepared
+SoundCloud recordings sent to chat keep the selected SoundCloud URL, without a
+YouTube lookup.
+
+Direct SoundCloud links are fetched from SoundCloud with no YouTube cookies.
+If a direct recording cannot be fetched and its public oEmbed metadata is
+available, chat and app can offer independent SoundCloud choices. The app labels
+DRM-protected source errors and never removes the protection. Direct YouTube
+AUDIO links first retain exact cache/reserve recovery, then can offer independent
+SoundCloud search using a public oEmbed label. YouTube VIDEO links never enter
+that audio replacement flow. Missing public metadata can still leave a source
+failure. TikTok and Instagram continue to use their own extractors.

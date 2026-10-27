@@ -2,6 +2,50 @@ import unittest
 from unittest.mock import Mock, patch
 from catalog_links import classify, extract_links, apple_metadata, public_metadata
 class CatalogLinksTests(unittest.TestCase):
+    def test_youtube_public_metadata_can_label_an_independent_audio_search(self):
+        from catalog_links import youtube_metadata
+        response=Mock();response.json.return_value={'title':'Ed Sheeran - Perfect (Official Music Video)','author_name':'Ed Sheeran'}
+        with patch('catalog_links.requests.get',return_value=response) as get:
+            metadata=youtube_metadata('https://www.youtube.com/watch?v=2Vv-BfVoq4g')
+        self.assertEqual(metadata['query'],'perfect ed sheeran')
+        self.assertEqual(get.call_args.args[0],'https://www.youtube.com/oembed')
+        self.assertFalse(get.call_args.kwargs['allow_redirects'])
+
+    def test_youtube_audio_failure_exposes_search_identity_but_video_never_does(self):
+        import tempfile,yt_dlp
+        from app_media import fetch
+        from unittest.mock import MagicMock
+        manager=MagicMock();manager.__enter__.return_value.extract_info.side_effect=yt_dlp.utils.DownloadError("Sign in to confirm you're not a bot")
+        with tempfile.TemporaryDirectory() as folder,patch('yt_dlp.YoutubeDL',return_value=manager),patch('catalog_links.youtube_metadata',return_value={'query':'perfect ed sheeran'}) as metadata:
+            result=fetch({'url':'https://www.youtube.com/watch?v=2Vv-BfVoq4g','mode':'audio','height':360},folder)
+            self.assertEqual(result,{'error':'sourceLogin','recovery_query':'perfect ed sheeran'})
+            metadata.reset_mock()
+            with self.assertRaises(yt_dlp.utils.DownloadError):fetch({'url':'https://www.youtube.com/watch?v=2Vv-BfVoq4g','mode':'video','height':360},folder)
+            metadata.assert_not_called()
+
+    def test_soundcloud_metadata_is_independent_and_does_not_supply_audio(self):
+        from catalog_links import soundcloud_metadata
+        response=Mock();response.json.return_value={'title':'Perfect by Singer','author_name':'Singer','html':'<iframe></iframe>'}
+        with patch('catalog_links.requests.get',return_value=response) as get:
+            metadata=soundcloud_metadata('https://soundcloud.com/singer/perfect')
+        self.assertEqual(metadata,{'title':'Perfect','artist':'Singer','query':'Perfect Singer'})
+        self.assertEqual(get.call_args.args[0],'https://soundcloud.com/oembed')
+        self.assertFalse(get.call_args.kwargs['allow_redirects'])
+        with patch('catalog_links.requests.get') as get,self.assertRaises(ValueError):
+            soundcloud_metadata('https://soundcloud.com.evil.test/singer/perfect')
+        get.assert_not_called()
+
+    def test_protected_soundcloud_link_offers_independent_source_search(self):
+        import tempfile,yt_dlp
+        from app_media import fetch
+        from unittest.mock import MagicMock
+        manager=MagicMock();manager.__enter__.return_value.extract_info.side_effect=yt_dlp.utils.DownloadError('This video is DRM protected')
+        with tempfile.TemporaryDirectory() as folder,patch('yt_dlp.YoutubeDL',return_value=manager) as ydl,patch('catalog_links.soundcloud_metadata',return_value={'title':'Song','artist':'Artist','query':'Song Artist'}):
+            result=fetch({'url':'https://soundcloud.com/artist/song','mode':'audio','height':360},folder)
+        self.assertEqual(result,{'kind':'search','query':'Song Artist','source_search':'sc','reason':'sourceProtected'})
+        self.assertIsNone(ydl.call_args.args[0]['cookiefile'])
+        manager.__enter__.return_value.extract_info.assert_called_once_with('https://soundcloud.com/artist/song',download=True)
+
     def test_copied_tiktok_share_formats_work_in_chat_and_miniapp(self):
         from app_media import validate
         url='https://vm.tiktok.com/ABC12/'

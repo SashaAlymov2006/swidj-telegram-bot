@@ -188,3 +188,14 @@ class AppReserves(unittest.IsolatedAsyncioTestCase):
         task.cancel()
         with self.assertRaises(asyncio.CancelledError):await task
         self.assertTrue(finished.is_set())
+
+    async def test_failed_direct_youtube_audio_offers_fresh_search_after_exact_reserve(self):
+        result=json.dumps({'error':'sourceLogin','recovery_query':'perfect ed sheeran'}).encode()
+        with patch.dict(os.environ,MINIAPP_URL='https://preview.example.test'),patch('media_recovery.recover_audio',return_value=None),patch('app_media.process',new=AsyncMock(return_value=result)),patch('media_recovery.download_with_reserve',return_value=None) as reserve:
+            response=await self.client.post('/api/link',headers=self.headers,json={'url':YT,'mode':'audio'})
+            self.assertEqual(response.status,200)
+            self.assertEqual(await response.json(),{'kind':'search','query':'perfect ed sheeran','source_search':'sc'})
+            reserve.assert_called_once()
+            reserve.reset_mock()
+            response=await self.client.post('/api/link',headers=self.headers,json={'url':YT,'mode':'video'})
+            self.assertEqual(response.status,502);reserve.assert_not_called()

@@ -678,6 +678,17 @@ assert 78 not in h
         sender.assert_not_awaited()
         self.assertEqual(path.read_bytes(), b"retained full recording")
 
+    async def test_failed_direct_soundcloud_link_offers_its_own_versions_without_youtube(self):
+        await self.app.process_update(self.message('https://soundcloud.com/singer/perfect'))
+        token=next(reversed(self.app.user_data[77]['dl_requests']))
+        candidate=dict(title='Perfect',artist='Singer',duration=261,url='https://soundcloud.com/singer/another',source='SoundCloud')
+        with patch.object(self.bot,'download_soundcloud_audio',side_effect=RuntimeError('DRM protected')),patch('catalog_links.soundcloud_metadata',return_value={'title':'Perfect','artist':'Singer','query':'Perfect Singer'}),patch('soundcloud_source.search',return_value=[candidate]) as search,patch('versions.find_versions') as youtube:
+            await self.app.process_update(self.callback('dl_audio|'+token))
+        search.assert_called_once_with('Perfect Singer',5);youtube.assert_not_called()
+        request=next(reversed(self.app.user_data[77]['version_requests'].values()))
+        self.assertEqual(request['source'],'sc')
+        self.assertEqual(request['candidates'],[candidate])
+
     async def test_source_buttons_search_catalog_then_download_soundcloud_selection(self):
         for uid,language in ((77,'ru'),(88,'en')):
             catalog=dict(id=51,title='Perfect',artist='Ed Sheeran')

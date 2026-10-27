@@ -123,6 +123,8 @@ def register(app,bridge):
                             try:shutil.copyfile(path,target)
                             finally:remove_owned_file(path)
                             cached=(str(target),metadata);result=dict(metadata,path=str(target))
+                    if result.get('error') and result.get('recovery_query') and mode=='audio' and platform=='youtube':
+                        return web.json_response({'kind':'search','query':result['recovery_query'],'source_search':'sc'})
                     if result.get('error'):return web.json_response({'reason':result['error']},status=502)
                     source=Path(result['path'])
                     if source.is_symlink() or source.resolve().parent!=Path(directory).resolve() or not source.stat().st_size>0:raise ValueError('Invalid output')
@@ -231,6 +233,20 @@ def fetch(payload,directory):
             options['cookiefile']=cookies
             with yt_dlp.YoutubeDL(options) as downloader:info=downloader.extract_info(url,download=True)
     except yt_dlp.utils.DownloadError as error:
+        if platform=='youtube' and mode=='audio':
+            try:
+                from catalog_links import youtube_metadata
+                metadata=youtube_metadata(url)
+                return {'error':'sourceLogin' if 'sign in' in str(error).lower() or 'not a bot' in str(error).lower() else 'sourceUnavailable',
+                        'recovery_query':metadata['query'][:120]}
+            except Exception:pass
+        if platform=='soundcloud':
+            try:
+                from catalog_links import soundcloud_metadata
+                metadata=soundcloud_metadata(url)
+                return {'kind':'search','query':metadata['query'][:120],'source_search':'sc',
+                        'reason':'sourceProtected' if 'drm' in str(error).lower() else 'sourceUnavailable'}
+            except Exception:pass
         if platform=='tiktok' and any(text in str(error).lower() for text in ('unsupported url','no suitable extractor')):
             from tiktok_photos import download
             photos=download(url,directory,mode,height,budget)
@@ -255,6 +271,7 @@ if __name__=='__main__':
         elif 'too large' in message or 'max-filesize' in message:reason='mediaTooLarge'
         elif 'live broadcast' in message:reason='sourceLive'
         elif 'duration' in message or 'too long' in message:reason='mediaTooLong'
+        elif 'drm' in message:reason='sourceProtected'
         elif 'sign in' in message or 'login' in message or 'not a bot' in message:reason='sourceLogin'
         elif '429' in message:reason='sourceRateLimit'
         elif 'unsupported' in message or 'suitable extractor' in message:reason='unsupportedLink'

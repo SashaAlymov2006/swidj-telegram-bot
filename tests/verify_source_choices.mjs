@@ -7,9 +7,9 @@ const e=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').repl
 const stamp=x=>String(x),form={onsubmit:null},$=()=>form;
 const dialog=(title,body)=>{rendered={title,body};};
 const api=async(path,payload)=>{calls.push([path,payload]);const result=responses.shift();assert(result,'Unexpected API request');return{json:async()=>result};};
-const start=source.indexOf('async function prepareTrack(track) {'),end=source.indexOf('async function playTrack(',start);
+const start=source.indexOf('async function prepareTrack('),end=source.indexOf('async function playTrack(',start);
 assert(start>=0&&end>start,'Frontend functions missing');
-const {prepareTrack,recordingChoices}=eval(source.slice(start,end)+'\n({prepareTrack,recordingChoices})');
+const {prepareTrack,recordingChoices,chartOriginKeys}=eval(source.slice(start,end)+'\n({prepareTrack,recordingChoices,chartOriginKeys})');
 recordingChoices({source:'SoundCloud',tracks:[{id:'sc1',title:'<script>',artist:'Singer',duration:261}]},'origin');
 assert(rendered.title==='chooseVersion · SoundCloud','Source title missing');
 assert(rendered.body.includes('&lt;script&gt;')&&!rendered.body.includes('<script>'),'Unescaped recording title');
@@ -31,3 +31,33 @@ responses=[{status:'ready',track:{id:'ready',title:'Ready'}}];calls=[];
 assert((await prepareTrack({id:'ready'})).title==='Ready'&&calls.length===1,'Normal ready flow changed');
 assert(source.includes("if(button.dataset.sourceTrack)"),'Source button handler missing');
 console.log('Source choices frontend flow: PASS');
+
+let route='charts',chartChoiceKey=null,chartCountry='de',chartData={tracks:[{id:'101',title:'Song',artist:'Singer'}]},chartBusy=null;
+const chartResolved=new Map(),chartKey=item=>'de:'+item.id,engine={unlock:async()=>{}},render=()=>{},report=error=>{throw error;};
+const chartStart=source.indexOf('function showChartChoices('),chartEnd=source.indexOf('function home()',chartStart);
+const {playChart}=eval(source.slice(chartStart,chartEnd)+'\n({playChart})');
+chartResolved.set('de:101',{id:'saved1',title:'Saved version',artist:'Singer',playable:true});calls=[];
+await playChart(0);
+assert(calls.length===0,'Cached chart prompted a fresh download');
+assert(rendered.body.includes('keepVersion')&&rendered.body.includes('data-chart-provider="sc"')&&rendered.body.includes('data-chart-provider="jam"'),'Cached chart lacks keep/other provider options');
+let searchSource='all',searchGroups=[{source:'SoundCloud',tracks:[{id:'sc5',title:'Song'}]}],results=searchGroups[0].tracks,searching=false;
+const row=track=>'<li>'+e(track.title)+'</li>';
+const searchStart=source.indexOf('function searchProviders()'),searchEnd=source.indexOf('function searchScreen()',searchStart);
+const {searchProviders,searchResults}=eval(source.slice(searchStart,searchEnd)+'\n({searchProviders,searchResults})');
+assert(['all','yt','sc','jam'].every(key=>searchProviders().includes('data-search-source="'+key+'"')),'Provider filters missing');
+assert(searchResults().includes('SoundCloud')&&!searchResults().includes('YouTube'),'Source attribution is wrong');
+console.log('Cached chart and multi-source search frontend flows: PASS');
+
+chartResolved.clear();calls=[];responses=[{tracks:[{id:'restored',title:'Previously selected',artist:'Singer',playable:true}],alternatives:[]}];
+await playChart(0);
+assert(calls.length===1&&calls[0][0]==='charts/resolve','Restored chart cache was downloaded again');
+assert(rendered.body.includes('keepVersion')&&rendered.body.includes('data-chart-provider="sc"'),'Restored chart cache hides other sources');
+console.log('Restored chart choice frontend flow: PASS');
+
+responses=[{status:'choices',tracks:[{id:'download-choice',title:'Download choice',artist:'Singer'}]}];calls=[];
+await prepareTrack({id:'catalog-download'},'download');
+assert(rendered.body.includes('data-action="download"')&&rendered.body.includes('data-source-intent="download"'),'Choosing a recording loses download intent');
+responses=[{status:'choices',tracks:[{id:'studio-choice',title:'Studio choice',artist:'Singer'}]}];
+await prepareTrack({id:'catalog-studio'},'studio');
+assert(rendered.body.includes('data-action="studio"'),'Choosing a recording loses studio intent');
+console.log('Download/studio intent through version selection: PASS');

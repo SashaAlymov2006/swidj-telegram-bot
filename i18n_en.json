@@ -461,5 +461,6 @@
   "YouTube ограничил доступ к этой записи с сервера. Повторная попытка сейчас может не помочь. Можно прислать аудиофайл или ссылку на SoundCloud.": "YouTube has restricted access to this recording from the server. Retrying now may not help. You can send an audio file or a SoundCloud link.",
   "Мои пресеты": "My presets",
   "?????? SoundCloud": "SoundCloud recordings",
-  "?????? Jamendo": "Jamendo recordings"
+  "?????? Jamendo": "Jamendo recordings",
+  "?????? YouTube": "YouTube recordings"
 }
