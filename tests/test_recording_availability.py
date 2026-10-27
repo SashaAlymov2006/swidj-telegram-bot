@@ -77,7 +77,45 @@ class AvailabilityTests(unittest.TestCase):
 
     def test_selection_omits_failed_candidates_and_backfills_three(self):
         rows=[dict(SC,url=SC['url']+str(index)) for index in range(6)]
-        with patch('recording_availability.available',side_effect=[False,True,False,True,True]) as probe:
+        with patch('recording_availability.available',side_effect=lambda item,uid:item['url'] in {rows[i]['url'] for i in (1,3,4)}) as probe:
             result=availability.verified_choices(rows,'Song Artist',77)
         self.assertEqual([s['url'] for s in result],[rows[i]['url'] for i in (1,3,4)])
-        self.assertEqual(probe.call_count,5)
+        self.assertLessEqual(probe.call_count,6)
+
+    def test_parallel_checks_keep_owner_context_and_rank_order(self):
+        import threading
+        from operations import Operation,_current
+        rows=[dict(SC,url=SC['url']+str(i)) for i in range(2)]
+        barrier=threading.Barrier(2)
+        operation=Operation(77);marker=_current.set(operation)
+        def check(item,uid):
+            self.assertIs(_current.get(),operation)
+            barrier.wait(timeout=2)
+            return True
+        try:
+            with patch('recording_availability.available',side_effect=check):
+                self.assertEqual(availability.verified_choices(rows,'Song Artist',77),rows)
+        finally:_current.reset(marker)
+
+    def test_youtube_probe_uses_bounded_real_downloader_test_and_cleans_sample(self):
+        import yt_dlp
+        settings={};paths=[]
+        manager=MagicMock();manager.__enter__.return_value=manager
+        info={'url':'https://media.googlevideo.com/audio','duration':210,'format_id':'251'}
+        def create(options):
+            settings.update(options)
+            return manager
+        def extract(url,download):
+            self.assertTrue(download)
+            path=Path(settings['outtmpl'].replace('%(ext)s','webm'));paths.append(path)
+            path.write_bytes(bytes.fromhex('1a45dfa3')+b'fixture')
+            return info
+        manager.extract_info.side_effect=extract
+        with patch('yt_dlp.YoutubeDL',side_effect=create),patch.dict('os.environ',{'YTDLP_COOKIE_FILE':''}):
+            self.assertTrue(availability._remote(dict(SC,url='https://www.youtube.com/watch?v=abcdefghijk')))
+        self.assertTrue(settings['test'])
+        self.assertNotIn('skip_download',settings)
+        self.assertFalse(paths[0].parent.exists())
+        with self.assertRaisesRegex(ValueError,'Probe size'):
+            settings['progress_hooks'][0]({'downloaded_bytes':65537})
+        self.assertIsNotNone(settings['match_filter'](dict(info,has_drm=True)))

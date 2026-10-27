@@ -65,6 +65,10 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         return form
 
     async def asyncSetUp(self):
+        sc=patch('soundcloud_source.search',return_value=[])
+        sc.start();self.addCleanup(sc.stop)
+        from versions import _source_metadata, _source_checks
+        _source_metadata.clear();_source_checks.clear()
         inventory=patch('versions.source_inventory',new_callable=AsyncMock,return_value={'yt':[], 'sc':[], 'jam':[]})
         inventory.start();self.addCleanup(inventory.stop)
         preflight=patch('recording_availability.available',return_value=True)
@@ -190,8 +194,29 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
             response=await self.client.get('/api/search?q=original+song&source=sc',headers=self.headers)
             self.assertEqual(response.status,200)
             self.assertEqual((await response.json())['tracks'][0]['title'],'Original song')
-            self.assertEqual((await self.client.get('/api/search?q=original+song&source=sc',headers=self.headers)).status,429)
+            before=searcher.call_count
+            self.assertEqual((await self.client.get('/api/search?q=original+song&source=sc',headers=self.headers)).status,200)
+            self.assertEqual(searcher.call_count,before)
         self.assertEqual((await self.client.get('/api/search?q=original+song&source=invalid',headers=self.headers)).status,400)
+
+    async def test_cached_search_replays_without_requests_and_refreshes_playable_state(self):
+        found=dict(title='Found',artist='A',url='https://www.youtube.com/watch?v=abcdefghijk')
+        with patch('versions.find_versions',side_effect=lambda *args,**kwargs:[dict(found)]) as search:
+            response=await self.client.get('/api/search?q=cached',headers=self.headers)
+            first=(await response.json())['tracks'][0]
+            self.assertFalse(first['playable'])
+            fixture=Path(self.tmp.name)/'cached.mp3';fixture.write_bytes(b'owned fixture')
+            self.bridge.audio_jobs.retain(77,first['id'],fixture)
+            self.bridge.searches[77][0]['title']='mutated live snapshot'
+            repeat=await self.client.get('/api/search?q=cached',headers=self.headers)
+            self.assertEqual(repeat.status,200)
+            replay=(await repeat.json())['tracks'][0]
+            self.assertTrue(replay['playable']);self.assertEqual(replay['title'],'Found')
+            self.assertEqual(search.call_count,1)
+            other=await self.client.get('/api/search?q=cached',headers={'X-Telegram-Init-Data':signed(78)})
+            self.assertEqual(other.status,200)
+            self.assertFalse((await other.json())['tracks'][0]['playable'])
+            self.assertEqual(search.call_count,2)
 
     async def test_main_search_is_compact_and_keeps_jamendo_as_reserve(self):
         def search(song,source):

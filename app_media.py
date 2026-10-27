@@ -54,7 +54,13 @@ async def normalize(source,target,mode,height=0):
     if LINK_MAX_SECONDS and duration>LINK_MAX_SECONDS:raise ValueError('Media too long')
     command=['ffmpeg','-nostdin','-v','error','-y','-threads','2','-protocol_whitelist','file,pipe',
              '-format_whitelist','mp3,wav,ogg,flac,mov,matroska,webm','-i',str(source),'-map_metadata','-1']
-    if mode=='audio':command+=['-vn','-c:a','libmp3lame','-b:a','192k']
+    if mode=='audio':
+        codec=None
+        if Path(source).suffix.lower()=='.mp3':
+            raw=await process(['ffprobe','-v','error','-select_streams','a:0','-show_entries','stream=codec_name','-of','json',str(source)],15)
+            streams=json.loads(raw).get('streams',[])
+            codec=streams[0].get('codec_name') if streams else None
+        command+=['-vn','-c:a','copy'] if codec=='mp3' else ['-vn','-c:a','libmp3lame','-b:a','192k']
     elif info['streams'][0].get('codec_name')=='h264' and info['streams'][0].get('pix_fmt')=='yuv420p' and (not height or max(info['streams'][0].get('width',0),info['streams'][0].get('height',0))<=height*16/9):
         streams=json.loads(await process(['ffprobe','-v','error','-select_streams','a:0','-show_entries','stream=codec_name','-of','json',str(source)],15))
         command+=['-c:v','copy','-c:a','copy' if not streams.get('streams') or streams['streams'][0].get('codec_name')=='aac' else 'aac','-movflags','+faststart']

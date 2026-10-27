@@ -6,6 +6,8 @@ from pathlib import Path
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from urllib.parse import urlsplit,urljoin
 import requests
 from operations import checkpoint,run_process
@@ -42,10 +44,45 @@ def _sample(url,source,headers=None):
             line=next((s.strip() for s in text.splitlines() if s.strip() and not s.startswith('#')),None)
             if not line:return False
             url=urljoin(url,line);continue
-        return (body.startswith((b'ID3',b'OggS',b'fLaC',b'RIFF',bytes.fromhex('1a45dfa3')))
-                or len(body)>2 and body[0]==255 and body[1]&224==224
-                or len(body)>8 and body[4:8] in (b'ftyp',b'styp',b'moof'))
+        return _media_bytes(body)
     return False
+
+
+def _media_bytes(body):
+    return (body.startswith((b'ID3',b'OggS',b'fLaC',b'RIFF',bytes.fromhex('1a45dfa3')))
+            or len(body)>2 and body[0]==255 and body[1]&224==224
+            or len(body)>8 and body[4:8] in (b'ftyp',b'styp',b'moof'))
+
+
+def _youtube_sample(item):
+    """Exercise the real downloader's test mode (about 10 KiB), not a raw URL."""
+    import yt_dlp
+    from soundcloud_source import Quiet
+    from youtube_session import cookie_snapshot
+    from scratch import scratch_root
+    def progress(info):
+        checkpoint()
+        if (info.get('downloaded_bytes') or 0)>65536:raise ValueError('Probe size exceeded')
+    def match(info,**kwargs):
+        checkpoint()
+        if info.get('has_drm') or info.get('is_live') or not _duration_ok(item.get('duration'),info.get('duration')):
+            return 'Unavailable full recording'
+        if info.get('availability') in ('private','premium_only','subscriber_only','needs_auth'):
+            return 'Recording requires access'
+    with tempfile.TemporaryDirectory(dir=scratch_root(),prefix='availability-yt-') as folder:
+        settings={'quiet':True,'no_warnings':True,'logger':Quiet(),'noplaylist':True,
+                  'socket_timeout':4,'retries':0,'extractor_retries':0,'test':True,
+                  'format':'bestaudio[protocol=https][format_id!*=preview]/best[protocol=https][format_id!*=preview]',
+                  'outtmpl':str(Path(folder)/'probe.%(ext)s'),'allowed_extractors':['youtube.*'],
+                  'progress_hooks':[progress],'match_filter':match}
+        with cookie_snapshot(os.getenv('YTDLP_COOKIE_FILE')) as jar:
+            settings['cookiefile']=jar
+            with yt_dlp.YoutubeDL(settings) as ydl:info=ydl.extract_info(item['url'],download=True)
+        checkpoint()
+        if not isinstance(info,dict) or match(info) or not _allowed(info.get('url'),'youtube'):return False
+        files=[p for p in Path(folder).glob('probe.*') if p.is_file() and not p.is_symlink() and p.suffix not in ('.part','.ytdl','.json')]
+        if len(files)!=1 or not 0<files[0].stat().st_size<=65536:return False
+        return _media_bytes(files[0].read_bytes())
 
 
 def _duration_ok(expected,actual):
@@ -67,6 +104,7 @@ def _cached(item,uid):
 def _remote(item):
     from download_cache import source_key
     key=str(source_key(item['url']))
+    if key.startswith('youtube:'):return _youtube_sample(item)
     if key.startswith('jamendo:'):
         from jamendo_source import rows,track,identifier
         tid=identifier(item['url']);row=None
@@ -127,12 +165,27 @@ def available(item,uid=None):
     finally:_slots.release()
 
 
-def verified_choices(items,query,uid=None):
+def verified_choices(items,query,uid=None,limit=3):
     from search_quality import recording_choices
+    if type(limit) is not int or not 1<=limit<=3:raise ValueError('Invalid choice limit')
     choices=[];deadline=time.monotonic()+18
-    for item in recording_choices(items,query,limit=6):
-        checkpoint()
-        if time.monotonic()>deadline:break
-        if available(item,uid):choices.append(item)
-        if len(choices)==3:break
+    ranked=recording_choices(items,query,limit=6)
+    if limit==1:
+        for item in ranked:
+            checkpoint()
+            if time.monotonic()>deadline:break
+            if available(item,uid):return [item]
+        return []
+    # Two candidates at a time; the global semaphore still caps remote work.
+    # Preserve ranking, operation cancellation and user isolation in workers.
+    with ThreadPoolExecutor(max_workers=2,thread_name_prefix='recording-check') as pool:
+        for offset in range(0,len(ranked),2):
+            checkpoint()
+            if time.monotonic()>deadline:break
+            batch=ranked[offset:offset+2]
+            pending=[pool.submit(copy_context().run,available,item,uid) for item in batch]
+            for item,result in zip(batch,pending):
+                if result.result() and len(choices)<limit:choices.append(item)
+            if len(choices)>=limit:break
+    checkpoint()
     return choices

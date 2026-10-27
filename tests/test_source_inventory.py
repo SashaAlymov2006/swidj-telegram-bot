@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from versions import source_inventory, source_rows, source_search, _source_checks
+from versions import source_inventory, source_rows, source_search, _source_checks, _source_metadata
 
 YT = {'url':'https://www.youtube.com/watch?v=abcdefghijk','title':'Song','artist':'Artist'}
 SC = {'url':'https://soundcloud.com/artist/song','title':'Song','artist':'Artist'}
@@ -10,7 +10,18 @@ JAM = {'url':'https://www.jamendo.com/track/1680810','title':'Song','artist':'Ar
 class SourceInventoryTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         _source_checks.clear()
+        _source_metadata.clear()
         self.addCleanup(_source_checks.clear)
+        self.addCleanup(_source_metadata.clear)
+
+    async def test_quick_inventory_expands_without_repeating_metadata_search(self):
+        rows=[dict(SC,url=SC['url']+str(i)) for i in range(3)]
+        with patch('soundcloud_source.search',return_value=rows) as search,patch('recording_availability.available',return_value=True):
+            inventory=await source_inventory({'title':'Song','artist':'Artist'},77,{'yt':[],'jam':[]})
+            self.assertEqual(len(inventory['sc']),1)
+            expanded=source_search({'title':'Song','artist':'Artist','_availability_uid':77},'sc')
+        self.assertEqual(len(expanded),3)
+        search.assert_called_once_with('Song Artist',10)
 
     async def test_empty_and_failed_sources_are_not_advertised(self):
         def search(song, source):

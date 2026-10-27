@@ -97,6 +97,7 @@ class BotLibrary:
         self.chart_recordings = {}
         self.source_searching = set()
         self.search_times = {}
+        self.search_results = {}
         self.send_times = {}
         self.search_slots = asyncio.Semaphore(2)
         self.upload_slots = asyncio.Semaphore(2)
@@ -204,6 +205,16 @@ class BotLibrary:
         if exclude:
             from soundcloud_source import public_url as sc_url
             if not sc_url(exclude):raise web.HTTPBadRequest()
+        def present(rows,groups,available):
+            def output(song):return public_song(song,bool(self.audio_path(uid,song)))
+            return {'tracks':[output(s) for s in rows], 'available_sources':list(available),
+                    'groups':[{'source':name,'tracks':[output(s) for s in items]} for name,items in groups.items()]}
+        cache_key=(uid,query,source,exclude)
+        cached=self.search_results.get(cache_key)
+        if cached and cached[0]>time.monotonic():
+            rows,groups,available=deepcopy(cached[1:])
+            self.searches[uid]=rows
+            return present(rows,groups,available)
         rate_key=(uid,source)
         if time.monotonic() - self.search_times.get(rate_key, 0) < 3:
             raise web.HTTPTooManyRequests()
@@ -216,13 +227,13 @@ class BotLibrary:
         async def provider(key):
             try:
                 async with self.search_slots:
-                    rows=await asyncio.to_thread(source_search, {'_search_query':query,'_availability_uid':uid}, key)
+                    rows=await asyncio.to_thread(source_search, {'_search_query':query,'_availability_uid':uid,'_availability_limit':2 if source=='all' else 3}, key)
                     return key,[row for row in rows if row['url']!=exclude]
             except Exception:
                 return key, []
         groups = await asyncio.gather(*(provider(key) for key in (('yt','sc') if source=='all' else (source,))))
         from versions import source_inventory
-        inventory = await source_inventory({'_search_query':query}, uid, dict(groups))
+        inventory = await source_inventory({'_search_query':query,'_availability_limit':2 if source=='all' else 3}, uid, dict(groups))
         inventory = {key:[row for row in rows if row['url']!=exclude] for key,rows in inventory.items()}
         available_sources = [key for key,rows in inventory.items() if rows]
         if source=='all':
@@ -248,9 +259,9 @@ class BotLibrary:
             song['id'] = 10**15 + int.from_bytes(hashlib.sha256(song['url'].encode()).digest()[:6], 'big')
             song['_search_query'] = query
         self.searches[uid] = result
-        def output(song):return public_song(song,bool(self.audio_path(uid,song)))
-        return {'tracks': [output(s) for s in result], 'available_sources':available_sources, 'groups':[
-            {'source':name, 'tracks':[output(s) for s in items]} for name,items in public_groups.items()]}
+        self.search_results[cache_key]=(time.monotonic()+(15 if result else 5),*deepcopy((result,public_groups,available_sources)))
+        while len(self.search_results)>256:self.search_results.pop(next(iter(self.search_results)))
+        return present(result,public_groups,available_sources)
 
     async def source_versions(self, uid, identifier, source):
         self.allowed(uid, 'search')

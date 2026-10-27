@@ -45,6 +45,8 @@ class ComfortUnitTests(unittest.TestCase):
 
 class ComfortAsyncTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        from versions import _source_metadata, _source_checks
+        _source_metadata.clear();_source_checks.clear()
         inventory=patch('versions.source_inventory',new_callable=AsyncMock,return_value={'yt':[], 'sc':[], 'jam':[]})
         inventory.start();self.addCleanup(inventory.stop)
         preflight=patch('recording_availability.available',return_value=True)

@@ -58,6 +58,16 @@ class LinkValidationTests(unittest.TestCase):
             self.assertEqual(validate({'url':'https://vm.tiktok.com/ABC12/','height':height})[2],height)
 
 class AppMediaTests(unittest.IsolatedAsyncioTestCase):
+    async def test_existing_mp3_remux_preserves_decoded_audio(self):
+        with tempfile.TemporaryDirectory() as folder:
+            original=Path(folder)/'original.mp3';target=Path(folder)/'ready.mp3'
+            await real_process(['ffmpeg','-v','error','-f','lavfi','-i','sine=frequency=440:duration=2','-c:a','libmp3lame','-b:a','128k',str(original)],20)
+            duration=await normalize(original,target,'audio')
+            self.assertGreater(duration,1.9)
+            async def digest(path):
+                return await real_process(['ffmpeg','-v','error','-i',str(path),'-map','0:a:0','-f','md5','-'],20)
+            self.assertEqual(await digest(original),await digest(target))
+
     async def asyncSetUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name)

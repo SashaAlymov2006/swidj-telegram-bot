@@ -4,6 +4,7 @@ import os
 import re
 import secrets
 import time
+import threading
 from copy import deepcopy
 import yt_dlp
 from telegram import InlineKeyboardButton as Button
@@ -81,20 +82,29 @@ def source_search(song, source):
     """A new, user-visible search uses the catalog identity, not a failed video."""
     origin = song.get('_catalog_song') or song
     query = song.get('_search_query') or ' '.join(str(origin.get(k) or '') for k in ('title', 'artist')).strip()
-    cached = _source_checks.get((song.get('_availability_uid'), query, source))
-    if cached and cached[0] > time.monotonic():
-        return deepcopy(cached[1])
+    limit = max(1, min(3, int(song.get('_availability_limit', 3))))
+    key = (song.get('_availability_uid'), query, source)
+    cached = _source_checks.get(key)
+    if cached and cached[0] > time.monotonic() and (len(cached)<3 or cached[2]>=limit):
+        return deepcopy(cached[1][:limit])
     if source == 'sc':
         from soundcloud_source import search
     elif source == 'jam':
         from jamendo_source import search
     elif source == 'yt':
-        from recording_availability import verified_choices
-        return verified_choices(find_versions(query,10),query,song.get('_availability_uid'))
+        search = find_versions
     else:
         raise ValueError('Invalid recording source')
     from recording_availability import verified_choices
-    return verified_choices(search(query,10),query,song.get('_availability_uid'))
+    with _metadata_lock:
+        raw = _source_metadata.get(key)
+        rows = deepcopy(raw[1]) if raw and raw[0]>time.monotonic() else None
+    if rows is None:
+        rows = search(query,10)
+        with _metadata_lock:
+            _source_metadata[key] = (time.monotonic()+(60 if rows else 20),deepcopy(rows))
+            while len(_source_metadata)>128:_source_metadata.pop(next(iter(_source_metadata)))
+    return verified_choices(rows,query,song.get('_availability_uid'),limit=limit)
 
 
 def source_rows(token, request):
@@ -105,6 +115,8 @@ def source_rows(token, request):
 
 
 _source_checks = {}
+_source_metadata = {}
+_metadata_lock = threading.Lock()
 
 
 async def source_inventory(song, uid, known=None):
@@ -120,7 +132,7 @@ async def source_inventory(song, uid, known=None):
             return source, deepcopy(cached[1])
         else:
             try:
-                rows = await asyncio.to_thread(source_search, dict(song, _availability_uid=uid), source)
+                rows = await asyncio.to_thread(source_search, dict(song, _availability_uid=uid, _availability_limit=1), source)
             except Exception:
                 checkpoint()
                 rows = []
@@ -132,7 +144,8 @@ async def source_inventory(song, uid, known=None):
                 (source == 'sc' and public_url(row.get('url'))) or
                 (source == 'jam' and identifier(row.get('url'))) or
                 (source == 'yt' and re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', row.get('url', '')))]
-        _source_checks[key] = (time.monotonic() + (60 if rows else 20), deepcopy(rows))
+        checked_limit = song.get('_availability_limit',3) if known is not None and source in known else 1
+        _source_checks[key] = (time.monotonic() + (60 if rows else 20), deepcopy(rows),checked_limit)
         while len(_source_checks) > 1000:
             _source_checks.pop(next(iter(_source_checks)))
         return source, deepcopy(rows)
