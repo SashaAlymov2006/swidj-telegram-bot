@@ -73,3 +73,8 @@ recordingChoices({source:'YouTube',tracks:[],available_sources:['aud']},'aud-onl
 assert(rendered.body.includes('data-source-provider="aud"')&&!rendered.body.includes('data-source-provider="jam"'),'Audius source filtering failed');
 searchAvailable=['aud'];assert(searchProviders().includes('data-search-source="aud"')&&!searchProviders().includes('data-search-source="yt"'),'Audius search filter missing');
 console.log('Audius provider UI checks passed');
+recordingChoices({source:'Audius',tracks:[{id:'aud1',title:'First'},{id:'aud2',title:'Second'}],available_sources:['aud','jam']},'catalog');
+responses=[{status:'failed',error:'prepareFailed'}];calls=[];
+assert(await prepareTrack({id:'aud1'})===null&&calls.length===1,'Failed Audius recording discarded remaining local versions');
+assert(rendered.body.includes('aud2')&&!rendered.body.includes('data-track="aud1"'),'Failed Audius version was not removed');
+console.log('Audius remaining versions flow passed');

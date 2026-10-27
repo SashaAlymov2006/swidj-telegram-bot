@@ -454,7 +454,7 @@ async function prepareTrack(track,intent='play') {
     if(info.status!=='ready'){
       if(info.error==='prepareFailed'){
         const group=recordingGroups.get(track.id);
-        if(group?.source==='SoundCloud'){
+        if(['SoundCloud','Audius','Jamendo'].includes(group?.source)){
           const remaining=group.tracks.filter(choice=>choice.id!==track.id);
           if(remaining.length){recordingChoices({...group,tracks:remaining},group.origin,intent);return null;}
         }
