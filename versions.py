@@ -107,7 +107,7 @@ async def version_screen(update, context, text, markup):
 async def show_versions(update, context, token, request, *, exclude=None):
     rows = []
     for index, item in enumerate(request["candidates"]):
-        if index == exclude:
+        if index == exclude or index in request.get("sent_indices", []):
             continue
         duration = item.get("duration")
         stamp = f" · {duration // 60}:{duration % 60:02d}" if duration else ""
@@ -219,12 +219,17 @@ async def download_selected(update, context, token, request, index, downloader, 
     await stage("Скачиваю…")
     path = None
     sent = False
+    # Keep the recording choices reachable without leaving obsolete download menus.
+    other_rows = ([[Button("🎧 Другая версия", callback_data=f"ver:other:{token}:{index}")]]
+                  if not request.get("queue_ref") and any(
+                      i != index and i not in request.get("sent_indices", [])
+                      for i in range(len(request["candidates"]))) else [])
     try:
         if request.get('mode') in ('listen','queue'):
             from audio_presentation import send_cached_music
             from track_card import card_keyboard, retire_download_menus
             resolved=dict(request['song'],url=candidate['url'],title=candidate['title'],artist=candidate.get('artist',''))
-            if await send_cached_music(context.bot,update.effective_chat.id,candidate['url'],resolved['title'],resolved['artist'],reply_markup=card_keyboard(context,resolved,delivered=True)):
+            if await send_cached_music(context.bot,update.effective_chat.id,candidate['url'],resolved['title'],resolved['artist'],reply_markup=card_keyboard(context,resolved,extra_rows=other_rows,delivered=True)):
                 request.setdefault('sent_indices',[]).append(index)
                 await retire_download_menus(update,context,request)
                 return True
@@ -240,7 +245,7 @@ async def download_selected(update, context, token, request, index, downloader, 
         kwargs = {}
         if request.get("mode") in ("listen", "queue"):
             from track_card import card_keyboard
-            kwargs["reply_markup"] = card_keyboard(context, resolved, delivered=True)
+            kwargs["reply_markup"] = card_keyboard(context, resolved, extra_rows=other_rows, delivered=True)
         await send_music(context.bot, update.effective_chat.id, path, title, artist,
                          resolved.get("cover"), source_url=resolved['url'],license_url=resolved.get('license_url'), **kwargs)
         sent = True
@@ -262,7 +267,7 @@ async def download_selected(update, context, token, request, index, downloader, 
             from diagnostics import source_access_blocked, SOURCE_ACCESS_MESSAGE
             if source_access_blocked(error):
                 await version_screen(update, context, SOURCE_ACCESS_MESSAGE,
-                    Markup(queue_recovery(request) + [[Button("← Поиск", callback_data="ui:search")]]))
+                    Markup(queue_recovery(request) + other_rows + [[Button("← Поиск", callback_data="ui:search")]]))
                 return False
             await version_screen(update, context, "Не удалось скачать трек. Попробуй ещё раз или выбери другую версию.",
                 Markup(queue_recovery(request) + [

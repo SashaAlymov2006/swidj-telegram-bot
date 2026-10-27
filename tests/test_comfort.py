@@ -44,6 +44,27 @@ class ComfortUnitTests(unittest.TestCase):
 
 
 class ComfortAsyncTests(unittest.IsolatedAsyncioTestCase):
+    async def test_other_versions_survive_cached_delivery_and_source_block(self):
+        from versions import download_selected, show_versions
+        candidates = [dict(id=i, title="Song", artist="Artist", url=f"https://example.com/{i}") for i in range(3)]
+        context = SimpleNamespace(user_data={}, bot=SimpleNamespace())
+        update = SimpleNamespace(effective_chat=SimpleNamespace(id=77), effective_user=SimpleNamespace(id=77))
+        request = dict(song=candidates[0], candidates=candidates, mode="listen")
+        with patch("audio_presentation.send_cached_music", new_callable=AsyncMock, return_value=True) as cached, patch("track_card.retire_download_menus", new_callable=AsyncMock):
+            self.assertTrue(await download_selected(update, context, "0123456789", request, 0, None, None, None, None))
+        markup = cached.call_args.kwargs["reply_markup"]
+        self.assertIn("ver:other:0123456789:0", [b.callback_data for row in markup.inline_keyboard for b in row])
+        with patch("versions.version_screen", new_callable=AsyncMock) as screen:
+            await show_versions(update, context, "0123456789", request, exclude=0)
+        callbacks = [b.callback_data for row in screen.call_args.args[3].inline_keyboard for b in row]
+        self.assertNotIn("ver:pick:0123456789:0", callbacks)
+        self.assertIn("ver:pick:0123456789:1", callbacks)
+        self.assertIn("ver:pick:0123456789:2", callbacks)
+        with patch("audio_presentation.send_cached_music", new_callable=AsyncMock, return_value=False), patch("media_recovery.download_with_reserve", side_effect=RuntimeError("blocked")), patch("diagnostics.source_access_blocked", return_value=True), patch("versions.version_screen", new_callable=AsyncMock) as screen:
+            self.assertFalse(await download_selected(update, context, "0123456789", request, 1, None, None, None, None))
+        callbacks = [b.callback_data for row in screen.call_args.args[3].inline_keyboard for b in row]
+        self.assertIn("ver:other:0123456789:1", callbacks)
+
     async def test_lyrics_search_boosts_verified_phrase_and_bounds_requests(self):
         query = "these are the words I remember"
         false = {"id": 1, "title": "Wrong", "artist": "A", "url": "https://genius.com/wrong"}
