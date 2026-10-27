@@ -84,12 +84,12 @@ def source_search(song, source):
     elif source == 'jam':
         from jamendo_source import search
     elif source == 'yt':
-        from search_quality import recording_choices
-        return recording_choices(find_versions(query,10),query)
+        from recording_availability import verified_choices
+        return verified_choices(find_versions(query,10),query,song.get('_availability_uid'))
     else:
         raise ValueError('Invalid recording source')
-    from search_quality import recording_choices
-    return recording_choices(search(query,10),query)
+    from recording_availability import verified_choices
+    return verified_choices(search(query,10),query,song.get('_availability_uid'))
 
 
 def source_rows(token, request):
@@ -173,13 +173,12 @@ async def request_versions(update, context, song, *, mode="studio", queue_ref=No
     try:
         from jamendo_source import identifier
         if source:
-            candidates = await asyncio.to_thread(source_search, song, source)
+            candidates = await asyncio.to_thread(source_search, dict(song,_availability_uid=update.effective_user.id), source)
         else:
             candidates = [dict(song)] if identifier(song.get('url')) else await asyncio.to_thread(find_versions, " ".join(
                 str(song.get(key) or "") for key in ("title", "artist")).strip(),limit=10)
-            if not identifier(song.get('url')):
-                from search_quality import recording_choices
-                candidates=recording_choices(candidates,' '.join(str(song.get(k) or '') for k in ('title','artist')))
+            from recording_availability import verified_choices
+            candidates=await asyncio.to_thread(verified_choices,candidates,' '.join(str(song.get(k) or '') for k in ('title','artist')),update.effective_user.id)
         checkpoint()
     except Exception:
         return await version_screen(update, context,

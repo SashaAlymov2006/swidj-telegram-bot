@@ -76,6 +76,8 @@ class SDKTests(unittest.IsolatedAsyncioTestCase):
         cls.files.cleanup()
 
     async def asyncSetUp(self):
+        preflight=patch('recording_availability.available',return_value=True)
+        preflight.start();self.addCleanup(preflight.stop)
         self.local_files = tempfile.TemporaryDirectory()
         self.addCleanup(self.local_files.cleanup)
         local = Path(self.local_files.name)

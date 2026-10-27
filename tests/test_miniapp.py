@@ -65,6 +65,8 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         return form
 
     async def asyncSetUp(self):
+        preflight=patch('recording_availability.available',return_value=True)
+        preflight.start();self.addCleanup(preflight.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.store = StateStore(Path(self.tmp.name)/'state.db')

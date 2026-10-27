@@ -44,6 +44,9 @@ class ComfortUnitTests(unittest.TestCase):
 
 
 class ComfortAsyncTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        preflight=patch('recording_availability.available',return_value=True)
+        preflight.start();self.addCleanup(preflight.stop)
     async def test_other_versions_survive_cached_delivery_and_source_block(self):
         from versions import download_selected, show_versions
         candidates = [dict(id=i, title="Song", artist="Artist", url=f"https://example.com/{i}") for i in range(3)]

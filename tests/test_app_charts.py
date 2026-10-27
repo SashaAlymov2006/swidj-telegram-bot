@@ -21,6 +21,9 @@ def fixture():
 
 
 class ChartDataTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        preflight=patch('recording_availability.available',return_value=True)
+        preflight.start();self.addCleanup(preflight.stop)
     async def test_background_refresh_checks_all_countries_and_stops_cleanly(self):
         from aiohttp import web
         from app_charts import register,COUNTRIES

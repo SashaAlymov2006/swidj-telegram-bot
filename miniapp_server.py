@@ -216,7 +216,7 @@ class BotLibrary:
         async def provider(key):
             try:
                 async with self.search_slots:
-                    rows=await asyncio.to_thread(source_search, {'_search_query':query}, key)
+                    rows=await asyncio.to_thread(source_search, {'_search_query':query,'_availability_uid':uid}, key)
                     return key,[row for row in rows if row['url']!=exclude]
             except Exception:
                 return key, []
@@ -273,7 +273,7 @@ class BotLibrary:
         try:
             from versions import source_search
             async with self.search_slots:
-                candidates = await asyncio.to_thread(source_search, song, source)
+                candidates = await asyncio.to_thread(source_search, dict(song,_availability_uid=uid), source)
             origin = dict(song.get('_catalog_song') or {k:song.get(k, '') for k in ('title', 'artist')})
             for item in candidates:
                 item['id'] = 10**15 + int.from_bytes(hashlib.sha256(item['url'].encode()).digest()[:6], 'big')
@@ -310,8 +310,8 @@ class BotLibrary:
             from versions import find_versions
             async with self.search_slots:
                 candidates = await asyncio.to_thread(find_versions, song['title']+' '+song.get('artist', ''),limit=10)
-            from search_quality import recording_choices
-            candidates=recording_choices(candidates,song['title']+' '+song.get('artist',''))
+            from recording_availability import verified_choices
+            candidates=await asyncio.to_thread(verified_choices,candidates,song['title']+' '+song.get('artist',''),uid)
             for item in candidates:
                 item['id'] = 10**15 + int.from_bytes(hashlib.sha256(item['url'].encode()).digest()[:6], 'big')
                 item['_catalog_song'] = {k:song.get(k, '') for k in ('title', 'artist')}
@@ -477,8 +477,8 @@ class BotLibrary:
                 from versions import find_versions
                 async with self.search_slots:
                     candidates = await asyncio.to_thread(find_versions, song['title'] + ' ' + song.get('artist', ''),limit=10)
-                from search_quality import recording_choices
-                candidates=recording_choices(candidates,song['title']+' '+song.get('artist',''))
+                from recording_availability import verified_choices
+                candidates=await asyncio.to_thread(verified_choices,candidates,song['title']+' '+song.get('artist',''),uid)
             if not candidates:
                 raise web.HTTPNotFound()
             requests[token] = {'song': dict(song), 'mode': 'listen', 'candidates': candidates}
