@@ -158,7 +158,8 @@ def register(app,bridge):
                         except (ValueError,OSError):pass
                     return web.json_response({'source':result.get('source'),'source_url':result.get('source_url'),'license_url':result.get('license_url'), 'kind':mode,'url':public_url().rstrip('/')+'/studio-file/'+token,
                                               'filename':item['filename'],'title':result.get('title','SwiDJ'),
-                                              'artist':result.get('artist',''),'duration':duration,'expires_in':int(item['expires']-time.time()),'poster':poster,'has_audio':has_audio})
+                                              'artist':result.get('artist',''),'duration':duration,'expires_in':int(item['expires']-time.time()),'poster':poster,'has_audio':has_audio,
+                                              'video_quality_limit':result.get('video_quality_limit') if mode=='video' else None})
                 except asyncio.TimeoutError:raise web.HTTPGatewayTimeout() from None
                 except (ValueError,KeyError,TypeError,OSError) as error:
                     message=str(error).lower()
@@ -247,6 +248,13 @@ def fetch(payload,directory):
             options['cookiefile']=cookies
             with yt_dlp.YoutubeDL(options) as downloader:info=downloader.extract_info(url,download=True)
     except yt_dlp.utils.DownloadError as error:
+        if platform=='youtube' and mode=='video':
+            from operations import checkpoint
+            checkpoint()
+            try:
+                from video_reserve import download as reserve_video
+                return reserve_video(url,height,directory,budget)
+            except Exception:pass
         if platform=='youtube' and mode=='audio':
             try:
                 from catalog_links import youtube_metadata

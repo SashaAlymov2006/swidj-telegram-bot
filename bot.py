@@ -385,7 +385,8 @@ def download_youtube_video(url: str, height: int) -> str:
     from download_cache import restore, retain as cache_retain
     cached = restore(url, f'chat-video-{height}', temp_dir)
     if cached and Path(cached[0]).stat().st_size <= 49*1024*1024:
-        return cached[0]
+        from video_reserve import output_path
+        return output_path(cached[0],cached[1])
 
     ydl_opts = {
         "format": f"bv*[height<={height}]+ba/b[height<={height}]",
@@ -416,6 +417,15 @@ def download_youtube_video(url: str, height: int) -> str:
     try:
         _extract_media(ydl_opts, url, temp_dir)
     except Exception as error:
+        if classify(url)=='youtube':
+            checkpoint()
+            try:
+                from video_reserve import download as reserve_video, output_path
+                reserved=reserve_video(url,height,temp_dir,49*1024**2)
+                cache_retain(url,f'chat-video-{height}',reserved['path'],reserved)
+                return output_path(reserved['path'],reserved)
+            except Exception:
+                shutil.rmtree(temp_dir,ignore_errors=True)
         if classify(url)=='tiktok' and 'unsupported url' in str(error).lower():
             from tiktok_photos import download
             try:photos=download(url,temp_dir,'video',height,49*1024**2)
@@ -762,6 +772,7 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=query.message.chat_id,
                     video=media_file,
                     supports_streaming=True,
+                    caption="Доступно максимум 720p" if getattr(mp4,'quality_limit',None)==720 else None,
                     **video_metadata
                 )
             request.setdefault("delivered_actions",[]).append(action)

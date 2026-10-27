@@ -89,6 +89,8 @@ class DownloadCache:
         size = source.stat().st_size
         if not 0 < size <= self.limit: return
         safe = {k:metadata[k] for k in ('title','artist','track','uploader','duration','kind') if isinstance(metadata.get(k),(str,int,float))}
+        if source.suffix=='.mp4' and metadata.get('video_quality_limit')==720:
+            safe['video_quality_limit']=720
         if metadata.get('source') in ('SoundCloud','Jamendo','Audius') and shareable(metadata.get('source_url')):
             safe.update(source=metadata['source'],source_url=metadata['source_url'])
             from jamendo_source import license_url
