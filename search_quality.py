@@ -49,7 +49,8 @@ def query_alternatives(query):
         if re.search('[a-z]{3}',repaired):variants.append(repaired)
     # Italian "lasciatemi" is often heard as two words in Russian.
     phonetic=re.sub(r'\b(?:ласшате|лашате|ласшатэ) ми\b','lasciatemi',text)
-    converted=[''.join(_LATIN.get(c,c) for c in word) if word not in _SOUND else _SOUND[word] for word in phonetic.split()]
+    # Russian дж is one sound (Jeff/Jazz), not the literal letter sequence dzh.
+    converted=[''.join(_LATIN.get(c,c) for c in word.replace('дж','j')) if word not in _SOUND else _SOUND[word] for word in phonetic.split()]
     variants.append(' '.join(converted))
     return list(dict.fromkeys(v for v in variants if v!=text))[:2]
 

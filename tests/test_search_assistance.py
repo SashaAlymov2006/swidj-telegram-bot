@@ -18,6 +18,8 @@ class AssistanceTests(unittest.TestCase):
     def test_multilingual_phonetic_candidates(self):
         for query,expected in [('дойчланд','deutschland'),('жё тэм','je taime'),('ласшате ми кантаре','lasciatemi cantare'),('воларе','volare'),('деспасито','despacito'),('rbyj','кино')]:
             self.assertEqual(query_alternative(query),expected)
+        self.assertEqual(query_alternative('Джефф Лорбер'),'jeff lorber')
+        self.assertEqual(query_alternative('Джаз'),'jaz')
     def test_multilingual_results_are_accepted_with_accents_and_spacing(self):
         for query,title in [('дойчланд','Deutschland'),('жё тэм','Je t’aime'),('ласшате ми кантаре','Lasciatemi cantare'),('деспасито','Despacito'),('rbyj','Кино')]:
             search=Mock(side_effect=[[],[dict(title=title,artist='Artist',url='found')]])
