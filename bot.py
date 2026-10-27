@@ -2203,18 +2203,9 @@ async def track_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await open_studio(update, context, song, retain_audio_source, studio_command)
     active = context.user_data.get("downloaded_song") or {}
     path = context.user_data.get("last_audio_path")
-    if active.get("id") == song["id"] and path and os.path.isfile(path) and (
+    if action == "studio" and active.get("id") == song["id"] and path and os.path.isfile(path) and (
             "youtube.com/watch" not in str(song.get("url", "")) or song.get("url") == active.get("url")):
-        if action == "studio":
-            return await studio_command(update, context)
-        from audio_presentation import send_music
-        from track_card import card_keyboard
-        result = await send_music(context.bot, update.effective_chat.id, path,
-                                  active.get("title"), active.get("artist"), active.get("cover"),
-                                  reply_markup=card_keyboard(context, active, saved=current is not None, delivered=True))
-        from track_card import retire_download_menus
-        await retire_download_menus(update,context)
-        return result
+        return await studio_command(update, context)
     controls = context.application.bot_data.get("controls")
     if controls and not access_policy.is_owner(update) and not controls.enabled("downloads"):
         return await update.effective_message.reply_text("Этот раздел временно закрыт.")

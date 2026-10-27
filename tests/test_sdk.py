@@ -659,6 +659,25 @@ assert 78 not in h
         await self.app.process_update(self.callback("track:playlist:" + token))
         self.assertTrue(any("Добавить в плейлист?" in text for text in self.texts()))
 
+    async def test_repeat_search_keeps_version_picker_even_with_retained_audio(self):
+        song = dict(id=51, title="Retained song", artist="Artist", url="https://genius.com/retained")
+        path = Path(self.local_files.name) / "retained.mp3"
+        path.write_bytes(b"retained full recording")
+        state = self.app.user_data[77]
+        state["downloaded_song"] = dict(song)
+        state["last_audio_path"] = str(path)
+        from track_card import card_keyboard
+        context = self.app.context_types.context.from_update(self.message("fixture"), self.app)
+        card_keyboard(context, song)
+        token = next(reversed(state["track_cards"]))
+        with patch("versions.request_versions", new_callable=AsyncMock) as picker, patch("audio_presentation.send_music", new_callable=AsyncMock) as sender:
+            await self.app.process_update(self.callback("track:listen:" + token))
+        picker.assert_awaited_once()
+        self.assertEqual(picker.call_args.kwargs["mode"], "listen")
+        self.assertEqual(picker.call_args.args[2]["id"], song["id"])
+        sender.assert_not_awaited()
+        self.assertEqual(path.read_bytes(), b"retained full recording")
+
     async def test_failed_download_retry_is_exact_and_other_version_skips_failure(self):
         from versions import request_versions
         update = self.message("fixture")
