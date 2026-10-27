@@ -90,13 +90,13 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_source_versions_use_original_chart_identity_and_remain_owner_scoped(self):
         song=dict(id=90,title='Video label',artist='Uploader',url='https://www.youtube.com/watch?v=abcdefghijk',_catalog_song={'title':'Perfect','artist':'Ed Sheeran'})
         self.bridge.chart_recordings[77]=[song]
-        found=dict(title='Perfect Cover',artist='Singer',duration=261.5,url='https://soundcloud.com/singer/perfect-cover',source='SoundCloud')
+        found=dict(title='Perfect',artist='Singer',duration=261.5,url='https://soundcloud.com/singer/perfect-cover',source='SoundCloud')
         self.assertEqual((await self.client.post('/api/versions',json={'track':'90'})).status,401)
         with patch('soundcloud_source.search',return_value=[found]) as search,patch('versions.find_versions') as youtube:
             response=await self.client.post('/api/versions',headers=self.headers,json={'track':'90','source':'next'})
             self.assertEqual(response.status,200)
             payload=await response.json()
-        search.assert_called_once_with('Perfect Ed Sheeran',5);youtube.assert_not_called()
+        search.assert_called_once_with('Perfect Ed Sheeran',10);youtube.assert_not_called()
         self.assertEqual(payload['source'],'SoundCloud')
         candidate=payload['tracks'][0]
         resolved=await self.bridge.find(77,candidate['id'])
@@ -107,7 +107,7 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
             response=await self.client.post('/api/versions',headers=self.headers,json={'track':candidate['id'],'source':'next'})
             self.assertEqual(response.status,200)
             self.assertEqual((await response.json())['source'],'Jamendo')
-        search.assert_called_once_with('Perfect Ed Sheeran',5)
+        search.assert_called_once_with('Perfect Ed Sheeran',10)
         self.assertEqual((await self.client.post('/api/versions',headers=self.headers,json={'track':'90','source':'unknown'})).status,400)
         self.assertFalse(self.bridge.data(77).get('_source_search_busy'))
 
@@ -182,12 +182,43 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual([g['source'] for g in payload['groups']],['SoundCloud'])
             identifier=payload['tracks'][0]['id']
             self.assertEqual((await self.bridge.find(77,identifier))['_search_query'],'original song')
-            self.assertEqual(searcher.call_count,3)
+            self.assertEqual(searcher.call_count,2)
             response=await self.client.get('/api/search?q=original+song&source=sc',headers=self.headers)
             self.assertEqual(response.status,200)
             self.assertEqual((await response.json())['tracks'][0]['title'],'Original song')
             self.assertEqual((await self.client.get('/api/search?q=original+song&source=sc',headers=self.headers)).status,429)
         self.assertEqual((await self.client.get('/api/search?q=original+song&source=invalid',headers=self.headers)).status,400)
+
+    async def test_main_search_is_compact_and_keeps_jamendo_as_reserve(self):
+        def search(song,source):
+            return [dict(title='Song',artist='Artist',url=f'https://example.test/{source}/{index}',source='YouTube' if source=='yt' else 'SoundCloud') for index in range(3)]
+        with patch('versions.source_search',side_effect=search) as find:
+            response=await self.client.get('/api/search?q=Song+Artist',headers=self.headers)
+            data=await response.json()
+        self.assertEqual(len(data['tracks']),3)
+        self.assertEqual({g['source'] for g in data['groups']},{'YouTube','SoundCloud'})
+        self.assertEqual({call.args[1] for call in find.call_args_list},{'yt','sc'})
+
+    async def test_main_search_uses_jamendo_if_both_primary_sources_have_no_choices(self):
+        def search(song,source):
+            return [dict(title='Song',artist='Artist',url='https://www.jamendo.com/track/1',source='Jamendo')] if source=='jam' else []
+        with patch('versions.source_search',side_effect=search) as find:
+            response=await self.client.get('/api/search?q=Song+Artist',headers=self.headers)
+            data=await response.json()
+        self.assertEqual([g['source'] for g in data['groups']],['Jamendo'])
+        self.assertEqual(find.call_count,3)
+
+    async def test_failed_soundcloud_source_is_excluded_from_new_primary_choices(self):
+        failed='https://soundcloud.com/singer/shivers'
+        def search(song,source):
+            return [dict(title='Shivers',artist='Singer',url=failed,source='SoundCloud')] if source=='sc' else [dict(title='Shivers',artist='Singer',url='https://www.youtube.com/watch?v=abcdefghijk')]
+        with patch('versions.source_search',side_effect=search):
+            from urllib.parse import urlencode
+            response=await self.client.get('/api/search?'+urlencode({'q':'Shivers Singer','exclude':failed}),headers=self.headers)
+        data=await response.json()
+        self.assertEqual(response.status,200)
+        self.assertEqual([g['source'] for g in data['groups']],['YouTube'])
+        self.assertEqual(len(data['tracks']),1)
 
     async def test_bot_and_miniapp_share_per_user_lock(self):
         from dispatch import user_lock

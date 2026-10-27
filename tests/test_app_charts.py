@@ -127,13 +127,13 @@ class ChartDataTests(unittest.IsolatedAsyncioTestCase):
                         from aiohttp import web
                         with self.assertRaises(web.HTTPNotFound):await bridge.find(78,identifier)
                         self.assertEqual(search.call_args.kwargs,{'limit':10})
-                    cover={'title':'Song Cover','artist':'Singer','url':'https://soundcloud.com/singer/song-cover','source':'SoundCloud','duration':180}
+                    cover={'title':'Song','artist':'Singer','url':'https://soundcloud.com/singer/song-cover','source':'SoundCloud','duration':180}
                     with patch('versions.source_search',return_value=[cover]) as source_search,patch('versions.find_versions') as youtube:
                         response=await client.post('/api/charts/resolve',headers={'X-Telegram-Init-Data':signed()},json={'country':'de','track':'101','source':'sc'})
                         self.assertEqual(response.status,200)
                         selected=await response.json();self.assertEqual(selected['source'],'SoundCloud')
                         chosen=selected['tracks'][0]
-                        self.assertEqual(chosen['title'],'Song Cover')
+                        self.assertEqual(chosen['title'],'Song')
                         actual=await bridge.find(77,chosen['id'])
                         self.assertEqual(actual['_catalog_song'],{'title':'Song','artist':'Artist'})
                         fixture_audio=Path(folder)/'cached.mp3';fixture_audio.write_bytes(b'cached recording')

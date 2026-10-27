@@ -84,10 +84,12 @@ def source_search(song, source):
     elif source == 'jam':
         from jamendo_source import search
     elif source == 'yt':
-        return find_versions(query)
+        from search_quality import recording_choices
+        return recording_choices(find_versions(query,10),query)
     else:
         raise ValueError('Invalid recording source')
-    return search(query, 5)
+    from search_quality import recording_choices
+    return recording_choices(search(query,10),query)
 
 
 def source_rows(token, request):
@@ -174,7 +176,10 @@ async def request_versions(update, context, song, *, mode="studio", queue_ref=No
             candidates = await asyncio.to_thread(source_search, song, source)
         else:
             candidates = [dict(song)] if identifier(song.get('url')) else await asyncio.to_thread(find_versions, " ".join(
-                str(song.get(key) or "") for key in ("title", "artist")).strip())
+                str(song.get(key) or "") for key in ("title", "artist")).strip(),limit=10)
+            if not identifier(song.get('url')):
+                from search_quality import recording_choices
+                candidates=recording_choices(candidates,' '.join(str(song.get(k) or '') for k in ('title','artist')))
         checkpoint()
     except Exception:
         return await version_screen(update, context,

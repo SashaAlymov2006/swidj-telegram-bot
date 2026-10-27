@@ -1,4 +1,12 @@
 import unittest
+
+
+class RecordingSourceLabels(unittest.TestCase):
+    def test_source_button_labels_are_translated(self):
+        from i18n_ui import english
+        self.assertEqual(english('Версии SoundCloud'),'SoundCloud recordings')
+        self.assertEqual(english('Версии Jamendo'),'Jamendo recordings')
+        self.assertEqual(english('Версии YouTube'),'YouTube recordings')
 from types import SimpleNamespace
 from i18n_ui import english, localized_data, locale, action
 

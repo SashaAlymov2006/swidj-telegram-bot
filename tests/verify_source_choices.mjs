@@ -1,6 +1,7 @@
 // Opt-in frontend flow checks; no browser session or remote service is used.
 const source=await Deno.readTextFile('/app/miniapp/app.js');
 const assert=(value,message)=>{if(!value)throw new Error(message);};
+assert(!/\?{3,}/.test(source),'Corrupted UI labels');
 let preparation=null,extraTracks=new Map(),copy={ru:{},en:{}},rendered=null,calls=[],responses=[];
 const showPreparation=()=>{},toast=()=>{},t=x=>x,icon=()=>'';
 const e=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');

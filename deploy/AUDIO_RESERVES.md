@@ -100,8 +100,10 @@ public SoundCloud fixture. It does not send Telegram messages or require cookies
 
 ## Search and saved-recording controls
 
-The Mini App main search defaults to all three sources. YouTube, SoundCloud and
-Jamendo metadata queries run under the existing two search-worker slots, results
+The Mini App main search uses YouTube and SoundCloud as independent primary
+sources and offers at most three alternating, relevant choices. Jamendo is the
+reserve when both primary searches have no choices, and remains selectable
+explicitly. Metadata queries use the existing two search-worker slots; results
 are grouped by their actual provider, and duplicate URLs are removed. Explicit
 source filters can be switched immediately; repeated queries to one source still
 have a per-owner rate limit. Only the chosen recording is downloaded.
@@ -116,9 +118,17 @@ YouTube lookup.
 
 Direct SoundCloud links are fetched from SoundCloud with no YouTube cookies.
 If a direct recording cannot be fetched and its public oEmbed metadata is
-available, chat and app can offer independent SoundCloud choices. The app labels
+available, chat offers the original song on the other primary; the app searches
+both primaries, excluding the failed canonical SoundCloud URL. The app labels
 DRM-protected source errors and never removes the protection. Direct YouTube
 AUDIO links first retain exact cache/reserve recovery, then can offer independent
 SoundCloud search using a public oEmbed label. YouTube VIDEO links never enter
 that audio replacement flow. Missing public metadata can still leave a source
 failure. TikTok and Instagram continue to use their own extractors.
+
+Recording menus and source-specific searches also show at most three choices.
+Unrequested remix/cover/slowed/live/acoustic/instrumental and similar labels are
+filtered; explicit search words (including common Russian/English equivalents)
+allow those versions. Relevant official audio precedes a music video with
+additional intro/outro. Ranking preserves provider order otherwise; it does not
+claim an independent global popularity chart or prove download availability.

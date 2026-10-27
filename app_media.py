@@ -244,7 +244,11 @@ def fetch(payload,directory):
             try:
                 from catalog_links import soundcloud_metadata
                 metadata=soundcloud_metadata(url)
-                return {'kind':'search','query':metadata['query'][:120],'source_search':'sc',
+                clean=urlsplit(url)
+                from soundcloud_source import public_url as sc_url
+                canonical=urlunsplit(('https','soundcloud.com' if clean.hostname in ('soundcloud.com','www.soundcloud.com','m.soundcloud.com') else clean.netloc,clean.path,'',''))
+                return {'kind':'search','query':metadata['query'][:120],'source_search':'all',
+                        'exclude_url':canonical if sc_url(canonical) else None,
                         'reason':'sourceProtected' if 'drm' in str(error).lower() else 'sourceUnavailable'}
             except Exception:pass
         if platform=='tiktok' and any(text in str(error).lower() for text in ('unsupported url','no suitable extractor')):

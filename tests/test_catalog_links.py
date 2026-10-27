@@ -42,7 +42,7 @@ class CatalogLinksTests(unittest.TestCase):
         manager=MagicMock();manager.__enter__.return_value.extract_info.side_effect=yt_dlp.utils.DownloadError('This video is DRM protected')
         with tempfile.TemporaryDirectory() as folder,patch('yt_dlp.YoutubeDL',return_value=manager) as ydl,patch('catalog_links.soundcloud_metadata',return_value={'title':'Song','artist':'Artist','query':'Song Artist'}):
             result=fetch({'url':'https://soundcloud.com/artist/song','mode':'audio','height':360},folder)
-        self.assertEqual(result,{'kind':'search','query':'Song Artist','source_search':'sc','reason':'sourceProtected'})
+        self.assertEqual(result,{'kind':'search','query':'Song Artist','source_search':'all','exclude_url':'https://soundcloud.com/artist/song','reason':'sourceProtected'})
         self.assertIsNone(ydl.call_args.args[0]['cookiefile'])
         manager.__enter__.return_value.extract_info.assert_called_once_with('https://soundcloud.com/artist/song',download=True)
 

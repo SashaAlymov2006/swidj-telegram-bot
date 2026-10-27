@@ -89,7 +89,7 @@ class SDKTests(unittest.IsolatedAsyncioTestCase):
             self.addCleanup(item.stop)
         self.versions_patch = patch("versions.find_versions", return_value=[
             {"url": "https://www.youtube.com/watch?v=abcdefghijk", "title": "Fixture recording", "artist": "Artist", "duration": 180, "cover": None},
-            {"url": "https://www.youtube.com/watch?v=lmnopqrstuv", "title": "Fixture live", "artist": "Artist", "duration": 210, "cover": None}])
+            {"url": "https://www.youtube.com/watch?v=lmnopqrstuv", "title": "Fixture second recording", "artist": "Artist", "duration": 210, "cover": None}])
         self.versions_patch.start()
         self.addCleanup(self.versions_patch.stop)
         self.cover_patch = patch("audio_presentation.fetch_cover", return_value=None)
@@ -678,15 +678,15 @@ assert 78 not in h
         sender.assert_not_awaited()
         self.assertEqual(path.read_bytes(), b"retained full recording")
 
-    async def test_failed_direct_soundcloud_link_offers_its_own_versions_without_youtube(self):
+    async def test_failed_direct_soundcloud_link_offers_original_song_on_other_primary(self):
         await self.app.process_update(self.message('https://soundcloud.com/singer/perfect'))
         token=next(reversed(self.app.user_data[77]['dl_requests']))
-        candidate=dict(title='Perfect',artist='Singer',duration=261,url='https://soundcloud.com/singer/another',source='SoundCloud')
-        with patch.object(self.bot,'download_soundcloud_audio',side_effect=RuntimeError('DRM protected')),patch('catalog_links.soundcloud_metadata',return_value={'title':'Perfect','artist':'Singer','query':'Perfect Singer'}),patch('soundcloud_source.search',return_value=[candidate]) as search,patch('versions.find_versions') as youtube:
+        candidate=dict(title='Perfect',artist='Singer',duration=261,url='https://www.youtube.com/watch?v=abcdefghijk',source='YouTube')
+        with patch.object(self.bot,'download_soundcloud_audio',side_effect=RuntimeError('DRM protected')),patch('catalog_links.soundcloud_metadata',return_value={'title':'Perfect','artist':'Singer','query':'Perfect Singer'}),patch('soundcloud_source.search',return_value=[candidate]) as search,patch('versions.find_versions',return_value=[candidate]) as youtube:
             await self.app.process_update(self.callback('dl_audio|'+token))
-        search.assert_called_once_with('Perfect Singer',5);youtube.assert_not_called()
+        search.assert_not_called();youtube.assert_called_once_with('Perfect Singer',10)
         request=next(reversed(self.app.user_data[77]['version_requests'].values()))
-        self.assertEqual(request['source'],'sc')
+        self.assertEqual(request['source'],'yt')
         self.assertEqual(request['candidates'],[candidate])
 
     async def test_source_buttons_search_catalog_then_download_soundcloud_selection(self):
@@ -694,7 +694,7 @@ assert 78 not in h
             catalog=dict(id=51,title='Perfect',artist='Ed Sheeran')
             self.app.user_data[uid]['language']=language
             self.app.user_data[uid]['version_requests']={'0123456789':dict(song=catalog,candidates=[],mode='listen')}
-            candidate=dict(title='Perfect (Cover)',artist='Singer',duration=261.781,url='https://soundcloud.com/singer/perfect-cover',source='SoundCloud')
+            candidate=dict(title='Perfect',artist='Singer',duration=261.781,url='https://soundcloud.com/singer/perfect-cover',source='SoundCloud')
             def download(url):
                 path=Path(self.local_files.name)/('sc-'+str(uid)+'.mp3');path.write_bytes(b'complete SoundCloud fixture')
                 return str(path),dict(candidate,source_url=url)
@@ -705,7 +705,7 @@ assert 78 not in h
                 self.assertEqual(self.app.user_data[uid]['version_requests'][token]['song'],catalog)
                 self.assertIn('SoundCloud',self.texts()[-1])
                 await self.app.process_update(self.callback(f'ver:pick:{token}:0',uid=uid))
-            search.assert_called_once_with('Perfect Ed Sheeran',5);youtube.assert_not_called()
+            search.assert_called_once_with('Perfect Ed Sheeran',10);youtube.assert_not_called()
             downloader.assert_called_once_with(candidate['url'])
             self.assertEqual(self.request.uploads[-1][1],b'complete SoundCloud fixture')
 
@@ -749,7 +749,7 @@ assert 78 not in h
         self.bot.user_search_results[77]=[{"id":99,"title":"Changed","artist":"Other"}]
         with patch("versions.find_versions",return_value=[]) as search:
             await self.app.process_update(self.callback(f"ver:refresh:{token}"))
-            search.assert_called_once_with("Original Artist")
+            search.assert_called_once_with("Original Artist",limit=10)
         request=context.user_data["version_requests"][next(reversed(context.user_data["version_requests"]))]
         self.assertEqual(request["mode"],"listen")
         self.assertEqual(request["song"]["id"],1)

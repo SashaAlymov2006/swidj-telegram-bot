@@ -197,10 +197,13 @@ class BotLibrary:
             raise web.HTTPNotFound()
         return song
 
-    async def search(self, uid, query, source='all'):
+    async def search(self, uid, query, source='all', exclude=None):
         self.allowed(uid, 'search')
         if source not in ('all', 'yt', 'sc', 'jam'):
             raise web.HTTPBadRequest()
+        if exclude:
+            from soundcloud_source import public_url as sc_url
+            if not sc_url(exclude):raise web.HTTPBadRequest()
         rate_key=(uid,source)
         if time.monotonic() - self.search_times.get(rate_key, 0) < 3:
             raise web.HTTPTooManyRequests()
@@ -213,10 +216,22 @@ class BotLibrary:
         async def provider(key):
             try:
                 async with self.search_slots:
-                    return key, await asyncio.to_thread(source_search, {'_search_query':query}, key)
+                    rows=await asyncio.to_thread(source_search, {'_search_query':query}, key)
+                    return key,[row for row in rows if row['url']!=exclude]
             except Exception:
                 return key, []
-        groups = await asyncio.gather(*(provider(key) for key in (('yt','sc','jam') if source=='all' else (source,))))
+        groups = await asyncio.gather(*(provider(key) for key in (('yt','sc') if source=='all' else (source,))))
+        if source=='all':
+            # Primary providers stay independent; offer a compact alternating list.
+            primary=[];seen_primary=set()
+            for index in range(3):
+                for key,items in groups:
+                    if index<len(items) and items[index]['url'] not in seen_primary:
+                        seen_primary.add(items[index]['url']);primary.append((key,items[index]))
+            if primary:
+                groups=[(key,[item for name,item in primary[:3] if name==key]) for key in ('yt','sc')]
+            else:
+                groups=[await provider('jam')]
         result=[];seen=set();public_groups={}
         names={'yt':'YouTube','sc':'SoundCloud','jam':'Jamendo'}
         for key, items in groups:
@@ -294,7 +309,9 @@ class BotLibrary:
             self.allowed(uid, 'search')
             from versions import find_versions
             async with self.search_slots:
-                candidates = await asyncio.to_thread(find_versions, song['title']+' '+song.get('artist', ''))
+                candidates = await asyncio.to_thread(find_versions, song['title']+' '+song.get('artist', ''),limit=10)
+            from search_quality import recording_choices
+            candidates=recording_choices(candidates,song['title']+' '+song.get('artist',''))
             for item in candidates:
                 item['id'] = 10**15 + int.from_bytes(hashlib.sha256(item['url'].encode()).digest()[:6], 'big')
                 item['_catalog_song'] = {k:song.get(k, '') for k in ('title', 'artist')}
@@ -459,7 +476,9 @@ class BotLibrary:
             else:
                 from versions import find_versions
                 async with self.search_slots:
-                    candidates = await asyncio.to_thread(find_versions, song['title'] + ' ' + song.get('artist', ''))
+                    candidates = await asyncio.to_thread(find_versions, song['title'] + ' ' + song.get('artist', ''),limit=10)
+                from search_quality import recording_choices
+                candidates=recording_choices(candidates,song['title']+' '+song.get('artist',''))
             if not candidates:
                 raise web.HTTPNotFound()
             requests[token] = {'song': dict(song), 'mode': 'listen', 'candidates': candidates}
@@ -535,7 +554,7 @@ def create_app(*, token='', bridge=None):
         query = request.query.get('q', '').strip()
         if not 2 <= len(query) <= 120:
             raise web.HTTPBadRequest()
-        return web.json_response(await bridge.search(request['user']['id'], query, request.query.get('source','all')))
+        return web.json_response(await bridge.search(request['user']['id'], query, request.query.get('source','all'),request.query.get('exclude')))
     async def audio(request):
         uid = request['user']['id']
         bridge.allowed(uid, 'downloads')

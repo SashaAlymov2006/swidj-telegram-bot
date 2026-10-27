@@ -29,7 +29,7 @@ Object.assign(copy.ru,{preparing:'Готовлю полную запись…',q
 Object.assign(copy.en,{preparing:'Preparing the full recording…',queued:'Waiting for a free slot…',cancelling:'Cancelling download…',cancelled:'Download cancelled',prepareFailed:'Could not prepare this recording. Tap to retry or choose another version.',chooseVersion:'Choose a recording',preparingOther:'Wait for the download or press Cancel.',readyToPlay:'Track ready — press ▶',downloadTrack:'Download audio',send:'Send to chat',sent:'Sent to chat. You can keep listening here.',sendNote:'Music opens right inside the app.',noResults:'No recordings found'});
 Object.assign(copy.ru,{nowPlaying:'Сейчас играет',rename:'Переименовать',deletePlaylist:'Удалить плейлист',playlistDeleteNote:'Плейлист исчезнет. Треки останутся в твоей библиотеке.',playlistDeleted:'Плейлист удалён',saveName:'Сохранить изменения',renamed:'Название изменено',removeFromPlaylist:'Убрать из этого плейлиста',refresh:'Обновить',refreshed:'Библиотека обновлена',long:'Для обработки в браузере выбери трек до 3 минут. Длинные треки обрабатывай в боте.',studioFine:'Скорость меняется вместе с тоном. В браузере исходный трек и готовый WAV — до 3 минут. Для длинного трека и MP3 используй студию бота.'});
 Object.assign(copy.en,{nowPlaying:'Now playing',rename:'Rename',deletePlaylist:'Delete playlist',playlistDeleteNote:'The playlist will be removed. Its tracks stay in your library.',playlistDeleted:'Playlist deleted',saveName:'Save changes',renamed:'Name updated',removeFromPlaylist:'Remove from this playlist',refresh:'Refresh',refreshed:'Library refreshed',long:'Browser processing supports tracks up to 3 minutes. Use the bot for longer tracks.',studioFine:'Speed changes pitch too. Browser source audio and exported WAV support up to 3 minutes. Use the bot studio for longer tracks and MP3.'});
-Object.assign(copy.ru,{removeUploadQuestion:'??????? ???? ???? ?? ?????????? ? ???? ??????????? ??????????? ?? ??????? ????? ????? ??????? ??? ??????????? ??????????????.'});
+Object.assign(copy.ru,{removeUploadQuestion:'Удалить этот файл из библиотеки и всех плейлистов? Сохранённая копия на сервере будет удалена без возможности восстановления.'});
 Object.assign(copy.en,{removeUploadQuestion:'Delete this file from the library and all playlists? The stored server copy will be permanently deleted.'});
 Object.assign(copy.ru,{missingFile:'Файл удалён или недоступен. Добавь его заново.'});
 Object.assign(copy.en,{missingFile:'This file was removed or is unavailable. Add it again.'});
@@ -469,9 +469,9 @@ async function prepareTrack(track,intent='play') {
     return track;
   } finally {if(preparation===item)preparation=null;showPreparation();}
 }
-Object.assign(copy.ru,{sourceProtected:'???????? ?????? ????????. ?????? ?????? ??????.',allSources:'??? ?????????',recordingSource:'???????? ??????',alreadyLoaded:'??? ?????????',otherVersion:'?????? ??????',keepVersion:'??????? ???????????'});
-Object.assign(copy.en,{sourceProtected:'The source recording is protected. Choose another version.',allSources:'All sources',recordingSource:'Recording source',alreadyLoaded:'Already loaded',otherVersion:'Another recording',keepVersion:'Play saved recording'});
-Object.assign(copy.ru,{versionsFrom:'?????? ??'});
+Object.assign(copy.ru,{sourceProtected:'Исходная запись защищена. Выбери другую версию.',allSources:'Основные',recordingSource:'Источник записи',alreadyLoaded:'Уже загружено',otherVersion:'Другая версия',keepVersion:'Слушать загруженную'});
+Object.assign(copy.en,{sourceProtected:'The source recording is protected. Choose another version.',allSources:'Main sources',recordingSource:'Recording source',alreadyLoaded:'Already loaded',otherVersion:'Another recording',keepVersion:'Play saved recording'});
+Object.assign(copy.ru,{versionsFrom:'Версии из'});
 Object.assign(copy.en,{versionsFrom:'Recordings from'});
 const recordingGroups=new Map(),chartOriginKeys=new Map();
 function recordingChoices(info,origin,intent='play'){
@@ -638,7 +638,7 @@ async function importLink(){
     const response=await fetch('/api/link',{method:'POST',headers:{'X-Telegram-Init-Data':initData,'Content-Type':'application/json'},body:JSON.stringify({url:linkUrl.trim(),mode:linkType,height:linkQuality}),signal:linkController.signal,credentials:'omit'});
     if(!response.ok){let reason;try{reason=(await response.json()).reason;}catch{}throw new Error(copy.en[reason]?reason:({429:'rateLimit',401:'expired',400:'unsupportedLink',504:'studioTimeout'})[response.status]||'linkFailed');}
     const data=await response.json();
-    if(data.kind==='search'){searchQuery=data.query;searchSource=data.source_search==='sc'?'sc':'all';const found=await(await api('search?q='+encodeURIComponent(searchQuery)+'&source='+searchSource)).json();results=found.tracks;searchGroups=found.groups||null;linkMode=false;if(data.reason==='sourceProtected')toast('sourceProtected');}
+    if(data.kind==='search'){searchQuery=data.query;searchSource=data.source_search==='sc'?'sc':'all';const found=await(await api('search?q='+encodeURIComponent(searchQuery)+'&source='+searchSource+(data.exclude_url?'&exclude='+encodeURIComponent(data.exclude_url):''))).json();results=found.tracks;searchGroups=found.groups||null;linkMode=false;if(data.reason==='sourceProtected')toast('sourceProtected');}
     else {linkResult=data;linkAudioResult=null;}
   }catch(error){if(error.name==='AbortError')toast('cancelled');else report(error);}finally{clearTimeout(timer);linkBusy=false;linkController=null;if(route==='search'){render();if(linkMode&&linkResult!==previousResult)document.querySelector('.link-result')?.scrollIntoView({block:'start',behavior:'smooth'});}}
 }

@@ -69,12 +69,12 @@ class ComfortAsyncTests(unittest.IsolatedAsyncioTestCase):
     async def test_independent_provider_choices_keep_catalog_identity_and_exact_selected_url(self):
         catalog = dict(id=91, title='Perfect', artist='Ed Sheeran')
         failed = dict(title='Ed Sheeran - Perfect [Official Lyric Video]', artist='Uploader', duration=264, url='https://www.youtube.com/watch?v=abcdefghijk')
-        candidate = dict(title='Perfect (Cover)', artist='Another singer', duration=265.222, source='SoundCloud', url='https://soundcloud.com/singer/perfect-cover')
+        candidate = dict(title='Perfect', artist='Another singer', duration=265.222, source='SoundCloud', url='https://soundcloud.com/singer/perfect-cover')
         context = SimpleNamespace(user_data={'version_requests': {'0123456789': dict(song=catalog,candidates=[failed],mode='listen')}}, bot=SimpleNamespace())
         update = SimpleNamespace(callback_query=SimpleNamespace(data='ver:source:0123456789:sc',answer=AsyncMock()),effective_chat=SimpleNamespace(id=77),effective_user=SimpleNamespace(id=77))
         with patch('soundcloud_source.search', return_value=[candidate]) as search, patch('versions.find_versions') as youtube, patch('versions.version_screen', new_callable=AsyncMock):
             await choose_version(update, context, None, None, None, None)
-        search.assert_called_once_with('Perfect Ed Sheeran',5)
+        search.assert_called_once_with('Perfect Ed Sheeran',10)
         youtube.assert_not_called()
         token = next(reversed(context.user_data['version_requests']))
         selected = context.user_data['version_requests'][token]
@@ -89,7 +89,7 @@ class ComfortAsyncTests(unittest.IsolatedAsyncioTestCase):
         update.callback_query.data = f'ver:source:{token}:jam'
         with patch('jamendo_source.search',return_value=[]) as search,patch('versions.version_screen',new_callable=AsyncMock):
             await choose_version(update,context,None,None,None,None)
-        search.assert_called_once_with('Perfect Ed Sheeran',5)
+        search.assert_called_once_with('Perfect Ed Sheeran',10)
 
     async def test_blocked_youtube_offers_new_catalog_search_after_exact_reserve_failed(self):
         from versions import download_selected

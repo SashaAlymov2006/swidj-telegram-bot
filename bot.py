@@ -712,7 +712,7 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         pass
                     else:
                         song=dict(download_song(platform, url, meta['title'], meta['artist'], None),_search_query=meta['query'])
-                        return await request_versions(update, context, song, mode='listen', source='sc')
+                        return await request_versions(update, context, song, mode='listen', source='yt' if platform=='soundcloud' else 'sc')
                 from diagnostics import source_access_blocked, SOURCE_ACCESS_MESSAGE
                 if source_access_blocked(e):
                     await query.message.reply_text(SOURCE_ACCESS_MESSAGE,
