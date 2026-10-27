@@ -108,7 +108,8 @@ def source_search(song, source):
         raw = _source_metadata.get(key)
         rows = deepcopy(raw[1]) if raw and raw[0]>time.monotonic() else None
     if rows is None:
-        rows = search(query,10)
+        from search_quality import assisted_search
+        rows = assisted_search(search,query,10)
         with _metadata_lock:
             _source_metadata[key] = (time.monotonic()+(60 if rows else 20),deepcopy(rows))
             while len(_source_metadata)>128:_source_metadata.pop(next(iter(_source_metadata)))

@@ -1354,7 +1354,8 @@ def _search_songs_sync(query):
 
 
 async def search_songs(query):
-    return await asyncio.to_thread(_search_songs_sync, query)
+    from search_quality import assisted_search
+    return await asyncio.to_thread(assisted_search, _search_songs_sync, query)
 
 def _get_lyrics_sync(song_url):
     try:
@@ -1923,7 +1924,8 @@ def _search_deezer_sync(query: str):
 
 
 async def search_deezer(query: str):
-    return await asyncio.to_thread(_search_deezer_sync, query)
+    from search_quality import assisted_search
+    return await asyncio.to_thread(assisted_search, _search_deezer_sync, query)
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
