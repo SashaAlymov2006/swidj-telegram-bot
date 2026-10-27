@@ -221,6 +221,10 @@ class BotLibrary:
             except Exception:
                 return key, []
         groups = await asyncio.gather(*(provider(key) for key in (('yt','sc') if source=='all' else (source,))))
+        from versions import source_inventory
+        inventory = await source_inventory({'_search_query':query}, uid, dict(groups))
+        inventory = {key:[row for row in rows if row['url']!=exclude] for key,rows in inventory.items()}
+        available_sources = [key for key,rows in inventory.items() if rows]
         if source=='all':
             # Primary providers stay independent; offer a compact alternating list.
             primary=[];seen_primary=set()
@@ -245,7 +249,7 @@ class BotLibrary:
             song['_search_query'] = query
         self.searches[uid] = result
         def output(song):return public_song(song,bool(self.audio_path(uid,song)))
-        return {'tracks': [output(s) for s in result], 'groups':[
+        return {'tracks': [output(s) for s in result], 'available_sources':available_sources, 'groups':[
             {'source':name, 'tracks':[output(s) for s in items]} for name,items in public_groups.items()]}
 
     async def source_versions(self, uid, identifier, source):
@@ -274,6 +278,11 @@ class BotLibrary:
             from versions import source_search
             async with self.search_slots:
                 candidates = await asyncio.to_thread(source_search, dict(song,_availability_uid=uid), source)
+            from versions import source_inventory
+            inventory = await source_inventory(song, uid, {source:candidates})
+            if not candidates:
+                source = next((key for key,rows in inventory.items() if rows), source)
+                candidates = inventory[source]
             origin = dict(song.get('_catalog_song') or {k:song.get(k, '') for k in ('title', 'artist')})
             for item in candidates:
                 item['id'] = 10**15 + int.from_bytes(hashlib.sha256(item['url'].encode()).digest()[:6], 'big')
@@ -287,7 +296,8 @@ class BotLibrary:
             sources={s.get('source') or 'YouTube' for s in candidates}
             label=next(iter(sources)) if len(sources)==1 else {'yt':'YouTube','sc':'SoundCloud','jam':'Jamendo'}[source]
             return {'status': 'choices', 'tracks': [public_song(s,bool(self.audio_path(uid,s))) for s in candidates],
-                    'source': label, 'origin': identifier}
+                    'source': label, 'origin': identifier,
+                    'available_sources':[key for key,rows in inventory.items() if rows]}
         finally:
             self.source_searching.discard(uid)
 
@@ -316,7 +326,10 @@ class BotLibrary:
                 item['id'] = 10**15 + int.from_bytes(hashlib.sha256(item['url'].encode()).digest()[:6], 'big')
                 item['_catalog_song'] = {k:song.get(k, '') for k in ('title', 'artist')}
             self.searches[uid] = candidates
-            return {'status':'choices', 'tracks':[public_song(item) for item in candidates]}
+            from versions import source_inventory
+            inventory=await source_inventory(song, uid)
+            return {'status':'choices', 'tracks':[public_song(item) for item in candidates],
+                    'available_sources':[key for key,rows in inventory.items() if rows]}
         try:
             return self.job_payload(self.audio_jobs.start(uid, song))
         except ValueError:
@@ -488,6 +501,9 @@ class BotLibrary:
             rows = [[InlineKeyboardButton(s['title'][:60], callback_data=f'ver:pick:{token}:{i}')]
                     for i, s in enumerate(candidates)]
             from versions import source_rows
+            from versions import source_inventory
+            inventory=await source_inventory(song,uid)
+            requests[token]['available_sources']=[key for key,items in inventory.items() if items]
             rows += source_rows(token,requests[token])
             message = await self.application.bot.send_message(uid, song['title'], reply_markup=InlineKeyboardMarkup(rows))
             requests[token]['menu_messages'] = [[uid, message.message_id]]

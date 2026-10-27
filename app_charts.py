@@ -215,8 +215,11 @@ def register(app,bridge):
             while len(bridge.chart_recordings)>1000:bridge.chart_recordings.pop(next(iter(bridge.chart_recordings)))
         from miniapp_server import public_song
         choices=recordings if source else list({row['id']:row for row in saved+matching_versions(item,recordings)}.values())
+        from versions import source_inventory
+        inventory=await source_inventory(item,uid)
         return web.json_response({'tracks':[public_song(row,bool(bridge.audio_path(uid,row))) for row in choices],
                                   'alternatives':[public_song(row,bool(bridge.audio_path(uid,row))) for row in recordings],
+                                  'available_sources':[key for key,rows in inventory.items() if rows],
                                   'source':{'yt':'YouTube','sc':'SoundCloud','jam':'Jamendo'}.get(source,'YouTube')})
     app.router.add_get('/api/charts',chart)
     app.router.add_post('/api/charts/resolve',resolve)

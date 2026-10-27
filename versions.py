@@ -3,6 +3,8 @@ import asyncio
 import os
 import re
 import secrets
+import time
+from copy import deepcopy
 import yt_dlp
 from telegram import InlineKeyboardButton as Button
 from ui_layout import comfortable_keyboard as Markup
@@ -79,6 +81,9 @@ def source_search(song, source):
     """A new, user-visible search uses the catalog identity, not a failed video."""
     origin = song.get('_catalog_song') or song
     query = song.get('_search_query') or ' '.join(str(origin.get(k) or '') for k in ('title', 'artist')).strip()
+    cached = _source_checks.get((song.get('_availability_uid'), query, source))
+    if cached and cached[0] > time.monotonic():
+        return deepcopy(cached[1])
     if source == 'sc':
         from soundcloud_source import search
     elif source == 'jam':
@@ -96,7 +101,42 @@ def source_rows(token, request):
     selected = request.get('source')
     return [[Button('Версии ' + name, callback_data=f'ver:source:{token}:{source}')]
             for source, name in (('yt', 'YouTube'), ('sc', 'SoundCloud'), ('jam', 'Jamendo'))
-            if source != selected and (source != 'yt' or selected in ('sc', 'jam'))]
+            if source != selected and source in request.get('available_sources', [])]
+
+
+_source_checks = {}
+
+
+async def source_inventory(song, uid, known=None):
+    """Only advertise providers with checked recordings for this exact query/owner."""
+    origin = song.get('_catalog_song') or song
+    query = song.get('_search_query') or ' '.join(str(origin.get(k) or '') for k in ('title', 'artist')).strip()
+    async def check(source):
+        key = (uid, query, source)
+        cached = _source_checks.get(key)
+        if known is not None and source in known:
+            rows = known[source]
+        elif cached and cached[0] > time.monotonic():
+            return source, deepcopy(cached[1])
+        else:
+            try:
+                rows = await asyncio.to_thread(source_search, dict(song, _availability_uid=uid), source)
+            except Exception:
+                checkpoint()
+                rows = []
+        # A YouTube lookup may return reserve records; those do not establish
+        # availability of YouTube itself.
+        from soundcloud_source import public_url
+        from jamendo_source import identifier
+        rows = [row for row in rows if
+                (source == 'sc' and public_url(row.get('url'))) or
+                (source == 'jam' and identifier(row.get('url'))) or
+                (source == 'yt' and re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', row.get('url', '')))]
+        _source_checks[key] = (time.monotonic() + (60 if rows else 20), deepcopy(rows))
+        while len(_source_checks) > 1000:
+            _source_checks.pop(next(iter(_source_checks)))
+        return source, deepcopy(rows)
+    return dict(await asyncio.gather(*(check(source) for source in ('yt', 'sc', 'jam'))))
 
 
 def queue_recovery(request):
@@ -181,11 +221,16 @@ async def request_versions(update, context, song, *, mode="studio", queue_ref=No
             candidates=await asyncio.to_thread(verified_choices,candidates,' '.join(str(song.get(k) or '') for k in ('title','artist')),update.effective_user.id)
         checkpoint()
     except Exception:
+        inventory = await source_inventory(song, update.effective_user.id, {source or 'yt': []})
+        request['available_sources'] = [key for key, rows in inventory.items() if rows]
         return await version_screen(update, context,
             "Не удалось найти версии. Попробуй ещё раз.", Markup(queue_recovery(request) + source_rows(token, request) + [
                 [Button("🔄 Повторить поиск", callback_data=f"ver:refresh:{token}", style="primary")],
                 [Button("← Поиск", callback_data="ui:search")]]))
     request["candidates"] = candidates
+    known = {source or 'yt': candidates}
+    inventory = await source_inventory(song, update.effective_user.id, known)
+    request['available_sources'] = [key for key, rows in inventory.items() if rows]
     if not candidates:
         return await version_screen(update, context,
             "Не нашёл подходящие версии. Можно повторить поиск или уточнить название.", Markup(queue_recovery(request) + source_rows(token, request) + [

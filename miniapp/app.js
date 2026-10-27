@@ -97,7 +97,7 @@ let route = 'home', filter = 'all', playlist = null, current = null, results = n
 let trackBlob = null, trackUrl = null, previewUrl = null, loadingTrack = 0, toastTimer;
 let renderBusy = false, refreshing = false, sourceDuration = 0;
 let djMode=false,djRoom=null,djModule=null,djChoosingDeck='A',soundPresets=null,presetsOpen=false;
-let preparation = null, searchQuery = '', searchSource='all', searchGroups=null;
+let preparation = null, searchQuery = '', searchSource='all', searchGroups=null, searchAvailable=null;
 let lastRendered=null;
 function studioSignature(){return JSON.stringify([loadingTrack,engine.bass,engine.speed,engine.treble,studioPitch,studioEffects,engine.trimStart,engine.trimEnd,engine.fade,engine.ambience,engine.linked,engine.params]);}
 let toneUrl=null;
@@ -163,10 +163,10 @@ async function loadCharts(){
  finally{if(request===chartRequest){chartsLoading=false;if(route==='charts')render();}}
 }
 let chartChoiceKey=null;
-function showChartChoices(item,tracks,key,source='YouTube',saved=false){
+function showChartChoices(item,tracks,key,source='YouTube',saved=false,available=[]){
  chartChoiceKey=key;for(const track of tracks){extraTracks.set(track.id,track);chartOriginKeys.set(track.id,key);}
  const country=key.split(':')[0];
- const links=[['yt','YouTube'],['sc','SoundCloud'],['jam','Jamendo']].map(([provider,name])=>`<button type="button" class="btn secondary" data-chart-source="${e(item.id)}" data-chart-country="${e(country)}" data-chart-provider="${provider}">${e(t('versionsFrom'))} ${name}</button>`).join('');
+ const links=[['yt','YouTube'],['sc','SoundCloud'],['jam','Jamendo']].filter(([provider,name])=>available.includes(provider)&&(saved||name!==source)).map(([provider,name])=>`<button type="button" class="btn secondary" data-chart-source="${e(item.id)}" data-chart-country="${e(country)}" data-chart-provider="${provider}">${e(t('versionsFrom'))} ${name}</button>`).join('');
  $('dialog-form').onsubmit=null;
  dialog(t('chooseVersion')+(saved?'':' ? '+source),`<p class="dialog-copy">${e(item.artist+' / '+item.title)}</p>${tracks.length?tracks.map(track=>`<button type="button" class="dialog-option" data-chart-version="${e(track.id)}">${icon('play')}<span><strong>${saved?e(t('keepVersion')):e(track.title)}</strong><small class="version-artist">${e(track.artist)} / ${stamp(track.duration)}${track.playable?' ? '+e(t('alreadyLoaded')):''}</small></span></button>`).join(''):`<p class="dialog-copy">${e(t('chartRecordingUnavailable'))}</p>`}${links}`);
 }
@@ -175,13 +175,13 @@ async function playChart(index){
  const country=chartCountry,key=chartKey(item);chartBusy=key;render();
  try{
   await engine.unlock();
-  const cached=chartResolved.get(key);if(cached){showChartChoices(item,[cached],key,'',true);return;}let candidates=null,alternatives=[];
+  let candidates=null,alternatives=[],available=[];
   if(!candidates){
    const resolved=await(await api('charts/resolve',{country,track:item.id})).json();
-   candidates=resolved.tracks||[];alternatives=resolved.alternatives||[];
+   candidates=resolved.tracks||[];alternatives=resolved.alternatives||[];available=resolved.available_sources||[];
    const saved=candidates.find(recording=>recording.playable);
-   if(saved){chartResolved.set(key,saved);showChartChoices(item,[saved],key,'',true);return;}
-   if(!candidates.length){showChartChoices(item,alternatives,key);return;}
+   if(saved){chartResolved.set(key,saved);showChartChoices(item,[saved],key,'',true,available);return;}
+   if(!candidates.length){showChartChoices(item,alternatives,key,'YouTube',false,available);return;}
   }
   let lastError;
   for(const recording of candidates.slice(0,3)){
@@ -191,7 +191,7 @@ async function playChart(index){
     if(!['prepareFailed','sourceUnavailable','sourceLogin','sourceRateLimit','invalidAudio'].includes(error.message)&&error.name!=='NotSupportedError')throw error;
    }
   }
-  if(alternatives.length){showChartChoices(item,alternatives,key);return;}
+  if(alternatives.length){showChartChoices(item,alternatives,key,'YouTube',false,available);return;}
   if(lastError)throw lastError;
  }catch(error){report(error);}finally{chartBusy=null;if(route==='charts')render();}
 }
@@ -223,7 +223,7 @@ async function identifyMusic(){
   }
  }catch(error){report(error);}finally{recognitionBusy=false;if(route==='search'){render();document.querySelector('.recognition-panel').open=true;}}
 }
-function searchProviders(){return `<div class="search-tabs search-providers" role="group" aria-label="${e(t('recordingSource'))}">${[['all',t('allSources')],['yt','YouTube'],['sc','SoundCloud'],['jam','Jamendo']].map(([key,label])=>`<button type="button" data-search-source="${key}" aria-pressed="${searchSource===key}" ${searching?'disabled':''}>${e(label)}</button>`).join('')}</div>`;}
+function searchProviders(){return `<div class="search-tabs search-providers" role="group" aria-label="${e(t('recordingSource'))}">${[['all',t('allSources')],['yt','YouTube'],['sc','SoundCloud'],['jam','Jamendo']].filter(([key])=>key==='all'||searchAvailable===null||searchAvailable.includes(key)).map(([key,label])=>`<button type="button" data-search-source="${key}" aria-pressed="${searchSource===key}" ${searching?'disabled':''}>${e(label)}</button>`).join('')}</div>`;}
 function searchResults(){return searchGroups?.length?searchGroups.filter(group=>group.tracks.length).map(group=>`<section class="source-results"><div class="section-head"><h3>${e(group.source)}</h3></div><div class="track-list">${group.tracks.map(row).join('')}</div></section>`).join(''):`<div class="track-list">${results.map(row).join('')}</div>`;}
 function searchScreen() {
   const tabs=`<div class="search-tabs"><button type="button" data-search-tab="music" aria-pressed="${!linkMode}">${e(t('search'))}</button><button type="button" data-search-tab="links" aria-pressed="${linkMode}">${e(t('links'))}</button></div>`;
@@ -324,8 +324,8 @@ window.addEventListener('hashchange',()=>{route=location.hash.slice(1);if(!['hom
 
 async function runSearch(query){
   if(searching)return;searchQuery=query;searching=true;render();
-  try{const data=demo?{tracks:demos.filter(s=>(s.title+' '+s.artist).toLowerCase().includes(query.toLowerCase()))}:await(await api('search?q='+encodeURIComponent(query)+'&source='+searchSource)).json();results=data.tracks;searchGroups=data.groups||null;}
-  catch(error){report(error);results=[];searchGroups=null;}finally{searching=false;if(route==='search')render();}
+  try{const data=demo?{tracks:demos.filter(s=>(s.title+' '+s.artist).toLowerCase().includes(query.toLowerCase()))}:await(await api('search?q='+encodeURIComponent(query)+'&source='+searchSource)).json();results=data.tracks;searchGroups=data.groups||null;searchAvailable=data.available_sources||[];if(searchSource!=='all'&&!searchAvailable.includes(searchSource))searchSource='all';}
+  catch(error){report(error);results=[];searchGroups=null;searchAvailable=[];}finally{searching=false;if(route==='search')render();}
 }
 async function mutate(payload) {
   if (!demo) state=await (await api('library',payload)).json();
@@ -477,13 +477,13 @@ const recordingGroups=new Map(),chartOriginKeys=new Map();
 function recordingChoices(info,origin,intent='play'){
   if(!['play','download','studio'].includes(intent))intent='play';
   const tracks=info.tracks||[];
-  const group={source:info.source,tracks,origin};
+  const group={source:info.source,tracks,origin,available_sources:info.available_sources||[]};
   const chart=chartOriginKeys.get(origin);if(chart)for(const choice of tracks)chartOriginKeys.set(choice.id,chart);
   while(chartOriginKeys.size>200)chartOriginKeys.delete(chartOriginKeys.keys().next().value);
   for(const choice of tracks){extraTracks.set(choice.id,choice);recordingGroups.set(choice.id,group);}
   while(extraTracks.size>100)extraTracks.delete(extraTracks.keys().next().value);
   while(recordingGroups.size>100)recordingGroups.delete(recordingGroups.keys().next().value);
-  const links=[['yt','YouTube'],['sc','SoundCloud'],['jam','Jamendo']].filter(([,name])=>name!==info.source).map(([source,name])=>`<button type="button" class="btn secondary" data-source-track="${e(origin)}" data-source-provider="${source}" data-source-intent="${intent}">${e(t('versionsFrom'))} ${name}</button>`).join('');
+  const links=[['yt','YouTube'],['sc','SoundCloud'],['jam','Jamendo']].filter(([source,name])=>name!==info.source&&(info.available_sources||[]).includes(source)).map(([source,name])=>`<button type="button" class="btn secondary" data-source-track="${e(origin)}" data-source-provider="${source}" data-source-intent="${intent}">${e(t('versionsFrom'))} ${name}</button>`).join('');
   $('dialog-form').onsubmit=null;
   dialog(t('chooseVersion')+(info.source?' · '+info.source:''),(tracks.length?tracks.map(choice=>`<button type="button" class="dialog-option" data-track="${e(choice.id)}" data-action="${intent}">${icon(intent==='download'?'download':intent==='studio'?'studio':'play')}<span>${e(choice.title)}<small class="version-artist">${e(choice.artist)} · ${stamp(choice.duration)}</small></span></button>`).join(''):`<p class="dialog-copy">${e(t('noResults'))}</p>`)+links);
 }
@@ -638,7 +638,7 @@ async function importLink(){
     const response=await fetch('/api/link',{method:'POST',headers:{'X-Telegram-Init-Data':initData,'Content-Type':'application/json'},body:JSON.stringify({url:linkUrl.trim(),mode:linkType,height:linkQuality}),signal:linkController.signal,credentials:'omit'});
     if(!response.ok){let reason;try{reason=(await response.json()).reason;}catch{}throw new Error(copy.en[reason]?reason:({429:'rateLimit',401:'expired',400:'unsupportedLink',504:'studioTimeout'})[response.status]||'linkFailed');}
     const data=await response.json();
-    if(data.kind==='search'){searchQuery=data.query;searchSource=data.source_search==='sc'?'sc':'all';const found=await(await api('search?q='+encodeURIComponent(searchQuery)+'&source='+searchSource+(data.exclude_url?'&exclude='+encodeURIComponent(data.exclude_url):''))).json();results=found.tracks;searchGroups=found.groups||null;linkMode=false;if(data.reason==='sourceProtected')toast('sourceProtected');}
+    if(data.kind==='search'){searchQuery=data.query;searchSource=data.source_search==='sc'?'sc':'all';const found=await(await api('search?q='+encodeURIComponent(searchQuery)+'&source='+searchSource+(data.exclude_url?'&exclude='+encodeURIComponent(data.exclude_url):''))).json();results=found.tracks;searchGroups=found.groups||null;searchAvailable=found.available_sources||[];linkMode=false;if(data.reason==='sourceProtected')toast('sourceProtected');}
     else {linkResult=data;linkAudioResult=null;}
   }catch(error){if(error.name==='AbortError')toast('cancelled');else report(error);}finally{clearTimeout(timer);linkBusy=false;linkController=null;if(route==='search'){render();if(linkMode&&linkResult!==previousResult)document.querySelector('.link-result')?.scrollIntoView({block:'start',behavior:'smooth'});}}
 }
@@ -824,7 +824,7 @@ document.addEventListener('click',async event=>{
   try {
     if(button.dataset.chartSource){
       button.disabled=true;
-      try{const country=button.dataset.chartCountry,identifier=button.dataset.chartSource;const info=await(await api('charts/resolve',{country,track:identifier,source:button.dataset.chartProvider})).json();const item=chartData?.tracks.find(track=>String(track.id)===identifier)||{id:identifier,title:'',artist:''};showChartChoices(item,info.alternatives||info.tracks||[],country+':'+identifier,info.source);}
+      try{const country=button.dataset.chartCountry,identifier=button.dataset.chartSource;const info=await(await api('charts/resolve',{country,track:identifier,source:button.dataset.chartProvider})).json();const item=chartData?.tracks.find(track=>String(track.id)===identifier)||{id:identifier,title:'',artist:''};showChartChoices(item,info.alternatives||info.tracks||[],country+':'+identifier,info.source,false,info.available_sources||[]);}
       finally{button.disabled=false;}
       return;
     }

@@ -13,3 +13,10 @@ are not forwarded to other providers.
 
 Existing messages retain their old buttons; repeat the search to get a newly
 checked list. Source failures can leave fewer results, including an empty list.
+
+Provider buttons are also checked for the current query. Bot version menus,
+Mini App recording dialogs, chart choices and search filters omit providers
+without checked recordings. Before a first search, all search filters remain
+available. A provider's reserve results do not count as availability of that
+provider. Checked query results are reused for up to sixty seconds, with empty
+results cached for twenty seconds and separated by owner and catalog query.

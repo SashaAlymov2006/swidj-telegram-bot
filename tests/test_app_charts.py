@@ -22,6 +22,8 @@ def fixture():
 
 class ChartDataTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        inventory=patch('versions.source_inventory',new_callable=AsyncMock,return_value={'yt':[], 'sc':[], 'jam':[]})
+        inventory.start();self.addCleanup(inventory.stop)
         preflight=patch('recording_availability.available',return_value=True)
         preflight.start();self.addCleanup(preflight.stop)
     async def test_background_refresh_checks_all_countries_and_stops_cleanly(self):
