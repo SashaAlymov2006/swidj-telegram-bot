@@ -2419,7 +2419,7 @@ def build_application(*, request=None, updates_request=None):
     app.add_handler(CommandHandler("cancel", localized_callback(cancel_entry)))
     app.add_handler(CallbackQueryHandler(serialize_user(menu_callback), pattern=r"^ui:(search|title|lyrics|recognize|audio|help|home|favorites|history)$"))
     app.add_handler(CommandHandler("download", serialize_user(download_command)))
-    app.add_handler(CallbackQueryHandler(serialize_user(versions_callback), pattern=r"^ver:(pick|refresh|other):"))
+    app.add_handler(CallbackQueryHandler(serialize_user(versions_callback), pattern=r"^ver:(pick|refresh|other|source):"))
     app.add_handler(CommandHandler("whoami", serialize_user(whoami_command)))
     app.add_handler(CommandHandler("history", serialize_user(history_command)))
     app.add_handler(CommandHandler("favorites", serialize_user(favorites_command)))

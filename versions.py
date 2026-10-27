@@ -75,6 +75,25 @@ def remember_request(context, song, mode):
     return token, requests[token]
 
 
+def source_search(song, source):
+    """A new, user-visible search uses the catalog identity, not a failed video."""
+    origin = song.get('_catalog_song') or song
+    query = song.get('_search_query') or ' '.join(str(origin.get(k) or '') for k in ('title', 'artist')).strip()
+    if source == 'sc':
+        from soundcloud_source import search
+    elif source == 'jam':
+        from jamendo_source import search
+    else:
+        raise ValueError('Invalid recording source')
+    return search(query, 5)
+
+
+def source_rows(token, request):
+    selected = request.get('source')
+    return [[Button('Версии ' + name, callback_data=f'ver:source:{token}:{source}')]
+            for source, name in (('sc', 'SoundCloud'), ('jam', 'Jamendo')) if source != selected]
+
+
 def queue_recovery(request):
     if not request.get("queue_ref"):
         return []
@@ -107,11 +126,15 @@ async def version_screen(update, context, text, markup):
 async def show_versions(update, context, token, request, *, exclude=None):
     rows = []
     for index, item in enumerate(request["candidates"]):
-        if index == exclude or index in request.get("sent_indices", []):
+        if index == exclude or index in request.get("sent_indices", []) or index in request.get('failed_indices', []):
             continue
         duration = item.get("duration")
-        stamp = f" · {duration // 60}:{duration % 60:02d}" if duration else ""
-        rows.append([Button(f"{index + 1}. {item['title'][:45]}{stamp}",
+        seconds = round(duration) if isinstance(duration, (int, float)) else 0
+        stamp = f" · {seconds // 60}:{seconds % 60:02d}" if seconds else ""
+        label = item['title'][:45]
+        if request.get('source') in ('sc', 'jam'):
+            label = item['title'][:32] + ' · ' + str(item.get('artist') or '')[:24]
+        rows.append([Button(f"{index + 1}. {label}{stamp}",
                             callback_data=f"ver:pick:{token}:{index}")])
     if not rows:
         rows.append([Button("🔄 Найти версии заново", callback_data=f"ver:refresh:{token}", style="primary")])
@@ -119,8 +142,10 @@ async def show_versions(update, context, token, request, *, exclude=None):
         from link_queue import skip_button
         batch,index=request["queue_ref"]
         rows += [[skip_button(batch,index)],[Button("Отменить очередь",callback_data="batch:stop:"+batch)]]
+    rows += source_rows(token, request)
     rows.append([Button("← Поиск", callback_data="ui:search")])
-    source='Jamendo' if request['candidates'] and all(item.get('source')=='Jamendo' for item in request['candidates']) else 'YouTube'
+    sources = {item.get('source', 'YouTube') for item in request['candidates']}
+    source = next(iter(sources)) if len(sources) == 1 else 'YouTube'
     from i18n_ui import tr
     message = await version_screen(update, context, (f"Очередь · трек {request['queue_ref'][1]+1}\n" if request.get("queue_ref") else "") + ("🎧 Выбери другую версию" if exclude is not None else "🎧 Выбери версию") + '\n'+tr('Источник записи: YouTube').replace('YouTube',source),
                                                     Markup(rows))
@@ -130,8 +155,9 @@ async def show_versions(update, context, token, request, *, exclude=None):
     return message
 
 
-async def request_versions(update, context, song, *, mode="studio", queue_ref=None, automatic=None):
+async def request_versions(update, context, song, *, mode="studio", queue_ref=None, automatic=None, source=None):
     token, request = remember_request(context, song, mode)
+    if source: request['source'] = source
     if queue_ref:
         request["queue_ref"] = list(queue_ref)
     origin = getattr(getattr(update, "callback_query", None), "message", None)
@@ -141,18 +167,21 @@ async def request_versions(update, context, song, *, mode="studio", queue_ref=No
     await stage("Ищу версии…")
     try:
         from jamendo_source import identifier
-        candidates = [dict(song)] if identifier(song.get('url')) else await asyncio.to_thread(find_versions, " ".join(
-            str(song.get(key) or "") for key in ("title", "artist")).strip())
+        if source:
+            candidates = await asyncio.to_thread(source_search, song, source)
+        else:
+            candidates = [dict(song)] if identifier(song.get('url')) else await asyncio.to_thread(find_versions, " ".join(
+                str(song.get(key) or "") for key in ("title", "artist")).strip())
         checkpoint()
     except Exception:
         return await version_screen(update, context,
-            "Не удалось найти версии. Попробуй ещё раз.", Markup(queue_recovery(request) + [
+            "Не удалось найти версии. Попробуй ещё раз.", Markup(queue_recovery(request) + source_rows(token, request) + [
                 [Button("🔄 Повторить поиск", callback_data=f"ver:refresh:{token}", style="primary")],
                 [Button("← Поиск", callback_data="ui:search")]]))
     request["candidates"] = candidates
     if not candidates:
         return await version_screen(update, context,
-            "Не нашёл подходящие версии. Можно повторить поиск или уточнить название.", Markup(queue_recovery(request) + [
+            "Не нашёл подходящие версии. Можно повторить поиск или уточнить название.", Markup(queue_recovery(request) + source_rows(token, request) + [
                 [Button("🔄 Повторить поиск", callback_data=f"ver:refresh:{token}")],
                 [Button("🔎 Уточнить название", callback_data="ui:search", style="primary")]]))
     if automatic:
@@ -182,6 +211,17 @@ async def choose_version(update, context, downloader, metadata, retain, studio):
     if duplicate and int(duplicate[2]) in previous.get("sent_indices", []):
         return await query.answer("Этот трек уже отправлен выше.")
     await query.answer()
+    provider = re.fullmatch(r'ver:source:([0-9a-f]{10}):(sc|jam)', query.data or '')
+    if provider:
+        request = context.user_data.get('version_requests', {}).get(provider[1])
+        if not request:
+            return await update.effective_message.reply_text('Выбор устарел. Открой варианты ещё раз.')
+        if request.get('queue_ref'):
+            from link_queue import current
+            if not current(context, *request['queue_ref']):
+                return await update.effective_message.reply_text('Очередь уже завершена или отменена.')
+        return await request_versions(update, context, request['song'], mode=request.get('mode', 'studio'),
+                                      queue_ref=request.get('queue_ref'), source=provider[2])
     recovery = re.fullmatch(r"ver:(refresh|other):([0-9a-f]{10})(?::([0-4]))?", query.data or "")
     if recovery:
         request = context.user_data.get("version_requests", {}).get(recovery[2])
@@ -193,7 +233,7 @@ async def choose_version(update, context, downloader, metadata, retain, studio):
             if not current(context, *request["queue_ref"]):
                 return await update.effective_message.reply_text("Очередь уже завершена или отменена.")
         if recovery[1] == "refresh":
-            return await request_versions(update, context, request["song"], mode=request.get("mode", "studio"), queue_ref=request.get("queue_ref"))
+            return await request_versions(update, context, request["song"], mode=request.get("mode", "studio"), queue_ref=request.get("queue_ref"), source=request.get('source'))
         return await show_versions(update, context, recovery[2], request,
                                    exclude=int(recovery[3]) if recovery[3] is not None else None)
     match = re.fullmatch(r"ver:pick:([0-9a-f]{10}):([0-4])", query.data or "")
@@ -222,7 +262,7 @@ async def download_selected(update, context, token, request, index, downloader, 
     # Keep the recording choices reachable without leaving obsolete download menus.
     other_rows = ([[Button("🎧 Другая версия", callback_data=f"ver:other:{token}:{index}")]]
                   if not request.get("queue_ref") and any(
-                      i != index and i not in request.get("sent_indices", [])
+                      i != index and i not in request.get("sent_indices", []) and i not in request.get('failed_indices', [])
                       for i in range(len(request["candidates"]))) else [])
     try:
         if request.get('mode') in ('listen','queue'):
@@ -264,13 +304,20 @@ async def download_selected(update, context, token, request, index, downloader, 
             await update.effective_message.reply_text("Трек отправлен, но студию открыть не удалось.",
                 reply_markup=Markup([[Button("🎛 Открыть студию", callback_data="studio:home")]]))
         else:
+            if index not in request.setdefault('failed_indices', []): request['failed_indices'].append(index)
             from diagnostics import source_access_blocked, SOURCE_ACCESS_MESSAGE
             if source_access_blocked(error):
+                if not request.get('source'):
+                    # Preserve the original catalog song; these are explicit new choices,
+                    # never a silent replacement for the failed YouTube recording.
+                    await request_versions(update, context, request['song'], mode=request.get('mode', 'studio'),
+                                           queue_ref=request.get('queue_ref'), source='sc')
+                    return False
                 await version_screen(update, context, SOURCE_ACCESS_MESSAGE,
-                    Markup(queue_recovery(request) + other_rows + [[Button("← Поиск", callback_data="ui:search")]]))
+                    Markup(queue_recovery(request) + other_rows + source_rows(token, request) + [[Button("← Поиск", callback_data="ui:search")]]))
                 return False
             await version_screen(update, context, "Не удалось скачать трек. Попробуй ещё раз или выбери другую версию.",
-                Markup(queue_recovery(request) + [
+                Markup(queue_recovery(request) + source_rows(token, request) + [
                     [Button("🔄 Повторить", callback_data=f"ver:pick:{token}:{index}", style="primary")],
                     [Button("🎧 Другая версия", callback_data=f"ver:other:{token}:{index}")],
                     [Button("← Поиск", callback_data="ui:search")]]))

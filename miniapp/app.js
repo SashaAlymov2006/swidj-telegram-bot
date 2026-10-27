@@ -433,10 +433,7 @@ async function prepareTrack(track) {
   try {
     let info=await(await api('prepare',{track:track.id})).json();
     if(info.status==='choices') {
-      for(const choice of info.tracks)extraTracks.set(choice.id,choice);
-      while(extraTracks.size>40)extraTracks.delete(extraTracks.keys().next().value);
-      $('dialog-form').onsubmit=null;
-      dialog(t('chooseVersion'),info.tracks.length?info.tracks.map(choice=>`<button type="button" class="dialog-option" data-track="${e(choice.id)}" data-action="play">${icon('play')}<span>${e(choice.title)}<small class="version-artist">${e(choice.artist)} · ${stamp(choice.duration)}</small></span></button>`).join(''):`<p class="dialog-copy">${e(t('noResults'))}</p>`);
+      recordingChoices(info,track.id);
       return null;
     }
     item.job=info.job;const deadline=Date.now()+1200000;
@@ -448,11 +445,36 @@ async function prepareTrack(track) {
       info=await(await api('jobs/'+item.job)).json();
     }
     if(info.status==='cancelled'||item.cancel){toast('cancelled');return null;}
-    if(info.status!=='ready')throw new Error(['queueTimeout','downloadTimeout'].includes(info.error)?info.error:'prepareFailed');
+    if(info.status!=='ready'){
+      if(info.error==='prepareFailed'){
+        const group=recordingGroups.get(track.id);
+        if(group?.source==='SoundCloud'){
+          const remaining=group.tracks.filter(choice=>choice.id!==track.id);
+          if(remaining.length){recordingChoices({...group,tracks:remaining},group.origin);return null;}
+        }
+        const choices=await(await api('versions',{track:track.id,source:'next'})).json();
+        if(!item.cancel){recordingChoices(choices,track.id);return null;}
+        return null;
+      }
+      throw new Error(['queueTimeout','downloadTimeout'].includes(info.error)?info.error:'prepareFailed');
+    }
     Object.assign(track,info.track);
     extraTracks.set(track.id,track);
     return track;
   } finally {if(preparation===item)preparation=null;showPreparation();}
+}
+Object.assign(copy.ru,{versionsFrom:'?????? ??'});
+Object.assign(copy.en,{versionsFrom:'Recordings from'});
+const recordingGroups=new Map();
+function recordingChoices(info,origin){
+  const tracks=info.tracks||[];
+  const group={source:info.source,tracks,origin};
+  for(const choice of tracks){extraTracks.set(choice.id,choice);recordingGroups.set(choice.id,group);}
+  while(extraTracks.size>100)extraTracks.delete(extraTracks.keys().next().value);
+  while(recordingGroups.size>100)recordingGroups.delete(recordingGroups.keys().next().value);
+  const links=[['sc','SoundCloud'],['jam','Jamendo']].filter(([,name])=>name!==info.source).map(([source,name])=>`<button type="button" class="btn secondary" data-source-track="${e(origin)}" data-source-provider="${source}">${e(t('versionsFrom'))} ${name}</button>`).join('');
+  $('dialog-form').onsubmit=null;
+  dialog(t('chooseVersion')+(info.source?' · '+info.source:''),(tracks.length?tracks.map(choice=>`<button type="button" class="dialog-option" data-track="${e(choice.id)}" data-action="play">${icon('play')}<span>${e(choice.title)}<small class="version-artist">${e(choice.artist)} · ${stamp(choice.duration)}</small></span></button>`).join(''):`<p class="dialog-copy">${e(t('noResults'))}</p>`)+links);
 }
 async function playTrack(track,autoplay=true) {
   engine.cancelSourceSwitch();
@@ -788,6 +810,12 @@ async function renderMix(preview,keepPosition=false) {
 document.addEventListener('click',async event=>{
   const button=event.target.closest('button,a,label');if(!button)return;
   try {
+    if(button.dataset.sourceTrack){
+      button.disabled=true;
+      try{recordingChoices(await(await api('versions',{track:button.dataset.sourceTrack,source:button.dataset.sourceProvider})).json(),button.dataset.sourceTrack);}
+      finally{button.disabled=false;}
+      return;
+    }
     if(button.dataset.studioMode){djMode=button.dataset.studioMode==='dj';if(djMode)audio.pause();else djRoom?.pauseAll();render();return;}
     if(button.id==='save-sound-preset')return await saveSoundPreset();
     if(button.dataset.soundPreset)return await applySoundPreset(button.dataset.soundPreset);

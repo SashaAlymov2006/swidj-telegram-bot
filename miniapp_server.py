@@ -95,6 +95,7 @@ class BotLibrary:
         self.saved_sessions, self.owner_ids = saved_sessions, owner_ids
         self.searches = {}
         self.chart_recordings = {}
+        self.source_searching = set()
         self.search_times = {}
         self.send_times = {}
         self.search_slots = asyncio.Semaphore(2)
@@ -210,8 +211,50 @@ class BotLibrary:
             result = await asyncio.to_thread(find_versions, query)
         for song in result:
             song['id'] = 10**15 + int.from_bytes(hashlib.sha256(song['url'].encode()).digest()[:6], 'big')
+            song['_search_query'] = query
         self.searches[uid] = result
         return {'tracks': [public_song(s) for s in result]}
+
+    async def source_versions(self, uid, identifier, source):
+        self.allowed(uid, 'search')
+        self.allowed(uid, 'downloads')
+        if source not in ('next', 'sc', 'jam'):
+            raise web.HTTPBadRequest()
+        song = await self.find(uid, identifier)
+        if song.get('kind') == 'upload':
+            raise web.HTTPBadRequest()
+        # A saved copy may carry a video title; prefer the chart/catalog context
+        # that most recently supplied this recording, after ownership is checked.
+        song = next((s for s in self.chart_recordings.get(uid, [])
+                     if str(s['id']) == identifier and s.get('_catalog_song')), song)
+        from soundcloud_source import public_url as sc_url
+        from jamendo_source import identifier as jam_id
+        if source == 'next':
+            source = 'jam' if sc_url(song.get('url')) else 'sc'
+            if jam_id(song.get('url')):
+                return {'status': 'choices', 'tracks': [], 'source': 'Jamendo', 'origin': identifier}
+        # One in-flight source search per owner; other owners retain their slots.
+        if uid in self.source_searching:
+            raise web.HTTPTooManyRequests()
+        self.source_searching.add(uid)
+        try:
+            from versions import source_search
+            async with self.search_slots:
+                candidates = await asyncio.to_thread(source_search, song, source)
+            origin = dict(song.get('_catalog_song') or {k:song.get(k, '') for k in ('title', 'artist')})
+            for item in candidates:
+                item['id'] = 10**15 + int.from_bytes(hashlib.sha256(item['url'].encode()).digest()[:6], 'big')
+                item['_catalog_song'] = origin
+                if song.get('_search_query'): item['_search_query'] = song['_search_query']
+            from dispatch import user_lock
+            async with user_lock(uid):
+                previous = self.chart_recordings.get(uid, [])
+                self.chart_recordings[uid] = list({item['id']:item for item in previous+candidates}.values())[-100:]
+                while len(self.chart_recordings)>1000:self.chart_recordings.pop(next(iter(self.chart_recordings)))
+            return {'status': 'choices', 'tracks': [public_song(s) for s in candidates],
+                    'source': 'SoundCloud' if source == 'sc' else 'Jamendo', 'origin': identifier}
+        finally:
+            self.source_searching.discard(uid)
 
     def job_payload(self, job):
         return {'job': job.token, 'status': job.state, 'error': job.error,
@@ -234,6 +277,7 @@ class BotLibrary:
                 candidates = await asyncio.to_thread(find_versions, song['title']+' '+song.get('artist', ''))
             for item in candidates:
                 item['id'] = 10**15 + int.from_bytes(hashlib.sha256(item['url'].encode()).digest()[:6], 'big')
+                item['_catalog_song'] = {k:song.get(k, '') for k in ('title', 'artist')}
             self.searches[uid] = candidates
             return {'status':'choices', 'tracks':[public_song(item) for item in candidates]}
         try:
@@ -425,7 +469,7 @@ def create_app(*, token='', bridge=None):
                 uid = user['id']
                 bridge.allowed(uid)
                 from dispatch import user_lock
-                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts','/api/charts/resolve','/api/dj/analysis'):
+                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts','/api/charts/resolve','/api/versions','/api/dj/analysis'):
                     response=await handler(request)
                 else:
                     async with user_lock(uid):
@@ -539,6 +583,11 @@ def create_app(*, token='', bridge=None):
         if not isinstance(payload, dict):
             raise web.HTTPBadRequest()
         return web.json_response(await bridge.prepare(request['user']['id'], str(payload.get('track', ''))))
+    async def source_versions(request):
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise web.HTTPBadRequest()
+        return web.json_response(await bridge.source_versions(request['user']['id'], str(payload.get('track', '')), payload.get('source', 'next')))
     async def job_status(request):
         uid = request['user']['id']
         bridge.allowed(uid, 'downloads')
@@ -584,6 +633,7 @@ def create_app(*, token='', bridge=None):
                     web.post('/api/library', mutate), web.get('/api/search', search),
                     web.get('/api/audio/{track:-?\\d{1,20}}', audio), web.post('/api/send', send),
                     web.post('/api/prepare', prepare),
+                    web.post('/api/versions', source_versions),
                     web.post('/api/download', download_ticket),
                     web.post('/api/stream', download_ticket),
                     web.get('/api/track/{track:-?\\d{1,20}}', selected_track),

@@ -155,7 +155,9 @@ class Charts:
                     artist=re.split(r'\s+(?:&|x|and|feat\.?|ft\.?|with)\s+|,\s*',item['artist'],flags=re.I)[0]
                     extra=await asyncio.to_thread(find_versions,(artist+' '+title+' official audio')[:240],limit=10)
                     seen={row['url'] for row in result};result+= [row for row in extra if row['url'] not in seen]
-            for song in result:song['id']=10**15+int.from_bytes(hashlib.sha256(song['url'].encode()).digest()[:6],'big')
+            for song in result:
+                song['id']=10**15+int.from_bytes(hashlib.sha256(song['url'].encode()).digest()[:6],'big')
+                song['_catalog_song']={k:item.get(k,'') for k in ('title','artist')}
             if result:
                 self.recordings[key]=(time.monotonic(),result)
                 while len(self.recordings)>300:self.recordings.pop(next(iter(self.recordings)))

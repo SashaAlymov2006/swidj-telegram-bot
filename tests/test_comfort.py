@@ -60,10 +60,46 @@ class ComfortAsyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("ver:pick:0123456789:0", callbacks)
         self.assertIn("ver:pick:0123456789:1", callbacks)
         self.assertIn("ver:pick:0123456789:2", callbacks)
+        request['source'] = 'sc'
         with patch("audio_presentation.send_cached_music", new_callable=AsyncMock, return_value=False), patch("media_recovery.download_with_reserve", side_effect=RuntimeError("blocked")), patch("diagnostics.source_access_blocked", return_value=True), patch("versions.version_screen", new_callable=AsyncMock) as screen:
             self.assertFalse(await download_selected(update, context, "0123456789", request, 1, None, None, None, None))
         callbacks = [b.callback_data for row in screen.call_args.args[3].inline_keyboard for b in row]
         self.assertIn("ver:other:0123456789:1", callbacks)
+
+    async def test_independent_provider_choices_keep_catalog_identity_and_exact_selected_url(self):
+        catalog = dict(id=91, title='Perfect', artist='Ed Sheeran')
+        failed = dict(title='Ed Sheeran - Perfect [Official Lyric Video]', artist='Uploader', duration=264, url='https://www.youtube.com/watch?v=abcdefghijk')
+        candidate = dict(title='Perfect (Cover)', artist='Another singer', duration=265.222, source='SoundCloud', url='https://soundcloud.com/singer/perfect-cover')
+        context = SimpleNamespace(user_data={'version_requests': {'0123456789': dict(song=catalog,candidates=[failed],mode='listen')}}, bot=SimpleNamespace())
+        update = SimpleNamespace(callback_query=SimpleNamespace(data='ver:source:0123456789:sc',answer=AsyncMock()),effective_chat=SimpleNamespace(id=77),effective_user=SimpleNamespace(id=77))
+        with patch('soundcloud_source.search', return_value=[candidate]) as search, patch('versions.find_versions') as youtube, patch('versions.version_screen', new_callable=AsyncMock):
+            await choose_version(update, context, None, None, None, None)
+        search.assert_called_once_with('Perfect Ed Sheeran',5)
+        youtube.assert_not_called()
+        token = next(reversed(context.user_data['version_requests']))
+        selected = context.user_data['version_requests'][token]
+        self.assertEqual(selected['song'],catalog)
+        self.assertEqual(selected['source'],'sc')
+        self.assertEqual(selected['candidates'],[candidate])
+        update.callback_query.data = f'ver:pick:{token}:0'
+        with patch('audio_presentation.send_cached_music',new_callable=AsyncMock,return_value=True) as cached, patch('track_card.retire_download_menus',new_callable=AsyncMock),patch('media_recovery.download_with_reserve') as download:
+            self.assertTrue(await choose_version(update,context,None,None,None,None))
+        self.assertEqual(cached.call_args.args[2],candidate['url'])
+        download.assert_not_called()
+        update.callback_query.data = f'ver:source:{token}:jam'
+        with patch('jamendo_source.search',return_value=[]) as search,patch('versions.version_screen',new_callable=AsyncMock):
+            await choose_version(update,context,None,None,None,None)
+        search.assert_called_once_with('Perfect Ed Sheeran',5)
+
+    async def test_blocked_youtube_offers_new_catalog_search_after_exact_reserve_failed(self):
+        from versions import download_selected
+        original=dict(id=1,title='Perfect',artist='Ed Sheeran')
+        request=dict(song=original,candidates=[dict(title='Video title',artist='Uploader',url='https://www.youtube.com/watch?v=abcdefghijk')],mode='listen')
+        update=SimpleNamespace(effective_chat=SimpleNamespace(id=77))
+        with patch('audio_presentation.send_cached_music',new_callable=AsyncMock,return_value=False),patch('media_recovery.download_with_reserve',side_effect=RuntimeError("Sign in to confirm you're not a bot")),patch('versions.request_versions',new_callable=AsyncMock) as search:
+            self.assertFalse(await download_selected(update,SimpleNamespace(user_data={},bot=None),'0123456789',request,0,None,None,None,None))
+        self.assertEqual(search.call_args.args[2],original)
+        self.assertEqual(search.call_args.kwargs['source'],'sc')
 
     async def test_lyrics_search_boosts_verified_phrase_and_bounds_requests(self):
         query = "these are the words I remember"

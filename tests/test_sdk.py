@@ -678,6 +678,26 @@ assert 78 not in h
         sender.assert_not_awaited()
         self.assertEqual(path.read_bytes(), b"retained full recording")
 
+    async def test_source_buttons_search_catalog_then_download_soundcloud_selection(self):
+        for uid,language in ((77,'ru'),(88,'en')):
+            catalog=dict(id=51,title='Perfect',artist='Ed Sheeran')
+            self.app.user_data[uid]['language']=language
+            self.app.user_data[uid]['version_requests']={'0123456789':dict(song=catalog,candidates=[],mode='listen')}
+            candidate=dict(title='Perfect (Cover)',artist='Singer',duration=261.781,url='https://soundcloud.com/singer/perfect-cover',source='SoundCloud')
+            def download(url):
+                path=Path(self.local_files.name)/('sc-'+str(uid)+'.mp3');path.write_bytes(b'complete SoundCloud fixture')
+                return str(path),dict(candidate,source_url=url)
+            with patch('soundcloud_source.search',return_value=[candidate]) as search,patch('versions.find_versions') as youtube,patch.object(self.bot,'download_youtube_audio',side_effect=download) as downloader:
+                await self.app.process_update(self.callback('ver:source:0123456789:sc',uid=uid))
+                token=next(reversed(self.app.user_data[uid]['version_requests']))
+                self.assertNotEqual(token,'0123456789')
+                self.assertEqual(self.app.user_data[uid]['version_requests'][token]['song'],catalog)
+                self.assertIn('SoundCloud',self.texts()[-1])
+                await self.app.process_update(self.callback(f'ver:pick:{token}:0',uid=uid))
+            search.assert_called_once_with('Perfect Ed Sheeran',5);youtube.assert_not_called()
+            downloader.assert_called_once_with(candidate['url'])
+            self.assertEqual(self.request.uploads[-1][1],b'complete SoundCloud fixture')
+
     async def test_failed_download_retry_is_exact_and_other_version_skips_failure(self):
         from versions import request_versions
         update = self.message("fixture")

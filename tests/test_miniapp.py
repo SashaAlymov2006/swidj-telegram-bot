@@ -87,6 +87,30 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
         for path in ['/assets/bot.py','/assets/.env','/demo/9.wav']:
             self.assertEqual((await self.client.get(path)).status, 404)
 
+    async def test_source_versions_use_original_chart_identity_and_remain_owner_scoped(self):
+        song=dict(id=90,title='Video label',artist='Uploader',url='https://www.youtube.com/watch?v=abcdefghijk',_catalog_song={'title':'Perfect','artist':'Ed Sheeran'})
+        self.bridge.chart_recordings[77]=[song]
+        found=dict(title='Perfect Cover',artist='Singer',duration=261.5,url='https://soundcloud.com/singer/perfect-cover',source='SoundCloud')
+        self.assertEqual((await self.client.post('/api/versions',json={'track':'90'})).status,401)
+        with patch('soundcloud_source.search',return_value=[found]) as search,patch('versions.find_versions') as youtube:
+            response=await self.client.post('/api/versions',headers=self.headers,json={'track':'90','source':'next'})
+            self.assertEqual(response.status,200)
+            payload=await response.json()
+        search.assert_called_once_with('Perfect Ed Sheeran',5);youtube.assert_not_called()
+        self.assertEqual(payload['source'],'SoundCloud')
+        candidate=payload['tracks'][0]
+        resolved=await self.bridge.find(77,candidate['id'])
+        self.assertEqual(resolved['_catalog_song'],song['_catalog_song'])
+        self.assertNotIn('_catalog_song',candidate)
+        self.assertEqual((await self.client.post('/api/versions',headers={'X-Telegram-Init-Data':signed(uid=78)},json={'track':candidate['id'],'source':'jam'})).status,404)
+        with patch('jamendo_source.search',return_value=[]) as search:
+            response=await self.client.post('/api/versions',headers=self.headers,json={'track':candidate['id'],'source':'next'})
+            self.assertEqual(response.status,200)
+            self.assertEqual((await response.json())['source'],'Jamendo')
+        search.assert_called_once_with('Perfect Ed Sheeran',5)
+        self.assertEqual((await self.client.post('/api/versions',headers=self.headers,json={'track':'90','source':'unknown'})).status,400)
+        self.assertFalse(self.bridge.data(77).get('_source_search_busy'))
+
     async def test_sound_presets_are_private_persistent_and_validated(self):
         self.assertEqual((await self.client.get('/api/presets')).status,401)
         payload={'action':'save','name':'Night sound','user_id':78,'settings':{'speed':1.25,'pitch':-2,'bass':3,'effects':['reverb','echo'],'params':{'feedback':.3}}}

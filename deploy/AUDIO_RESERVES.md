@@ -34,6 +34,30 @@ If a fresh opaque YouTube link has no available identity metadata, the system
 keeps the original failure rather than guessing a different song. Search and
 voice transcription feed the same recording selection/download path.
 
+## Independent recording choices
+
+Exact automatic recovery remains the first attempt. If YouTube rejects the
+download, the bot opens a fresh SoundCloud version list using the original
+catalog title and performer. The version menus also have explicit SoundCloud
+and Jamendo search buttons. Refresh stays on the chosen provider; every list
+gets an immutable request snapshot. Already failed/sent versions are omitted
+from the other-version list, while an explicit retry remains available.
+
+The Mini App retains the chart/catalog identity separately from the YouTube
+video label. After preparation fails it requests `/api/versions` and offers
+independent source choices. Failed SoundCloud choices leave the remaining
+SoundCloud results available without another search. Jamendo can be selected
+from the same dialog. Query text from app text/voice search is retained for
+independent searches. The endpoint accepts only a track the authenticated owner
+can already access and a fixed provider name; it accepts no arbitrary URLs.
+
+These are visible recording choices, not automatic exact replacements. Covers,
+remixes and other uploaders may appear with their titles and performers. The
+chosen source URL uses the normal cache/Telegram/download path. Search results
+do not guarantee availability: DRM, source access restrictions and missing
+catalog recordings can still prevent a download. Searches do not download every
+candidate in advance. No new paid service or subscription is connected.
+
 ## Public cache and privacy
 
 The existing cache remains bounded by `DOWNLOAD_CACHE_BYTES` and its 30-day LRU

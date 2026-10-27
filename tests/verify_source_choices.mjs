@@ -1,0 +1,33 @@
+// Opt-in frontend flow checks; no browser session or remote service is used.
+const source=await Deno.readTextFile('/app/miniapp/app.js');
+const assert=(value,message)=>{if(!value)throw new Error(message);};
+let preparation=null,extraTracks=new Map(),copy={ru:{},en:{}},rendered=null,calls=[],responses=[];
+const showPreparation=()=>{},toast=()=>{},t=x=>x,icon=()=>'';
+const e=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+const stamp=x=>String(x),form={onsubmit:null},$=()=>form;
+const dialog=(title,body)=>{rendered={title,body};};
+const api=async(path,payload)=>{calls.push([path,payload]);const result=responses.shift();assert(result,'Unexpected API request');return{json:async()=>result};};
+const start=source.indexOf('async function prepareTrack(track) {'),end=source.indexOf('async function playTrack(',start);
+assert(start>=0&&end>start,'Frontend functions missing');
+const {prepareTrack,recordingChoices}=eval(source.slice(start,end)+'\n({prepareTrack,recordingChoices})');
+recordingChoices({source:'SoundCloud',tracks:[{id:'sc1',title:'<script>',artist:'Singer',duration:261}]},'origin');
+assert(rendered.title==='chooseVersion · SoundCloud','Source title missing');
+assert(rendered.body.includes('&lt;script&gt;')&&!rendered.body.includes('<script>'),'Unescaped recording title');
+assert(rendered.body.includes('data-source-provider="jam"')&&!rendered.body.includes('data-source-provider="sc"'),'Next source navigation wrong');
+assert(extraTracks.has('sc1'),'Choices unavailable to player');
+responses=[{status:'failed',error:'prepareFailed'},{source:'SoundCloud',tracks:[{id:'sc2',title:'Alternative',artist:'Uploader',duration:261}]}];calls=[];
+assert(await prepareTrack({id:'yt1',title:'Catalog song'})===null,'Alternative silently played');
+assert(JSON.stringify(calls.map(x=>x[0]))===JSON.stringify(['prepare','versions']),'Wrong fallback request chain');
+assert(calls[1][1].track==='yt1'&&calls[1][1].source==='next','Fallback identity missing');
+assert(preparation===null&&extraTracks.has('sc2'),'Preparation cleanup failed');
+recordingChoices({source:'SoundCloud',tracks:[{id:'sc3',title:'First'},{id:'sc4',title:'Second'}]},'catalog');
+responses=[{status:'failed',error:'prepareFailed'}];calls=[];
+assert(await prepareTrack({id:'sc3'})===null&&calls.length===1,'Failed SC choice did not retain remaining local choices');
+assert(rendered.body.includes('sc4')&&!rendered.body.includes('data-track="sc3"'),'Failed source choice still shown');
+responses=[{status:'failed',error:'queueTimeout'}];calls=[];
+try{await prepareTrack({id:'yt2'});throw new Error('Expected queue error');}catch(error){assert(error.message==='queueTimeout','Resource error lost');}
+assert(calls.length===1&&preparation===null,'Resource error triggered provider substitution');
+responses=[{status:'ready',track:{id:'ready',title:'Ready'}}];calls=[];
+assert((await prepareTrack({id:'ready'})).title==='Ready'&&calls.length===1,'Normal ready flow changed');
+assert(source.includes("if(button.dataset.sourceTrack)"),'Source button handler missing');
+console.log('Source choices frontend flow: PASS');
