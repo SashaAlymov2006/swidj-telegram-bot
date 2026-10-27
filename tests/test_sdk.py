@@ -1418,6 +1418,22 @@ asyncio.run(run())'''
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
+    async def test_audius_direct_link_and_duplicate_delivery_in_both_languages(self):
+        url='https://audius.co/artist/song'
+        for uid,language in ((77,'ru'),(88,'en')):
+            self.app.user_data[uid]['language']=language
+            await self.app.process_update(self.message(url,uid=uid))
+            token=next(reversed(self.app.user_data[uid]['dl_requests']))
+            self.assertEqual(self.app.user_data[uid]['dl_requests'][token]['platform'],'audius')
+            source=Path(self.local_files.name)/('audius-'+str(uid)+'.mp3');source.write_bytes(b'full fixture')
+            info=dict(title='Song',artist='Artist',duration=210,source='Audius',source_url=url)
+            with patch('media_recovery.download_with_reserve',return_value=(str(source),info)) as download,patch('audio_presentation.send_cached_music',new=AsyncMock(return_value=None)),patch('audio_presentation.send_music',new_callable=AsyncMock) as send,patch.object(self.bot,'retain_audio_source',new_callable=AsyncMock):
+                await self.app.process_update(self.callback('dl_audio|'+token,uid=uid))
+                await self.app.process_update(self.callback('dl_audio|'+token,uid=uid))
+            self.assertEqual(download.call_count,1);self.assertEqual(send.await_count,1)
+            self.assertEqual(send.call_args.kwargs['source_url'],url)
+            self.assertEqual(self.app.user_data[uid]['downloaded_song']['url'],url)
+
     async def test_tiktok_video_menu_delivery_retry_and_duplicate(self):
         self.app.user_data[77]["language"]="en"
         url="https://vm.tiktok.com/ABC12/"

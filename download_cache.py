@@ -17,6 +17,10 @@ def source_key(url):
         p = urlsplit(url)
         if p.scheme != 'https' or p.username or p.password: return None
         host = (p.hostname or '').lower()
+        if host in ('audius.co','www.audius.co'):
+            from audius_source import canonical
+            link=canonical(url)
+            return 'audius:'+link if link else None
         if host=='www.jamendo.com':
             from jamendo_source import identifier
             track=identifier(url)
@@ -85,7 +89,7 @@ class DownloadCache:
         size = source.stat().st_size
         if not 0 < size <= self.limit: return
         safe = {k:metadata[k] for k in ('title','artist','track','uploader','duration','kind') if isinstance(metadata.get(k),(str,int,float))}
-        if metadata.get('source') in ('SoundCloud','Jamendo') and shareable(metadata.get('source_url')):
+        if metadata.get('source') in ('SoundCloud','Jamendo','Audius') and shareable(metadata.get('source_url')):
             safe.update(source=metadata['source'],source_url=metadata['source_url'])
             from jamendo_source import license_url
             license=license_url(metadata.get('license_url'))
@@ -148,7 +152,7 @@ class DownloadCache:
                 db.execute('INSERT OR REPLACE INTO telegram VALUES (?,?,?)',(key,str(file_id),time.time()))
                 if metadata is not None:
                     safe={k:v for k,v in metadata.items() if k in ('title','artist','duration') and isinstance(v,(str,int,float))}
-                    if metadata.get('source') in ('SoundCloud','Jamendo') and shareable(metadata.get('source_url')):
+                    if metadata.get('source') in ('SoundCloud','Jamendo','Audius') and shareable(metadata.get('source_url')):
                         safe.update(source=metadata['source'],source_url=metadata['source_url'])
                         from jamendo_source import license_url
                         license=license_url(metadata.get('license_url'))
@@ -251,7 +255,7 @@ def shareable(url):
         p=urlsplit(str(url))
         if p.scheme!='https' or p.username or p.password or p.port not in (None,443):return False
         source=source_key(url)
-        if str(source).startswith(('youtube:','jamendo:')):return True
+        if str(source).startswith(('youtube:','jamendo:','audius:')):return True
         from soundcloud_source import public_url
         return public_url(url)
     except ValueError:return False

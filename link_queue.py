@@ -75,13 +75,18 @@ async def run(update,context,token,bot_module):
                 from media_recovery import download_with_reserve
                 path,info=await asyncio.to_thread(download_with_reserve,bot_module.download_youtube_audio,item["url"],{})
                 title,artist=bot_module.extract_youtube_metadata(info);cover=info.get("thumbnail")
+            elif item['platform']=='audius':
+                from media_recovery import download_with_reserve
+                path,info=await asyncio.to_thread(download_with_reserve,bot_module.download_youtube_audio,item['url'],{})
+                title,artist,cover=info.get('title'),info.get('artist'),None
             else:
                 data=await asyncio.to_thread(bot_module.download_soundcloud_audio,item["url"])
                 path,title,artist,cover=data["path"],data.get("title"),data.get("artist"),data.get("cover")
             from hashlib import sha256
             song={"id":-(10**15+int.from_bytes(sha256(item["url"].encode()).digest()[:6],"big")),"title":title or "Аудио","artist":artist or "","url":item["url"],"cover":cover}
             checkpoint()
-            await send_music(context.bot,update.effective_chat.id,path,title,artist,cover,reply_markup=card_keyboard(context,song,delivered=True))
+            await send_music(context.bot,update.effective_chat.id,path,title,artist,cover,reply_markup=card_keyboard(context,song,delivered=True),
+                             **({'source_url':item['url']} if item['platform']=='audius' else {}))
             sent=True
             await bot_module.retain_audio_source(context,update.effective_user.id,path)
             context.user_data["downloaded_song"]=song

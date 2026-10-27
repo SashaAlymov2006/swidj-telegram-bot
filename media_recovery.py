@@ -75,7 +75,7 @@ def download_with_reserve(downloader,url,hint,max_bytes=49*1024**2,uid=None):
         raise
     try:
         result=downloader(url)
-        if result[1].get('source')=='Jamendo':retain(url,'audio-mp3-192',result[0],dict(result[1],_public_source=True),uid)
+        if result[1].get('source') in ('Jamendo','Audius'):retain(url,'audio-mp3-192',result[0],dict(result[1],_public_source=True),uid)
         return result
     except Exception as original:
         # Never substitute a shorter file to get around product limits or a full disk.
@@ -87,7 +87,9 @@ def download_with_reserve(downloader,url,hint,max_bytes=49*1024**2,uid=None):
         hint=dict(known,**{k:v for k,v in hint.items() if v not in (None,'')})
         from soundcloud_source import matching_track as sc_match,download as sc_download
         from jamendo_source import matching_track as jam_match,download as jam_download
+        from audius_source import matching_track as aud_match,download as aud_download
         for match,download in ((sc_match,lambda item,folder:sc_download(item,folder,max_bytes)),
+                               (aud_match,lambda item,folder:aud_download(item['url'],folder,max_bytes)),
                                (jam_match,lambda item,folder:jam_download(item['url'],folder,max_bytes or 256*1024**2))):
             checkpoint()
             try:

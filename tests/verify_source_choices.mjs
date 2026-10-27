@@ -69,3 +69,7 @@ assert(!rendered.body.includes('data-source-provider='),'Empty providers still a
 recordingChoices({source:'YouTube',tracks:[],available_sources:['sc']},'only-sc');
 assert(rendered.body.includes('data-source-provider="sc"')&&!rendered.body.includes('data-source-provider="jam"')&&!rendered.body.includes('data-source-provider="yt"'),'Provider availability filter failed');
 console.log('Provider filtering UI checks passed');
+recordingChoices({source:'YouTube',tracks:[],available_sources:['aud']},'aud-only');
+assert(rendered.body.includes('data-source-provider="aud"')&&!rendered.body.includes('data-source-provider="jam"'),'Audius source filtering failed');
+searchAvailable=['aud'];assert(searchProviders().includes('data-search-source="aud"')&&!searchProviders().includes('data-search-source="yt"'),'Audius search filter missing');
+console.log('Audius provider UI checks passed');

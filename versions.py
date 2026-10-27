@@ -34,6 +34,9 @@ def find_versions(query, limit=5):
         from soundcloud_source import search as sc_search
         reserve=sc_search(query,limit)
         if not reserve:
+            from audius_source import search as audius_search
+            reserve=audius_search(query,limit)
+        if not reserve:
             from jamendo_source import search
             reserve=search(query,limit)
         if reserve:
@@ -63,6 +66,9 @@ def find_versions(query, limit=5):
         from soundcloud_source import search as sc_search
         result=sc_search(query,limit)
         if not result:
+            from audius_source import search as audius_search
+            result=audius_search(query,limit)
+        if not result:
             from jamendo_source import search
             result=search(query,limit)
     if result:search_cache(query,result)
@@ -91,6 +97,8 @@ def source_search(song, source):
         from soundcloud_source import search
     elif source == 'jam':
         from jamendo_source import search
+    elif source == 'aud':
+        from audius_source import search
     elif source == 'yt':
         search = find_versions
     else:
@@ -110,7 +118,7 @@ def source_search(song, source):
 def source_rows(token, request):
     selected = request.get('source')
     return [[Button('Версии ' + name, callback_data=f'ver:source:{token}:{source}')]
-            for source, name in (('yt', 'YouTube'), ('sc', 'SoundCloud'), ('jam', 'Jamendo'))
+            for source, name in (('yt', 'YouTube'), ('sc', 'SoundCloud'), ('aud', 'Audius'), ('jam', 'Jamendo'))
             if source != selected and source in request.get('available_sources', [])]
 
 
@@ -140,16 +148,20 @@ async def source_inventory(song, uid, known=None):
         # availability of YouTube itself.
         from soundcloud_source import public_url
         from jamendo_source import identifier
+        from audius_source import canonical
         rows = [row for row in rows if
                 (source == 'sc' and public_url(row.get('url'))) or
                 (source == 'jam' and identifier(row.get('url'))) or
+                (source == 'aud' and canonical(row.get('url'))) or
                 (source == 'yt' and re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', row.get('url', '')))]
         checked_limit = song.get('_availability_limit',3) if known is not None and source in known else 1
         _source_checks[key] = (time.monotonic() + (60 if rows else 20), deepcopy(rows),checked_limit)
         while len(_source_checks) > 1000:
             _source_checks.pop(next(iter(_source_checks)))
         return source, deepcopy(rows)
-    return dict(await asyncio.gather(*(check(source) for source in ('yt', 'sc', 'jam'))))
+    from audius_source import enabled
+    sources=('yt','sc','jam')+(('aud',) if enabled() else ())
+    return dict(await asyncio.gather(*(check(source) for source in sources)))
 
 
 def queue_recovery(request):
@@ -276,7 +288,7 @@ async def choose_version(update, context, downloader, metadata, retain, studio):
     if duplicate and int(duplicate[2]) in previous.get("sent_indices", []):
         return await query.answer("Этот трек уже отправлен выше.")
     await query.answer()
-    provider = re.fullmatch(r'ver:source:([0-9a-f]{10}):(yt|sc|jam)', query.data or '')
+    provider = re.fullmatch(r'ver:source:([0-9a-f]{10}):(yt|sc|aud|jam)', query.data or '')
     if provider:
         request = context.user_data.get('version_requests', {}).get(provider[1])
         if not request:

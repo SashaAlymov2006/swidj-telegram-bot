@@ -197,7 +197,7 @@ def register(app,bridge):
         if not isinstance(value,dict):raise web.HTTPBadRequest()
         country=value.get('country','de');identifier=str(value.get('track',''))
         source=value.get('source')
-        if source not in (None,'yt','sc','jam'):raise web.HTTPBadRequest()
+        if source not in (None,'yt','sc','aud','jam'):raise web.HTTPBadRequest()
         if country not in COUNTRIES or not identifier.isdigit() or len(identifier)>20:raise web.HTTPBadRequest()
         item,recordings=await service.resolve(country,identifier,bridge,source)
         saved=[]
@@ -220,6 +220,6 @@ def register(app,bridge):
         return web.json_response({'tracks':[public_song(row,bool(bridge.audio_path(uid,row))) for row in choices],
                                   'alternatives':[public_song(row,bool(bridge.audio_path(uid,row))) for row in recordings],
                                   'available_sources':[key for key,rows in inventory.items() if rows],
-                                  'source':{'yt':'YouTube','sc':'SoundCloud','jam':'Jamendo'}.get(source,'YouTube')})
+                                  'source':{'yt':'YouTube','sc':'SoundCloud','aud':'Audius','jam':'Jamendo'}.get(source,'YouTube')})
     app.router.add_get('/api/charts',chart)
     app.router.add_post('/api/charts/resolve',resolve)

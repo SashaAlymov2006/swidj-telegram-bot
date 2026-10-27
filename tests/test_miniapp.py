@@ -218,6 +218,20 @@ class MiniApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse((await other.json())['tracks'][0]['playable'])
             self.assertEqual(search.call_count,2)
 
+    async def test_audius_prepare_is_direct_and_never_researches_youtube(self):
+        url='https://audius.co/artist/song'
+        song=dict(id=900,title='Song',artist='Artist',duration=210,url=url,source='Audius',source_url=url)
+        self.bridge.searches[77]=[song]
+        source=Path(self.tmp.name)/'audius.mp3';source.write_bytes(b'owned full fixture')
+        self.bridge.audio_jobs.downloader=lambda _: (str(source),song)
+        with patch('versions.find_versions',side_effect=AssertionError('Must not use YouTube')),patch('media_recovery.recover_audio',return_value=None),patch('download_cache.restore',return_value=None),patch('media_recovery.retain'):
+            result=await self.client.post('/api/prepare',headers=self.headers,json={'track':'900'})
+            self.assertEqual(result.status,200)
+            job=self.bridge.audio_jobs.get(77,(await result.json())['job']);await job.task
+        self.assertEqual(job.state,'ready')
+        self.assertEqual(job.song['url'],url)
+        self.bridge.application.bot.send_message.assert_not_awaited()
+
     async def test_main_search_is_compact_and_keeps_jamendo_as_reserve(self):
         def search(song,source):
             return [dict(title='Song',artist='Artist',url=f'https://example.test/{source}/{index}',source='YouTube' if source=='yt' else 'SoundCloud') for index in range(3)]

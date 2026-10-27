@@ -35,9 +35,13 @@ def validate(payload):
     platform=classify(url)
     if host=='www.jamendo.com' and re.fullmatch(r'/track/\d{1,12}(?:/[^?#]*)?',parts.path):
         platform='jamendo';url='https://www.jamendo.com/track/'+parts.path.split('/')[2]
+    if host in ('audius.co','www.audius.co'):
+        from audius_source import canonical
+        clean=canonical(urlunsplit((parts.scheme,parts.netloc,parts.path,'','')))
+        if clean:platform='audius';url=clean
     if host in ('vimeo.com','www.vimeo.com') and re.fullmatch(r'/(?:\d+|channels/[A-Za-z0-9_-]+/\d+)/?',parts.path):platform='vimeo'
     if host.endswith('.bandcamp.com') and re.fullmatch(r'/track/[^/]+/?',parts.path):platform='bandcamp'
-    if platform not in DIRECT|{'apple','yandex','spotify','jamendo'}:raise ValueError('Unsupported link')
+    if platform not in DIRECT|{'apple','yandex','spotify','jamendo','audius'}:raise ValueError('Unsupported link')
     if mode=='video' and platform not in {'youtube','tiktok','instagram','vimeo'}:raise ValueError('No video on this platform')
     return url,mode,height,platform
 
@@ -191,6 +195,10 @@ def register(app,bridge):
 
 def fetch(payload,directory):
     url,mode,height,platform=validate(payload)
+    if platform=='audius':
+        from audius_source import download
+        path,info=download(url,directory,256*1024**2)
+        return dict(info,path=path)
     if platform=='jamendo':
         from jamendo_source import download
         path,info=download(url,directory,256*1024**2)

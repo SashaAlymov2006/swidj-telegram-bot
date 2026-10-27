@@ -218,6 +218,13 @@ def _extract_media(options, query, directory):
 
 def download_youtube_audio(query: str):
     from pathlib import Path
+    from audius_source import canonical, download as download_audius
+    if canonical(query):
+        directory=tempfile.mkdtemp(dir=scratch_root(),prefix='yt_audio_audius_')
+        try:return download_audius(query,directory)
+        except BaseException:
+            shutil.rmtree(directory,ignore_errors=True)
+            raise
     from jamendo_source import identifier,download as download_catalog
     if identifier(query):
         directory=tempfile.mkdtemp(dir=scratch_root(),prefix='yt_audio_catalog_')
@@ -636,7 +643,7 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             from audio_presentation import send_cached_music
             from track_card import card_keyboard, retire_download_menus
-            if platform in ('youtube','soundcloud'):
+            if platform in ('youtube','soundcloud','audius'):
                 cached_message=await send_cached_music(context.bot,query.message.chat_id,url)
                 if cached_message:
                     from telegram.error import TelegramError
@@ -661,6 +668,11 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 title = data["title"]
                 performer = data["artist"]
 
+
+            elif platform == 'audius':
+                from media_recovery import download_with_reserve
+                mp3,info=await asyncio.to_thread(download_with_reserve,download_youtube_audio,url,{})
+                title,performer=info.get('title'),info.get('artist')
 
             elif platform == 'spotify':
                 meta = await asyncio.to_thread(spotify_to_metadata, url)

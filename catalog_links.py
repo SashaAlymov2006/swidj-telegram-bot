@@ -12,6 +12,9 @@ def classify(url):
         if parsed.scheme not in ("http","https") or parsed.username or parsed.password or parsed.port not in (None,80,443):
             return None
         path=parsed.path
+        if host in ('audius.co','www.audius.co'):
+            from audius_source import canonical
+            return 'audius' if canonical(url) else None
         if host in ("youtu.be","youtube.com","www.youtube.com","m.youtube.com","music.youtube.com"):
             return "youtube" if host=="youtu.be" and path.strip("/") or re.match(r"/(watch|shorts/|live/)",path) else None
         if host in ("tiktok.com","www.tiktok.com","m.tiktok.com") and re.fullmatch(r"/(?:@[^/]+/(?:video|photo)/\d+|t/[A-Za-z0-9]+|embed/v2/\d+)/?",path):

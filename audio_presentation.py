@@ -116,6 +116,10 @@ async def send_cached_music(bot, chat_id, source_url, title=None, artist=None, *
     if identifier(credit.get('source_url')) and checked_license(credit.get('license_url')):
         kwargs['caption']=kwargs.get('caption','♪ SwiDJ')+'\n<a href="'+escape(credit['source_url'],quote=True)+'">Jamendo</a> · <a href="'+escape(checked_license(credit['license_url']),quote=True)+'">Creative Commons</a>'
         kwargs['parse_mode']='HTML'
+    from audius_source import canonical as aud_url
+    if aud_url(credit.get('source_url')):
+        kwargs['caption']=kwargs.get('caption','♪ SwiDJ')+'\n<a href="'+escape(aud_url(credit['source_url']),quote=True)+'">Audius</a>'
+        kwargs['parse_mode']='HTML'
     checkpoint()
     try:return await bot.send_audio(**kwargs)
     except BadRequest as error:
@@ -135,7 +139,7 @@ async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *,
                 if known_public:public_copy=await asyncio.to_thread(cache.public_file,source_url,path)
                 if public_copy:
                     provenance=await asyncio.to_thread(cache.public_metadata,source_url)
-                    if provenance.get('source') in ('SoundCloud','Jamendo'):
+                    if provenance.get('source') in ('SoundCloud','Jamendo','Audius'):
                         credit_url=provenance.get('source_url') or source_url;credit_license=provenance.get('license_url') or license_url
         except Exception:pass
     if source_url and (not known_public or public_copy):
@@ -151,6 +155,8 @@ async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *,
     from jamendo_source import identifier,license_url as checked_license
     if identifier(credit_url) and checked_license(credit_license):
         kwargs['caption']+='\n<a href="'+escape(credit_url,quote=True)+'">Jamendo</a> · <a href="'+escape(checked_license(credit_license),quote=True)+'">Creative Commons</a>'
+    from audius_source import canonical as aud_url
+    if aud_url(credit_url):kwargs['caption']+='\n<a href="'+escape(aud_url(credit_url),quote=True)+'">Audius</a>'
     if reply_markup is not None:
         kwargs["reply_markup"] = reply_markup
     if thumbnail:
@@ -165,7 +171,7 @@ async def send_music(bot, chat_id, path, title=None, artist=None, cover=None, *,
             from download_cache import configured
             cache=configured()
             if cache and type(bot.id) is int and getattr(message,'audio',None) and isinstance(message.audio.file_id,str):
-                source='Jamendo' if identifier(credit_url) else 'SoundCloud' if str(credit_url).startswith('https://soundcloud.com/') else None
+                source='Audius' if aud_url(credit_url) else 'Jamendo' if identifier(credit_url) else 'SoundCloud' if str(credit_url).startswith('https://soundcloud.com/') else None
                 await asyncio.to_thread(cache.telegram_set,bot.id,chat_id,source_url,message.audio.file_id,metadata={'title':title,'artist':artist,'duration':duration,'source':source,'source_url':credit_url,'license_url':credit_license},public=public_copy)
         except Exception:pass
     return message

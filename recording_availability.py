@@ -104,6 +104,9 @@ def _cached(item,uid):
 def _remote(item):
     from download_cache import source_key
     key=str(source_key(item['url']))
+    if key.startswith('audius:'):
+        from audius_source import available
+        return available(item)
     if key.startswith('youtube:'):return _youtube_sample(item)
     if key.startswith('jamendo:'):
         from jamendo_source import rows,track,identifier

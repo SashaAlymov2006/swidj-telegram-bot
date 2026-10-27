@@ -57,8 +57,11 @@ def public_song(song, playable=False):
     if not isinstance(cover, str) or not re.fullmatch(r'https://i\.ytimg\.com/vi/[A-Za-z0-9_-]{11}/(?:hqdefault|mqdefault|default)\.jpg', cover):
         cover = None
     from jamendo_source import identifier,license_url
+    from audius_source import canonical
     catalog=bool(identifier(song.get('url')) and license_url(song.get('license_url')))
+    audius=canonical(song.get('source_url') or song.get('url'))
     return {**({'source':'Jamendo','source_url':song['url'],'license_url':license_url(song.get('license_url'))} if catalog else {}),
+            **({'source':'Audius','source_url':audius} if audius else {}),
             'id': str(song['id']), 'title': str(song.get('title') or 'Audio')[:180],
             'artist': str(song.get('artist') or '')[:120],
             'duration': song.get('duration') if isinstance(song.get('duration'), (int, float)) else None,
@@ -200,7 +203,7 @@ class BotLibrary:
 
     async def search(self, uid, query, source='all', exclude=None):
         self.allowed(uid, 'search')
-        if source not in ('all', 'yt', 'sc', 'jam'):
+        if source not in ('all', 'yt', 'sc', 'aud', 'jam'):
             raise web.HTTPBadRequest()
         if exclude:
             from soundcloud_source import public_url as sc_url
@@ -246,9 +249,9 @@ class BotLibrary:
             if primary:
                 groups=[(key,[item for name,item in primary[:3] if name==key]) for key in ('yt','sc')]
             else:
-                groups=[await provider('jam')]
+                groups=[await provider('aud')] if inventory.get('aud') else [await provider('jam')]
         result=[];seen=set();public_groups={}
-        names={'yt':'YouTube','sc':'SoundCloud','jam':'Jamendo'}
+        names={'yt':'YouTube','sc':'SoundCloud','aud':'Audius','jam':'Jamendo'}
         for key, items in groups:
             for item in items:
                 if item['url'] in seen:continue
@@ -266,7 +269,7 @@ class BotLibrary:
     async def source_versions(self, uid, identifier, source):
         self.allowed(uid, 'search')
         self.allowed(uid, 'downloads')
-        if source not in ('next', 'yt', 'sc', 'jam'):
+        if source not in ('next', 'yt', 'sc', 'aud', 'jam'):
             raise web.HTTPBadRequest()
         song = await self.find(uid, identifier)
         if song.get('kind') == 'upload':
@@ -277,8 +280,10 @@ class BotLibrary:
                      if str(s['id']) == identifier and s.get('_catalog_song')), song)
         from soundcloud_source import public_url as sc_url
         from jamendo_source import identifier as jam_id
+        from audius_source import canonical as aud_url,enabled as aud_enabled
         if source == 'next':
-            source = 'jam' if sc_url(song.get('url')) else 'sc'
+            source = ('aud' if aud_enabled() else 'jam') if sc_url(song.get('url')) else 'sc'
+            if aud_url(song.get('url')):source='jam'
             if jam_id(song.get('url')):
                 return {'status': 'choices', 'tracks': [], 'source': 'Jamendo', 'origin': identifier}
         # One in-flight source search per owner; other owners retain their slots.
@@ -305,7 +310,7 @@ class BotLibrary:
                 self.chart_recordings[uid] = list({item['id']:item for item in previous+candidates}.values())[-100:]
                 while len(self.chart_recordings)>1000:self.chart_recordings.pop(next(iter(self.chart_recordings)))
             sources={s.get('source') or 'YouTube' for s in candidates}
-            label=next(iter(sources)) if len(sources)==1 else {'yt':'YouTube','sc':'SoundCloud','jam':'Jamendo'}[source]
+            label=next(iter(sources)) if len(sources)==1 else {'yt':'YouTube','sc':'SoundCloud','aud':'Audius','jam':'Jamendo'}[source]
             return {'status': 'choices', 'tracks': [public_song(s,bool(self.audio_path(uid,s))) for s in candidates],
                     'source': label, 'origin': identifier,
                     'available_sources':[key for key,rows in inventory.items() if rows]}
@@ -326,7 +331,8 @@ class BotLibrary:
             raise web.HTTPGone()
         from jamendo_source import identifier as jamendo_id
         from soundcloud_source import public_url as sc_url
-        if not re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', song.get('url', '')) and not jamendo_id(song.get('url')) and not sc_url(song.get('url')):
+        from audius_source import canonical as aud_url
+        if not re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', song.get('url', '')) and not jamendo_id(song.get('url')) and not sc_url(song.get('url')) and not aud_url(song.get('url')):
             self.allowed(uid, 'search')
             from versions import find_versions
             async with self.search_slots:
@@ -495,7 +501,8 @@ class BotLibrary:
             requests = data.setdefault('version_requests', {})
             from jamendo_source import identifier as jamendo_id
             from soundcloud_source import public_url as sc_url
-            if song.get('url', '').startswith('https://www.youtube.com/watch?v=') or jamendo_id(song.get('url')) or sc_url(song.get('url')):
+            from audius_source import canonical as aud_url
+            if song.get('url', '').startswith('https://www.youtube.com/watch?v=') or jamendo_id(song.get('url')) or sc_url(song.get('url')) or aud_url(song.get('url')):
                 candidates = [dict(song)]
             else:
                 from versions import find_versions
@@ -507,6 +514,7 @@ class BotLibrary:
                 raise web.HTTPNotFound()
             requests[token] = {'song': dict(song), 'mode': 'listen', 'candidates': candidates}
             if sc_url(song.get('url')):requests[token]['source']='sc'
+            if aud_url(song.get('url')):requests[token]['source']='aud'
             while len(requests) > 8:
                 requests.pop(next(iter(requests)))
             rows = [[InlineKeyboardButton(s['title'][:60], callback_data=f'ver:pick:{token}:{i}')]
