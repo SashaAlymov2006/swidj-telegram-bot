@@ -16,3 +16,16 @@ jobs:
         run: docker run --rm --network none --mount type=bind,source="${{ github.workspace }}",target=/workspace,readonly --workdir /workspace swidj:ci python -m unittest discover -s tests -v
       - name: Check dependencies
         run: docker run --rm --network none swidj:ci python -m pip check
+  visual-studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build isolated video renderer
+        run: docker build -f music_video/Dockerfile -t swidj:visual-ci .
+      - name: Verify renderer, ownership, cancellation and recovery
+        run: >-
+          docker run --rm --network none --cpus 1 --memory 2g
+          --pids-limit 64 --read-only --tmpfs /tmp:rw,size=2g,mode=1777
+          --mount type=bind,source="${{ github.workspace }}/music_video/tests",target=/app/music_video/tests,readonly
+          --entrypoint python swidj:visual-ci -m unittest discover -s music_video/tests -q
