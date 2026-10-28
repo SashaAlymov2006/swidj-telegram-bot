@@ -39,6 +39,17 @@ class LyricsApiTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=harness.ApiTests.asyncSetUp
     asyncTearDown=harness.ApiTests.asyncTearDown
     wait=harness.ApiTests.wait
+    async def test_player_original_clock_auth_and_no_draft_creation(self):
+        before=len(self.app['jobs'].items)
+        self.assertEqual((await self.client.post('/api/player-lyrics',json=SOURCE)).status,403)
+        with patch.object(TimedLyrics,'lookup',new=AsyncMock(return_value=recording(RECORD,SOURCE))) as lookup:
+            response=await self.client.post('/api/player-lyrics',headers=self.headers,json=dict(SOURCE,start=.5,speed=2))
+            data=await response.json();self.assertTrue(data['available']);self.assertEqual(data['lines'][1]['at'],.7)
+            self.assertEqual(lookup.await_args.args[0]['start'],0);self.assertEqual(lookup.await_args.args[0]['speed'],1)
+        self.assertEqual(len(self.app['jobs'].items),before)
+        for source in ({},{'disabled':True}):
+            response=await self.client.post('/api/player-lyrics',headers=self.headers,json=source)
+            self.assertEqual(await response.json(),{'available':False})
     async def test_conditional_lookup_and_render_snapshot(self):
         form=FormData();form.add_field('audio',audio_bytes(2),filename='fixture.wav');form.add_field('lyric_source',json.dumps(SOURCE))
         draft=await self.wait(await(await self.client.post('/api/drafts',headers=self.headers,data=form)).json(),('queued','analysis'))

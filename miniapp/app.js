@@ -459,7 +459,7 @@ function fullPlayer() {
   if(!current)return navigate('library');
   $('dialog-form').onsubmit=null;
   dialog(t('nowPlaying'),`<div class="full-player"><div class="full-player-art">${art(current)}</div><h3>${e(current.title)}</h3><button type="button" class="text-btn" data-track="${e(current.id)}" data-action="artist">${e(current.artist)}</button><input id="full-seek" type="range" min="0" max="1000" value="${$('seek').value}" aria-label="${e(t('seek'))}"><div class="full-times"><span id="full-elapsed">${stamp(audio.currentTime)}</span><span id="full-duration">${stamp(audio.duration)}</span></div><div class="full-controls"><button type="button" class="icon-btn" data-player="previous" aria-label="${e(t('previous'))}">${icon('previous')}</button><button type="button" id="full-play" class="play-main" data-player="play" aria-label="${e(t(audio.paused?'play':'pause'))}">${icon(audio.paused?'play':'pause')}</button><button type="button" class="icon-btn" data-player="next" aria-label="${e(t('next'))}">${icon('next')}</button></div><button type="button" class="btn secondary" data-track="${e(current.id)}" data-action="studio">${icon('studio')}${e(t('openStudio'))}</button></div>`);
-  $('dialog-body').querySelector('.full-player>.btn').insertAdjacentHTML('beforebegin',`<button type="button" class="btn secondary" data-track="${e(current.id)}" data-action="lyrics">${e(t('lyrics'))}</button>`);
+  $('dialog-body').querySelector('.full-player>.btn').insertAdjacentHTML('beforebegin',`<button type="button" class="btn secondary" data-track="${e(current.id)}" data-action="player-lyrics">${e(t('lyrics'))}</button>`);
   $('dialog-body').querySelector('.full-player>.btn').insertAdjacentHTML('beforebegin',`<button type="button" class="btn" data-track="${e(current.id)}" data-action="download">${icon('download')}${e(t('downloadTrack'))}</button>`);
 }
 async function refreshLibrary() {
@@ -791,6 +791,19 @@ const easyEffectSettings={
 function easyEffectControls(){return `<section class="easy-effect-controls"><h3>${e(t('effectStrength'))}</h3>${studioEffects.filter(f=>easyEffectSettings[f]).map(f=>`<div class="easy-effect-row"><strong>${e(t(f))}</strong><div class="touch-stepper">${['gentleFx','balancedFx','strongFx'].map((key,i)=>`<button type="button" data-easy-effect="${f}" data-strength="${i}" aria-pressed="${Object.entries(easyEffectSettings[f][i]).every(([k,v])=>engine.params[k]===v)}">${e(t(key))}</button>`).join('')}</div></div>`).join('')}</section>`;}
 function dspControls(){const seen=new Set();return `<details class="dsp-panel"><summary>${e(t('fineTune'))}</summary><button type="button" class="text-btn" id="reset-effect-controls">${e(t('resetEffectControls'))}</button>${studioEffects.map(f=>{const keys=(paramGroups[f]||[]).filter(k=>!seen.has(k));keys.forEach(k=>seen.add(k));return keys.length?`<section><h3>${e(t(f))}</h3>${keys.map(k=>`<label for="param-${k}">${e(t(k))}<output id="value-${k}">${engine.params[k]}</output></label><input id="param-${k}" data-param="${k}" type="range" min="${paramRanges[k][0]}" max="${paramRanges[k][1]}" step="${paramRanges[k][2]}" value="${engine.params[k]}">`).join('')}</section>`:'';}).join('')}</details>`;}
 let lyricMatches=[];
+async function showPlayerLyrics(track){
+ const host=$('dialog-body').querySelector('.full-player');
+ if(!host||current?.id!==track.id||!musicVideoAvailable)return showLyrics(track);
+ try{
+  const {openPlayerLyrics}=await import('/music-video/static/player-lyrics.js');
+  const identity=videoLyricSource({...track,duration:sourceDuration||track.duration});
+  await openPlayerLyrics({host,dialog:$('dialog'),track,audio,language,isCurrent:()=>current?.id===track.id,
+   plain:async()=>{const response=await api('lyrics?track='+encodeURIComponent(track.id));return response.json();},
+   timed:async()=>{if(!identity)return {available:false};const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),16000);try{const response=await fetch('/music-video/api/player-lyrics',{method:'POST',headers:{'X-Telegram-Init-Data':initData,'Content-Type':'application/json'},body:JSON.stringify(identity),signal:controller.signal});if(!response.ok)throw Error('lyrics');return await response.json();}finally{clearTimeout(timer);}},
+   clock:()=>({time:audio.currentTime,processed:Boolean(previewUrl&&engine.processed),start:previewStart,speed:engine.speed,canSync:!(engine.processed&&studioEffects.includes('reverse'))}),
+   seek:time=>{if(current?.id!==track.id)return;const position=previewUrl&&engine.processed?(time-previewStart)/engine.speed:time;audio.currentTime=Math.max(0,Math.min(position,Number.isFinite(audio.duration)?Math.max(0,audio.duration-.05):position));},toggle:togglePlay});
+ }catch{if(host.isConnected&&$('dialog').open&&current?.id===track.id)return showLyrics(track);}
+}
 Object.assign(copy.en,{anotherLyrics:'Another version',lyricsSource:'Open source'});Object.assign(copy.ru,{anotherLyrics:'\u0414\u0440\u0443\u0433\u043e\u0439 \u0442\u0435\u043a\u0441\u0442',lyricsSource:'\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a'});
 async function showLyrics(track){
   if(demo)return toast('needsTelegram');
@@ -1009,6 +1022,7 @@ document.addEventListener('click',async event=>{
       if(action==='artist')return await openArtist(track);
       if(action==='info')return trackInfo(track);
       if(action==='lyrics')return await showLyrics(track);
+      if(action==='player-lyrics')return await showPlayerLyrics(track);
       if(action==='download'){$('dialog').close();return await downloadTrack(track);}
       if(action==='like'){$('dialog').close();return await favorite(track);}
       if(action==='menu')return trackMenu(track);

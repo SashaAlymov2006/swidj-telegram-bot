@@ -49,6 +49,9 @@ Deno.test('Editor prepares audio, edits and undoes, updates only images, preview
  const update=calls.find(([url])=>url==='api/assets/draft');assert(update&&!update[1].body.has('audio')&&update[1].body.has('logo'));
  await nodes.get('sample-render').onclick();const sample=calls.filter(([url])=>url==='api/render/draft').at(-1);assert(JSON.parse(sample[1].body).resolution===720&&!nodes.get('render-preview').hidden);
  await nodes.get('render').onclick();assert(!nodes.get('download').hidden&&operations>0);
+ for(const key of ['vinyl','tunnel','aurora','grid']){const preset=all.find(node=>node.dataset.preset===key);assert(preset);preset.click();assert(nodes.get('spectrum').value===configuration.presets[key].spectrum);}
+ nodes.get('spinLogo').checked=true;nodes.get('spinLogo').listeners.input();
+ await nodes.get('render').onclick();assert(JSON.parse(calls.filter(([url])=>url==='api/render/draft').at(-1)[1].body).spinLogo===true);
  await nodes.get('export-style').onclick();assert(!nodes.get('settings-download').hidden&&nodes.get('settings-download').href==='files/settings');
  nodes.get('language').click();assert(document.documentElement.lang==='en');
  nodes.get('logoX').value='.3';nodes.get('logoX').listeners.input();

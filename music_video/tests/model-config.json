@@ -1,1 +1,153 @@
-{"defaults": {"version": 1, "preset": "neon", "shape": "circle", "spectrum": "ring", "particles": "stars", "particleCount": 36, "color": "#77f2cf", "color2": "#8d79ff", "background": "#0c1020", "backgroundKind": "color", "dim": 0.35, "zoom": 1.08, "rotation": 0.1, "strength": 1.0, "glow": 0.7, "title": "", "subtitle": "", "start": 0.0, "end": 0.0, "fps": 30, "resolution": 1080, "aspect": "landscape", "seed": 7421, "logoX": 0.5, "logoY": 0.45, "logoSize": 1.0, "pulse": 1.0, "spectrumY": 0.78, "spectrumSize": 1.0, "fit": "cover", "panX": 0.5, "panY": 0.5, "blur": 0.0, "vignette": 0.0, "textY": 0.855, "textSize": 1.0, "textColor": "#ffffff", "fadeIn": 0.0, "fadeOut": 0.0, "lyricsOn": false, "lyricsY": 0.75, "lyricsSize": 1.0, "lyricsOffset": 0.0, "lyricsStyle": "highlight"}, "presets": {"neon": {"shape": "circle", "spectrum": "ring", "particles": "sparks", "color": "#77f2cf", "color2": "#8d79ff", "glow": 0.8}, "prism": {"shape": "triangle", "spectrum": "ring", "particles": "stars", "color": "#ff80b5", "color2": "#7b8fff", "rotation": 0.2}, "stars": {"shape": "circle", "spectrum": "ring", "particles": "stars", "color": "#91bcff", "color2": "#d9c6ff", "particleCount": 80}, "minimal": {"shape": "none", "spectrum": "wave", "particles": "none", "color": "#f3ece3", "color2": "#c6ad91", "glow": 0.15}, "retro": {"shape": "square", "spectrum": "bars", "particles": "none", "color": "#ffb36a", "color2": "#ff68b5", "rotation": 0}, "liquid": {"shape": "circle", "spectrum": "wave", "particles": "snow", "color": "#6df5df", "color2": "#6d8fff", "glow": 0.9}, "stage": {"shape": "triangle", "spectrum": "bars", "particles": "sparks", "color": "#ffe98a", "color2": "#ff7498", "particleCount": 64}, "photo": {"shape": "none", "spectrum": "bars", "particles": "none", "color": "#ffffff", "color2": "#cad1dc", "zoom": 1.15, "glow": 0.2}}}
+{
+  "defaults": {
+    "version": 1,
+    "preset": "neon",
+    "shape": "circle",
+    "spectrum": "ring",
+    "particles": "stars",
+    "particleCount": 36,
+    "color": "#77f2cf",
+    "color2": "#8d79ff",
+    "background": "#0c1020",
+    "backgroundKind": "color",
+    "dim": 0.35,
+    "zoom": 1.08,
+    "rotation": 0.1,
+    "strength": 1.0,
+    "glow": 0.7,
+    "title": "",
+    "subtitle": "",
+    "start": 0.0,
+    "end": 0.0,
+    "fps": 30,
+    "resolution": 1080,
+    "aspect": "landscape",
+    "seed": 7421,
+    "logoX": 0.5,
+    "logoY": 0.45,
+    "logoSize": 1.0,
+    "pulse": 1.0,
+    "spectrumY": 0.78,
+    "spectrumSize": 1.0,
+    "fit": "cover",
+    "panX": 0.5,
+    "panY": 0.5,
+    "blur": 0.0,
+    "vignette": 0.0,
+    "textY": 0.855,
+    "textSize": 1.0,
+    "textColor": "#ffffff",
+    "fadeIn": 0.0,
+    "fadeOut": 0.0,
+    "lyricsOn": false,
+    "lyricsY": 0.75,
+    "lyricsSize": 1.0,
+    "lyricsOffset": 0.0,
+    "lyricsStyle": "highlight",
+    "spinLogo": false
+  },
+  "presets": {
+    "vinyl": {
+      "shape": "circle",
+      "spectrum": "mirror",
+      "particles": "none",
+      "color": "#e8bc80",
+      "color2": "#b886db",
+      "rotation": 0.65,
+      "spinLogo": true,
+      "logoSize": 0.8
+    },
+    "tunnel": {
+      "shape": "triangle",
+      "spectrum": "ring",
+      "particles": "sparks",
+      "color": "#7cf9ed",
+      "color2": "#ec64cf",
+      "rotation": 0.25,
+      "glow": 0.5
+    },
+    "aurora": {
+      "shape": "circle",
+      "spectrum": "wave",
+      "particles": "stars",
+      "color": "#82ffd4",
+      "color2": "#8b78ff",
+      "particleCount": 24,
+      "glow": 0.4
+    },
+    "grid": {
+      "shape": "circle",
+      "spectrum": "mirror",
+      "particles": "none",
+      "color": "#f878db",
+      "color2": "#738dff",
+      "background": "#110e25",
+      "spectrumY": 0.68
+    },
+    "neon": {
+      "shape": "circle",
+      "spectrum": "ring",
+      "particles": "sparks",
+      "color": "#77f2cf",
+      "color2": "#8d79ff",
+      "glow": 0.8
+    },
+    "prism": {
+      "shape": "triangle",
+      "spectrum": "ring",
+      "particles": "stars",
+      "color": "#ff80b5",
+      "color2": "#7b8fff",
+      "rotation": 0.2
+    },
+    "stars": {
+      "shape": "circle",
+      "spectrum": "ring",
+      "particles": "stars",
+      "color": "#91bcff",
+      "color2": "#d9c6ff",
+      "particleCount": 80
+    },
+    "minimal": {
+      "shape": "none",
+      "spectrum": "wave",
+      "particles": "none",
+      "color": "#f3ece3",
+      "color2": "#c6ad91",
+      "glow": 0.15
+    },
+    "retro": {
+      "shape": "square",
+      "spectrum": "bars",
+      "particles": "none",
+      "color": "#ffb36a",
+      "color2": "#ff68b5",
+      "rotation": 0
+    },
+    "liquid": {
+      "shape": "circle",
+      "spectrum": "wave",
+      "particles": "snow",
+      "color": "#6df5df",
+      "color2": "#6d8fff",
+      "glow": 0.9
+    },
+    "stage": {
+      "shape": "triangle",
+      "spectrum": "bars",
+      "particles": "sparks",
+      "color": "#ffe98a",
+      "color2": "#ff7498",
+      "particleCount": 64
+    },
+    "photo": {
+      "shape": "none",
+      "spectrum": "bars",
+      "particles": "none",
+      "color": "#ffffff",
+      "color2": "#cad1dc",
+      "zoom": 1.15,
+      "glow": 0.2
+    }
+  }
+}

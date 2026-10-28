@@ -1,5 +1,5 @@
 export const ranges={strength:[0,3,.05],glow:[0,1,.05],particleCount:[0,200,1],rotation:[-1,1,.05],dim:[0,.95,.05],zoom:[1,1.5,.01],logoX:[.1,.9,.01],logoY:[.1,.9,.01],logoSize:[.4,1.6,.05],pulse:[0,2,.05],spectrumY:[.2,.95,.01],spectrumSize:[.5,1.5,.05],panX:[0,1,.01],panY:[0,1,.01],blur:[0,20,.5],vignette:[0,1,.05],textY:[.1,.9,.01],textSize:[.5,1.5,.05],fadeIn:[0,3,.1],fadeOut:[0,3,.1],start:[0,86400,.1],end:[0,86400,.1],seed:[0,2147483647,1],lyricsY:[.15,.9,.01],lyricsSize:[.6,1.4,.05],lyricsOffset:[-10,10,.1]};
-const enums={shape:['none','circle','triangle','square'],spectrum:['none','ring','bars','wave'],particles:['none','stars','sparks','snow'],backgroundKind:['color','image','video'],aspect:['landscape','portrait','square'],fit:['cover','contain'],resolution:[720,1080],fps:[30,60],version:[1]};
+const enums={shape:['none','circle','triangle','square'],spectrum:['none','ring','bars','wave','mirror'],particles:['none','stars','sparks','snow'],backgroundKind:['color','image','video'],aspect:['landscape','portrait','square'],fit:['cover','contain'],resolution:[720,1080],fps:[30,60],version:[1]};
 enums.lyricsStyle=['highlight','fade','pulse'];
 export function normalize(value,defaults,presets={}){
  const result={...defaults};if(!value||typeof value!=='object'||Array.isArray(value))return result;

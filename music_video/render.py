@@ -145,6 +145,23 @@ class Scene:
         if s['vignette']:image.paste(Image.new('RGB',(w,h),'black'),(0,0),self.vignette)
         layer=Image.new('RGBA',(w,h));draw=ImageDraw.Draw(layer);accent=rgb(s['color']);second=rgb(s['color2'])
         cx,cy=w*s['logoX'],h*s['logoY'];radius=u*.19*s['logoSize']*(1+(low*.13+beat*.03)*strength*s['pulse']);angle=t*s['rotation']*.7
+        if s['preset']=='vinyl':
+            for i in range(14):
+                r=radius*(1.03+i*.025);draw.ellipse((cx-r,cy-r,cx+r,cy+r),outline=(*mix(accent,second,i/14),76),width=max(1,round(u*.001)))
+        if s['preset']=='tunnel':
+            for i in range(9):
+                phase=(i/9+t*.035)%1;r=u*(.12+phase*.85)
+                points=[(cx+math.cos(j/6*math.tau+angle*.2)*r,cy+math.sin(j/6*math.tau+angle*.2)*r) for j in range(7)]
+                draw.line(points,fill=(*mix(accent,second,phase),round((.15+.4*(1-phase))*255)),width=max(1,round(u*.002*(1+beat))))
+        if s['preset']=='aurora':
+            for i in range(5):
+                points=[(w*j/64,h*(.25+i*.09)+math.sin(j/64*math.tau+t*.3+i)*u*(.06+low*.035)) for j in range(65)]
+                draw.line(points,fill=(*mix(accent,second,i/4),31),width=max(1,round(u*(.025+mid*.025))),joint='curve')
+        if s['preset']=='grid':
+            horizon=h*.55;color=(*second,102);line_width=max(1,round(u*.002))
+            for i in range(-8,9):draw.line((w/2+i*w*.035,horizon,w/2+i*w*.2,h),fill=color,width=line_width)
+            for i in range(12):
+                q=(i/12+t*.08)%1;y=horizon+q*q*(h-horizon);draw.line((0,y,w,y),fill=color,width=line_width)
         if s['preset']=='liquid':
             for i in range(5):
                 px=w*(.5+.4*math.sin(t*.15+i));py=h*(.5+.4*math.cos(t*.13+i));r=u*(.08+.04*mid)
@@ -174,6 +191,10 @@ class Scene:
         elif s['spectrum']=='wave':
             points=[(w*.1+i*w*.8/(BANDS-1),h*(s['spectrumY']-.05)+math.sin(i*.55+t*2)*float(energy)*u*.09*strength*s['spectrumSize']) for i,energy in enumerate(bars)]
             draw.line(points,fill=(*accent,240),width=max(2,round(u*.005)),joint='curve')
+        elif s['spectrum']=='mirror':
+            for i,energy in enumerate(bars):
+                x=w*.12+i*w*.76/BANDS;height=u*.012+float(energy)*u*.085*strength*s['spectrumSize']
+                draw.rectangle((x,h*s['spectrumY']-height,x+w*.76/BANDS*.6,h*s['spectrumY']+height),fill=(*mix(accent,second,i/BANDS),230))
         if s['shape']!='none':
             mask=Image.new('L',(round(radius*2),round(radius*2)));md=ImageDraw.Draw(mask);r=radius-2
             if s['shape']=='circle':md.ellipse((1,1,2*r,2*r),fill=255)
@@ -182,6 +203,7 @@ class Scene:
                 points=[(radius+math.cos(angle-math.pi/2+j*math.tau/n)*r,radius+math.sin(angle-math.pi/2+j*math.tau/n)*r) for j in range(n)]
                 md.polygon(points,fill=255)
             fill=ImageOps.fit(self.logo,mask.size) if self.logo is not None else Image.new('RGBA',mask.size,(*rgb(s['background']),240))
+            if self.logo is not None and s['spinLogo']:fill=fill.rotate(-math.degrees(angle),resample=Image.Resampling.BICUBIC)
             layer.paste(fill,(round(cx-radius),round(cy-radius)),mask)
             if s['shape']=='circle':draw.ellipse((cx-radius,cy-radius,cx+radius,cy+radius),outline=(*accent,255),width=max(2,round(u*.004)))
             else:

@@ -8,8 +8,12 @@ DEFAULTS = dict(version=1, preset='neon', shape='circle', spectrum='ring', parti
                 title='', subtitle='', start=0., end=0., fps=30, resolution=1080,
                 aspect='landscape', seed=7421,logoX=.5,logoY=.45,logoSize=1.,pulse=1.,
                 spectrumY=.78,spectrumSize=1.,fit='cover',panX=.5,panY=.5,blur=0.,vignette=0.,
-                textY=.855,textSize=1.,textColor='#ffffff',fadeIn=0.,fadeOut=0.,lyricsOn=False,lyricsY=.75,lyricsSize=1.,lyricsOffset=0.,lyricsStyle='highlight')
+                textY=.855,textSize=1.,textColor='#ffffff',fadeIn=0.,fadeOut=0.,lyricsOn=False,lyricsY=.75,lyricsSize=1.,lyricsOffset=0.,lyricsStyle='highlight',spinLogo=False)
 PRESETS = {
+    'vinyl':dict(shape='circle',spectrum='mirror',particles='none',color='#e8bc80',color2='#b886db',rotation=.65,spinLogo=True,logoSize=.8),
+    'tunnel':dict(shape='triangle',spectrum='ring',particles='sparks',color='#7cf9ed',color2='#ec64cf',rotation=.25,glow=.5),
+    'aurora':dict(shape='circle',spectrum='wave',particles='stars',color='#82ffd4',color2='#8b78ff',particleCount=24,glow=.4),
+    'grid':dict(shape='circle',spectrum='mirror',particles='none',color='#f878db',color2='#738dff',background='#110e25',spectrumY=.68),
     'neon': dict(shape='circle', spectrum='ring', particles='sparks', color='#77f2cf',color2='#8d79ff',glow=.8),
     'prism': dict(shape='triangle', spectrum='ring', particles='stars',color='#ff80b5',color2='#7b8fff',rotation=.2),
     'stars': dict(shape='circle',spectrum='ring',particles='stars',color='#91bcff',color2='#d9c6ff',particleCount=80),
@@ -25,12 +29,13 @@ def validate(value):
     if set(value)-set(DEFAULTS):raise ValueError('Unknown scene setting')
     out=dict(DEFAULTS,**value)
     enums={'version':(1,), 'preset':tuple(PRESETS),'shape':('none','circle','triangle','square'),
-           'spectrum':('none','ring','bars','wave'),'particles':('none','stars','sparks','snow'),
+           'spectrum':('none','ring','bars','wave','mirror'),'particles':('none','stars','sparks','snow'),
            'backgroundKind':('color','image','video'),'aspect':('landscape','portrait','square'),
            'resolution':(720,1080),'fps':(30,60)}
     enums['fit']=('cover','contain')
     enums['lyricsStyle']=('highlight','fade','pulse')
     if type(out['lyricsOn']) is not bool:raise ValueError('Invalid lyrics setting')
+    if type(out['spinLogo']) is not bool:raise ValueError('Invalid logo rotation')
     for key,choices in enums.items():
         if isinstance(out[key],bool) or out[key] not in choices:raise ValueError('Invalid '+key)
     for key,low,high in [('particleCount',0,200),('seed',0,2**31-1),('dim',0,.95),('zoom',1,1.5),

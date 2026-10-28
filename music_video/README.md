@@ -86,5 +86,20 @@ The Deno tests exercise actual editor code against a minimal DOM contract, plus
 scene state and navigation. They are not browser emulation or physical-device QA:
 
 ```sh
-deno test --no-config --allow-read=music_video,miniapp/app.js music_video/tests/state_test.js music_video/tests/editor_flow_test.js music_video/tests/navigation_test.js music_video/tests/timing_test.js
+deno test --no-config --allow-read=music_video,miniapp/app.js music_video/tests/state_test.js music_video/tests/editor_flow_test.js music_video/tests/navigation_test.js music_video/tests/timing_test.js music_video/tests/player_lyrics_test.js
 ```
+
+## Optional lyrics in the ordinary player
+
+Open the expanded player, then Lyrics. Read displays the complete available text;
+With music appears when LRCLIB has timed lyrics matching the recording's title,
+artist and duration. Switching modes does not restart playback. Tap a timed line
+to seek, or adjust its delay. Closing lyrics leaves the music playing. Unsynced
+lyrics still work if timed lookup is unavailable. No guessed timing or paid AI
+transcription is used. Processed previews map back to the original source clock;
+reverse playback uses reading only. The existing chat lyrics remain unchanged.
+
+The video editor now has twelve presets, including Vinyl, Neon Tunnel, Aurora
+and Neon Grid, plus a mirrored spectrum and optional rotating cover. These use
+the existing Canvas preview and isolated Pillow/FFmpeg worker. Old scene defaults
+and the main bot's resource allocation are preserved.

@@ -202,9 +202,16 @@ def create_app(root,*,dev=False,token=''):
     async def index(_):return web.FileResponse(STATIC/'index.html')
     async def asset(request):
         if request.match_info['name']=='bridge.js':return web.FileResponse(Path(__file__).parent.parent/'miniapp'/'visualizer-bridge.js')
-        if request.match_info['name'] not in ('editor.js','scene.js','state.js','timing.js','editor.css','bridge.css'):raise web.HTTPNotFound()
+        if request.match_info['name'] not in ('editor.js','scene.js','state.js','timing.js','player-lyrics.js','player-lyrics.css','editor.css','bridge.css'):raise web.HTTPNotFound()
         return web.FileResponse(STATIC/request.match_info['name'])
     async def config(request):return web.json_response({'dev':dev,'profile':str(request['uid']),'defaults':DEFAULTS,'presets':PRESETS})
+    async def player_lyrics(request):
+        try:source=source_metadata(await request.json())
+        except (ValueError,TypeError):source=None
+        if not source or source.get('disabled'):return web.json_response({'available':False})
+        source=dict(source,start=0,end=source['duration'],speed=1)
+        result=await timed_lyrics.lookup(source)
+        return web.json_response(dict(available=True,**result) if result else {'available':False})
     async def upload(request):
         job=jobs.create(request['uid'],'draft');folder=jobs.folder(job);seen=set();total=0
         try:
@@ -327,7 +334,7 @@ def create_app(root,*,dev=False,token=''):
         if kind=='result':headers['Content-Disposition']="attachment; filename*=UTF-8''"+quote((job.get('scene',{}).get('title') or 'SwiDJ visualizer')+'.mp4',safe='')
         if kind=='settings':headers['Content-Disposition']='attachment; filename="SwiDJ-style.json"'
         return web.FileResponse(path,headers=headers)
-    app.add_routes([web.get('/',index),web.get('/static/{name}',asset),web.get('/api/config',config),web.get('/api/history',history),web.post('/api/drafts',upload),web.post('/api/settings',style_file),
+    app.add_routes([web.get('/',index),web.get('/static/{name}',asset),web.get('/api/config',config),web.get('/api/history',history),web.post('/api/drafts',upload),web.post('/api/settings',style_file),web.post('/api/player-lyrics',player_lyrics),
         web.get('/api/jobs/{id:[0-9a-f]{32}}',status),web.post('/api/lyrics/{id:[0-9a-f]{32}}',lyrics),web.post('/api/assets/{id:[0-9a-f]{32}}',update_assets),web.get('/api/features/{id:[0-9a-f]{32}}',features),web.post('/api/render/{id:[0-9a-f]{32}}',render_job),
         web.post('/api/cancel/{id:[0-9a-f]{32}}',cancel),web.get('/files/{id:[0-9a-f]{32}}/{cap}/{kind}',media)])
     return app

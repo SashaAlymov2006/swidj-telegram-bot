@@ -74,7 +74,7 @@ class RendererTests(unittest.TestCase):
             os.replace(root/'background.input.mp4',root/'background.input')
             analyse_assets(root)
             for fps in (30,60):
-                (root/'scene.json').write_text(json.dumps(validate({'fps':fps,'resolution':720,'end':.3,'backgroundKind':'video','particleCount':5,'fadeIn':.1,'fadeOut':.1,'fit':'contain','logoX':.4})))
+                (root/'scene.json').write_text(json.dumps(validate({'fps':fps,'resolution':720,'end':.3,'backgroundKind':'video','particleCount':5,'fadeIn':.1,'fadeOut':.1,'fit':'contain','logoX':.4,'preset':'vinyl','spectrum':'mirror','spinLogo':True})))
                 render(root);self.assertGreater((root/'result.mp4').stat().st_size,1000)
                 result=subprocess.run([ffmpeg(),'-hide_banner','-i',str(root/'result.mp4'),'-t','0','-f','null','-'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
                 text=result.stderr.decode(errors='replace');self.assertIn('1280x720',text);self.assertIn(f'{fps} fps',text);self.assertIn('Audio: aac',text)
