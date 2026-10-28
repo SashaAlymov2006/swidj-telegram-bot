@@ -17,7 +17,7 @@ from PIL import Image
 from aiohttp import FormData
 from aiohttp.test_utils import TestClient,TestServer
 from music_video.model import validate,DEFAULTS,PRESETS,dimensions
-from music_video.render import analyse,Scene,render,sample,ffmpeg
+from music_video.render import analyse,analyse_assets,Scene,render,sample,ffmpeg
 from music_video.server import create_app,telegram_user
 
 def audio_bytes(seconds=1.2):
@@ -29,6 +29,9 @@ def audio_bytes(seconds=1.2):
     return buffer.getvalue()
 
 class ModelTests(unittest.TestCase):
+    def test_javascript_fixture_matches_server_schema(self):
+        data=json.loads((Path(__file__).parent/'model-config.json').read_text())
+        self.assertEqual(data,{'defaults':DEFAULTS,'presets':PRESETS})
     def test_settings_reject_invalid_values_and_preserve_full_track_default(self):
         self.assertEqual(validate({})['end'],0)
         self.assertEqual(dimensions(validate({'aspect':'portrait'})),(1080,1920))
@@ -42,6 +45,16 @@ class ModelTests(unittest.TestCase):
             with self.assertRaises(ValueError):telegram_user(bad,token)
 
 class RendererTests(unittest.TestCase):
+    def test_composition_crop_and_fades_change_frames_without_changing_audio(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);body=audio_bytes(1);(root/'audio.input').write_bytes(body)
+            Image.new('RGB',(300,70),'orange').save(root/'background.input',format='PNG');analyse(root)
+            values=np.load(root/'features.npy');settings=validate({'resolution':720,'backgroundKind':'image','logoX':.25,'logoSize':.6,'fit':'contain','vignette':.5,'blur':3,'fadeIn':.2,'fadeOut':.2,'textColor':'#ff00aa'})
+            scene=Scene(root,settings);first=scene.frame(0,sample(values,0));middle=scene.frame(.5,sample(values,.5))
+            self.assertEqual(np.asarray(first).max(),0);self.assertGreater(np.asarray(middle).mean(),1)
+            self.assertEqual((root/'audio.input').read_bytes(),body)
+            for key in ('logoX','logoSize','vignette','fadeIn'):
+                with self.assertRaises(ValueError):validate({key:1000})
     def test_audio_drives_scene_and_all_presets_render_deterministically(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);(root/'audio.input').write_bytes(audio_bytes())
@@ -59,19 +72,52 @@ class RendererTests(unittest.TestCase):
             root=Path(directory);(root/'audio.input').write_bytes(audio_bytes(.7));analyse(root)
             subprocess.run([ffmpeg(),'-v','error','-f','lavfi','-i','color=c=blue:s=160x100:r=30','-t','0.3','-pix_fmt','yuv420p','-y',str(root/'background.input.mp4')],check=True)
             os.replace(root/'background.input.mp4',root/'background.input')
+            analyse_assets(root)
             for fps in (30,60):
-                (root/'scene.json').write_text(json.dumps(validate({'fps':fps,'resolution':720,'end':.3,'backgroundKind':'video','particleCount':5})))
+                (root/'scene.json').write_text(json.dumps(validate({'fps':fps,'resolution':720,'end':.3,'backgroundKind':'video','particleCount':5,'fadeIn':.1,'fadeOut':.1,'fit':'contain','logoX':.4})))
                 render(root);self.assertGreater((root/'result.mp4').stat().st_size,1000)
                 result=subprocess.run([ffmpeg(),'-hide_banner','-i',str(root/'result.mp4'),'-t','0','-f','null','-'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
                 text=result.stderr.decode(errors='replace');self.assertIn('1280x720',text);self.assertIn(f'{fps} fps',text);self.assertIn('Audio: aac',text)
 
 class ApiTests(unittest.IsolatedAsyncioTestCase):
+    async def test_settings_export_is_validated_and_downloadable_without_audio(self):
+        result=await self.client.post('/api/settings',headers=self.headers,json={'title':'My style','logoX':.3,'fadeOut':1})
+        self.assertEqual(result.status,200);job=await result.json()
+        response=await self.client.get('/'+job['files']['settings']);self.assertIn('attachment',response.headers['Content-Disposition'])
+        data=await response.json();self.assertEqual(data['type'],'swidj-visual-style');self.assertEqual(data['scene']['logoX'],.3)
+        self.assertEqual((await self.client.post('/api/settings',headers=self.headers,json={'logoX':2})).status,400)
+    async def test_image_update_reuses_audio_features_and_preserves_previous_draft(self):
+        form=FormData();form.add_field('audio',audio_bytes(.3),filename='source.wav')
+        image=io.BytesIO();Image.new('RGB',(32,32),'red').save(image,format='PNG');red=image.getvalue()
+        form.add_field('logo',red,filename='red.png')
+        draft=await self.wait(await(await self.client.post('/api/drafts',headers=self.headers,data=form)).json(),('queued','analysis'))
+        self.assertEqual(draft['state'],'ready');old=self.app['jobs'].folder(draft)
+        audio_hash=hashlib.sha256((old/'audio.input').read_bytes()).digest();features_hash=hashlib.sha256((old/'features.npy').read_bytes()).digest()
+        image=io.BytesIO();Image.new('RGB',(32,32),'blue').save(image,format='PNG');blue=image.getvalue()
+        form=FormData();form.add_field('logo',blue,filename='blue.png')
+        result=await self.client.post('/api/assets/'+draft['id'],headers=self.headers,data=form)
+        self.assertEqual(result.status,200);updated=await self.wait(await result.json(),('queued','analysis'));self.assertEqual(updated['state'],'ready')
+        new=self.app['jobs'].folder(updated)
+        self.assertEqual(audio_hash,hashlib.sha256((new/'audio.input').read_bytes()).digest());self.assertEqual(features_hash,hashlib.sha256((new/'features.npy').read_bytes()).digest())
+        self.assertEqual((old/'logo.input').read_bytes(),red);self.assertEqual((new/'logo.input').read_bytes(),blue)
+        self.assertNotEqual((old/'logo.png').read_bytes(),(new/'logo.png').read_bytes());self.assertFalse((new/'audio.f32').exists())
+        form=FormData();form.add_field('remove_logo','1',content_type='text/plain')
+        removed=await self.wait(await(await self.client.post('/api/assets/'+updated['id'],headers=self.headers,data=form)).json(),('queued','analysis'))
+        self.assertEqual(removed['state'],'ready');self.assertNotIn('logo',removed['files']);self.assertTrue((old/'logo.png').exists())
+        self.app['jobs'].items[draft['id']]['uid']=2
+        form=FormData();form.add_field('remove_logo','1',content_type='text/plain')
+        self.assertEqual((await self.client.post('/api/assets/'+draft['id'],headers=self.headers,data=form)).status,404)
     async def asyncSetUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.app=create_app(self.tmp.name,dev=True)
         self.client=TestClient(TestServer(self.app));await self.client.start_server()
         self.headers={'X-SwiDJ-Local':'1'}
     async def asyncTearDown(self):
-        await self.client.close();self.tmp.cleanup()
+        await self.client.close()
+        for attempt in range(20):
+            try:self.tmp.cleanup();break
+            except PermissionError:
+                if os.name!='nt' or attempt==19:raise
+                await asyncio.sleep(.05)
     async def wait(self,job,states):
         for _ in range(150):
             result=await self.client.get('/api/jobs/'+job['id'],headers=self.headers);job=await result.json()

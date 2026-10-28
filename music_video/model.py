@@ -6,7 +6,9 @@ DEFAULTS = dict(version=1, preset='neon', shape='circle', spectrum='ring', parti
                 particleCount=36, color='#77f2cf', color2='#8d79ff', background='#0c1020',
                 backgroundKind='color', dim=.35, zoom=1.08, rotation=.1, strength=1., glow=.7,
                 title='', subtitle='', start=0., end=0., fps=30, resolution=1080,
-                aspect='landscape', seed=7421)
+                aspect='landscape', seed=7421,logoX=.5,logoY=.45,logoSize=1.,pulse=1.,
+                spectrumY=.78,spectrumSize=1.,fit='cover',panX=.5,panY=.5,blur=0.,vignette=0.,
+                textY=.855,textSize=1.,textColor='#ffffff',fadeIn=0.,fadeOut=0.)
 PRESETS = {
     'neon': dict(shape='circle', spectrum='ring', particles='sparks', color='#77f2cf',color2='#8d79ff',glow=.8),
     'prism': dict(shape='triangle', spectrum='ring', particles='stars',color='#ff80b5',color2='#7b8fff',rotation=.2),
@@ -26,14 +28,18 @@ def validate(value):
            'spectrum':('none','ring','bars','wave'),'particles':('none','stars','sparks','snow'),
            'backgroundKind':('color','image','video'),'aspect':('landscape','portrait','square'),
            'resolution':(720,1080),'fps':(30,60)}
+    enums['fit']=('cover','contain')
     for key,choices in enums.items():
         if isinstance(out[key],bool) or out[key] not in choices:raise ValueError('Invalid '+key)
     for key,low,high in [('particleCount',0,200),('seed',0,2**31-1),('dim',0,.95),('zoom',1,1.5),
-                         ('rotation',-1,1),('strength',0,3),('glow',0,1),('start',0,86400),('end',0,86400)]:
+                         ('rotation',-1,1),('strength',0,3),('glow',0,1),('start',0,86400),('end',0,86400),
+                         ('logoX',.1,.9),('logoY',.1,.9),('logoSize',.4,1.6),('pulse',0,2),
+                         ('spectrumY',.2,.95),('spectrumSize',.5,1.5),('panX',0,1),('panY',0,1),
+                         ('blur',0,20),('vignette',0,1),('textY',.1,.9),('textSize',.5,1.5),('fadeIn',0,3),('fadeOut',0,3)]:
         number=out[key]
         if type(number) not in (int,float) or not math.isfinite(number) or not low<=number<=high:raise ValueError('Invalid '+key)
         if key in ('particleCount','seed') and int(number)!=number:raise ValueError('Invalid '+key)
-    for key in ('color','color2','background'):
+    for key in ('color','color2','background','textColor'):
         if not isinstance(out[key],str) or not re.fullmatch(r'#[0-9a-fA-F]{6}',out[key]):raise ValueError('Invalid color')
     for key,limit in [('title',120),('subtitle',100)]:
         if not isinstance(out[key],str) or len(out[key])>limit or any(ord(c)<32 for c in out[key]):raise ValueError('Invalid text')

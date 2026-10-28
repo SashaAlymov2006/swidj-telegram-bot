@@ -5,6 +5,16 @@ on:
 permissions:
   contents: read
 jobs:
+  visual-editor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Verify editor flows, state and navigation
+        run: deno test --no-config --allow-read=music_video,miniapp/app.js music_video/tests/state_test.js music_video/tests/editor_flow_test.js music_video/tests/navigation_test.js
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30

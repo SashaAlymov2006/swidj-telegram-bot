@@ -5,7 +5,7 @@ export async function openMusicVideo({blob,title='',language='ru'}){
  const header=document.createElement('div');header.className='music-video-dialog-header';
  const name=document.createElement('strong');name.textContent=english?'Music video':'Музыкальное видео';
  const close=document.createElement('button');close.type='button';close.textContent=english?'Close':'Закрыть';close.className='btn secondary';
- const frame=document.createElement('iframe');frame.src='/music-video/?lang='+(english?'en':'ru');frame.title=name.textContent;
+ const frame=document.createElement('iframe');frame.src='/music-video/?lang='+(english?'en':'ru')+(blob?'&new=1':'');frame.title=name.textContent;
  const onMessage=event=>{if(event.origin!==location.origin||event.source!==frame.contentWindow||event.data?.type!=='swidj:music-video-ready')return;frame.contentWindow.postMessage({type:'swidj:music-video',audio:blob,title,language},location.origin);};
  const finish=()=>{window.removeEventListener('message',onMessage);dialog.remove();};
  close.onclick=()=>dialog.close();dialog.addEventListener('close',finish,{once:true});

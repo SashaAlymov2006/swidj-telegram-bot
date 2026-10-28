@@ -25,7 +25,7 @@ from .model import validate,DEFAULTS,PRESETS
 
 STATIC=Path(__file__).parent/'web'
 FILES={'audio':'preview.mp3','background-image':'background.png','background-video':'background-preview.mp4',
-       'background-poster':'background-poster.png','logo':'logo.png','result':'result.mp4'}
+       'background-poster':'background-poster.png','logo':'logo.png','result':'result.mp4','settings':'settings.json'}
 
 def telegram_user(raw,token):
     pairs=parse_qsl(raw,keep_blank_values=True)
@@ -130,7 +130,8 @@ class Jobs:
                 try:
                     log=(self.folder(job)/'worker.log').open('wb')
                     try:
-                        self.process=await asyncio.create_subprocess_exec(sys.executable,'-m','music_video.render','analyse' if job['kind']=='draft' else 'render',str(self.folder(job)),cwd=Path(__file__).parent.parent,stdout=log,stderr=log,**options)
+                        action=job.get('action','analyse') if job['kind']=='draft' else 'render'
+                        self.process=await asyncio.create_subprocess_exec(sys.executable,'-m','music_video.render',action,str(self.folder(job)),cwd=Path(__file__).parent.parent,stdout=log,stderr=log,**options)
                         waiter=asyncio.create_task(self.process.wait())
                         while not waiter.done():
                             await asyncio.wait([waiter],timeout=1)
@@ -199,7 +200,7 @@ def create_app(root,*,dev=False,token=''):
     async def index(_):return web.FileResponse(STATIC/'index.html')
     async def asset(request):
         if request.match_info['name']=='bridge.js':return web.FileResponse(Path(__file__).parent.parent/'miniapp'/'visualizer-bridge.js')
-        if request.match_info['name'] not in ('editor.js','scene.js','editor.css','bridge.css'):raise web.HTTPNotFound()
+        if request.match_info['name'] not in ('editor.js','scene.js','state.js','editor.css','bridge.css'):raise web.HTTPNotFound()
         return web.FileResponse(STATIC/request.match_info['name'])
     async def config(request):return web.json_response({'dev':dev,'profile':str(request['uid']),'defaults':DEFAULTS,'presets':PRESETS})
     async def upload(request):
@@ -221,6 +222,44 @@ def create_app(root,*,dev=False,token=''):
         except BaseException:
             job['state']='failed';jobs.save(job);raise
     async def status(request):return web.json_response(jobs.payload(jobs.get(request['uid'],request.match_info['id'])))
+    async def style_file(request):
+        try:scene=validate(await request.json())
+        except (ValueError,TypeError):raise web.HTTPBadRequest() from None
+        job=jobs.create(request['uid'],'settings')
+        (jobs.folder(job)/'settings.json').write_text(json.dumps({'type':'swidj-visual-style','version':1,'scene':scene},ensure_ascii=False,indent=2),encoding='utf-8')
+        job['state']='complete';jobs.save(job);return web.json_response(jobs.payload(job))
+    async def update_assets(request):
+        if request.content_type!='multipart/form-data':raise web.HTTPBadRequest()
+        draft=jobs.get(request['uid'],request.match_info['id'])
+        if draft['kind']!='draft' or draft['state']!='ready':raise web.HTTPConflict()
+        job=jobs.create(request['uid'],'draft');job['action']='assets';folder=jobs.folder(job)
+        try:
+            for name in ('audio.input','preview.mp3','features.npy','background.input','logo.input','background.png','background-poster.png','background-preview.mp4','logo.png'):
+                source=jobs.folder(draft)/name
+                if source.is_file():
+                    try:os.link(source,folder/name)
+                    except OSError:await asyncio.to_thread(shutil.copyfile,source,folder/name)
+            shutil.copyfile(jobs.folder(draft)/'analysis.json',folder/'analysis.json')
+            reader=await request.multipart();seen=set();total=0
+            async for part in reader:
+                if part.name not in ('background','logo','remove_background','remove_logo') or part.name in seen:raise web.HTTPBadRequest()
+                seen.add(part.name)
+                if part.name.startswith('remove_'):
+                    if await part.read_chunk(65536)!=b'1':raise web.HTTPBadRequest()
+                    (folder/(part.name.removeprefix('remove_')+'.input')).unlink(missing_ok=True)
+                    continue
+                target=folder/(part.name+'.input');target.unlink(missing_ok=True)
+                with target.open('wb') as output:
+                    while chunk:=await part.read_chunk(65536):
+                        total+=len(chunk)
+                        if total>jobs.upload_bytes:raise web.HTTPRequestEntityTooLarge(max_size=jobs.upload_bytes,actual_size=total)
+                        if shutil.disk_usage(jobs.root).free<512*1024**2:raise web.HTTPInsufficientStorage()
+                        output.write(chunk)
+            if any(name in seen and 'remove_'+name in seen for name in ('background','logo')) or not seen:raise web.HTTPBadRequest()
+            (folder/'assets_changed.json').write_text(json.dumps(sorted({name.removeprefix('remove_') for name in seen})))
+            if jobs.workspace_size()>jobs.budget:raise web.HTTPInsufficientStorage()
+            jobs.submit(job);return web.json_response(jobs.payload(job))
+        except BaseException:job['state']='failed';jobs.save(job);raise
     async def history(request):
         jobs.prune();items=[job for job in jobs.items.values() if job['uid']==request['uid'] and job['kind']=='video']
         return web.json_response({'jobs':[jobs.payload(job) for job in sorted(items,key=lambda job:job['created'],reverse=True)[:15]]})
@@ -262,9 +301,10 @@ def create_app(root,*,dev=False,token=''):
         if path.is_symlink() or not path.is_file():raise web.HTTPNotFound()
         headers={}
         if kind=='result':headers['Content-Disposition']="attachment; filename*=UTF-8''"+quote((job.get('scene',{}).get('title') or 'SwiDJ visualizer')+'.mp4',safe='')
+        if kind=='settings':headers['Content-Disposition']='attachment; filename="SwiDJ-style.json"'
         return web.FileResponse(path,headers=headers)
-    app.add_routes([web.get('/',index),web.get('/static/{name}',asset),web.get('/api/config',config),web.get('/api/history',history),web.post('/api/drafts',upload),
-        web.get('/api/jobs/{id:[0-9a-f]{32}}',status),web.get('/api/features/{id:[0-9a-f]{32}}',features),web.post('/api/render/{id:[0-9a-f]{32}}',render_job),
+    app.add_routes([web.get('/',index),web.get('/static/{name}',asset),web.get('/api/config',config),web.get('/api/history',history),web.post('/api/drafts',upload),web.post('/api/settings',style_file),
+        web.get('/api/jobs/{id:[0-9a-f]{32}}',status),web.post('/api/assets/{id:[0-9a-f]{32}}',update_assets),web.get('/api/features/{id:[0-9a-f]{32}}',features),web.post('/api/render/{id:[0-9a-f]{32}}',render_job),
         web.post('/api/cancel/{id:[0-9a-f]{32}}',cancel),web.get('/files/{id:[0-9a-f]{32}}/{cap}/{kind}',media)])
     return app
 

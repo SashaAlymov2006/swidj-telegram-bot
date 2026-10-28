@@ -55,23 +55,36 @@ def analyse(folder):
         speed=np.where(current>previous,.65,.15);previous=previous+(current-previous)*speed
         features[index]=previous
         if index%300==0:progress(folder,'analysis',index/count*.8)
-    features.flush();del features;del pcm
+    features.flush();del features;del samples;pcm._mmap.close();del pcm
+    (folder/'audio.f32').unlink(missing_ok=True)
     run(['-y','-protocol_whitelist','file,pipe','-i',str(folder/'audio.input'),'-vn','-c:a','libmp3lame','-b:a','160k',str(folder/'preview.mp3')])
-    background_kind='color'
-    for name in ('background','logo'):
+    analyse_assets(folder)
+    (folder/'analysis.json').write_text(json.dumps({'duration':duration,'featureRate':30,'frames':count,'backgroundKind':background_type(folder)}),encoding='utf-8')
+    progress(folder,'ready',1)
+
+def background_type(folder):
+    return 'video' if (folder/'background-preview.mp4').exists() else 'image' if (folder/'background.png').exists() else 'color'
+
+def analyse_assets(folder):
+    folder=Path(folder)
+    changes=folder/'assets_changed.json'
+    names=json.loads(changes.read_text()) if changes.is_file() else ['background','logo']
+    if not isinstance(names,list) or any(name not in ('background','logo') for name in names):raise ValueError('Invalid assets')
+    for name in names:
+        for suffix in ('.png','-poster.png','-preview.mp4'):(folder/(name+suffix)).unlink(missing_ok=True)
         source=folder/(name+'.input')
         if not source.exists():continue
         try:
             with Image.open(source) as image:
                 if image.width*image.height>32_000_000:raise ValueError('Image too large')
                 normalized=ImageOps.exif_transpose(image).convert('RGBA');normalized.thumbnail((2400,2400));normalized.save(folder/(name+'.png'))
-                if name=='background':background_kind='image'
         except (Image.UnidentifiedImageError,OSError):
             if name=='logo':raise ValueError('Logo must be an image') from None
-            run(['-y','-protocol_whitelist','file,pipe','-i',str(source),'-an','-frames:v','1','-vf','scale=960:-2',str(folder/'background-poster.png')])
-            run(['-y','-protocol_whitelist','file,pipe','-i',str(source),'-an','-vf','scale=640:-2','-c:v','libx264','-preset','ultrafast','-crf','30','-pix_fmt','yuv420p','-threads','1','-movflags','+faststart',str(folder/'background-preview.mp4')])
-            background_kind='video'
-    (folder/'analysis.json').write_text(json.dumps({'duration':duration,'featureRate':30,'frames':count,'backgroundKind':background_kind}),encoding='utf-8')
+            run(['-y','-protocol_whitelist','file,pipe','-i',str(source),'-an','-frames:v','1','-vf','scale=960:960:force_original_aspect_ratio=decrease:force_divisible_by=2',str(folder/'background-poster.png')])
+            run(['-y','-protocol_whitelist','file,pipe','-i',str(source),'-an','-vf','scale=640:640:force_original_aspect_ratio=decrease:force_divisible_by=2','-c:v','libx264','-preset','ultrafast','-crf','30','-pix_fmt','yuv420p','-threads','1','-movflags','+faststart',str(folder/'background-preview.mp4')])
+    if (folder/'analysis.json').is_file():
+        metadata=json.loads((folder/'analysis.json').read_text());metadata['backgroundKind']=background_type(folder)
+        (folder/'analysis.json').write_text(json.dumps(metadata),encoding='utf-8')
     progress(folder,'ready',1)
 
 def sample(features,t):
@@ -95,19 +108,26 @@ class Scene:
         self.logo=Image.open(self.folder/'logo.png').convert('RGBA') if (self.folder/'logo.png').exists() else None
         self.background=Image.open(self.folder/'background.png').convert('RGB') if (self.folder/'background.png').exists() else None
         self.titlefont=font(self.unit*.042);self.subfont=font(self.unit*.025)
+        metadata=json.loads((self.folder/'analysis.json').read_text())
+        self.duration=min(config['end'] or metadata['duration'],metadata['duration'])-config['start']
+        self.vignette=Image.radial_gradient('L').resize((self.w,self.h)).point(lambda v:round(v*config['vignette']*.85))
         self.gradient=Image.new('RGB',(self.w,self.h));row=ImageDraw.Draw(self.gradient)
         for y in range(self.h):row.line((0,y,self.w,y),fill=mix(rgb(config['background']),tuple(int(v*.18) for v in rgb(config['color2'])),y/self.h))
 
     def frame(self,t,features,video=None):
         s=self.config;w,h,u=self.w,self.h,self.unit;low,mid,high,rms,beat=features[:5];strength=s['strength']
-        zoom=1+(s['zoom']-1)*(.5+.5*math.sin(t*.2))
+        zoom=1 if s['fit']=='contain' else 1+(s['zoom']-1)*(.5+.5*math.sin(t*.2))
         source=video if video is not None else self.background if s['backgroundKind']=='image' else None
-        image=ImageOps.fit(source,(round(w*zoom),round(h*zoom)),method=Image.Resampling.BILINEAR) if source is not None else self.gradient.copy()
+        image=self.gradient.copy()
         if source is not None:
-            image=image.crop(((image.width-w)//2,(image.height-h)//2,(image.width+w)//2,(image.height+h)//2))
+            scale=(max if s['fit']=='cover' else min)(w/source.width,h/source.height)*zoom
+            scaled=source.resize((max(1,round(source.width*scale)),max(1,round(source.height*scale))),Image.Resampling.BILINEAR)
+            image.paste(scaled,(round((w-scaled.width)*s['panX']),round((h-scaled.height)*s['panY'])))
+            if s['blur']:image=image.filter(ImageFilter.GaussianBlur(s['blur']*u/720))
             image=Image.blend(image,Image.new('RGB',(w,h),s['background']),s['dim'])
+        if s['vignette']:image.paste(Image.new('RGB',(w,h),'black'),(0,0),self.vignette)
         layer=Image.new('RGBA',(w,h));draw=ImageDraw.Draw(layer);accent=rgb(s['color']);second=rgb(s['color2'])
-        cx,cy=w/2,h*.45;radius=u*.19*(1+low*.13*strength+beat*.03*strength);angle=t*s['rotation']*.7
+        cx,cy=w*s['logoX'],h*s['logoY'];radius=u*.19*s['logoSize']*(1+(low*.13+beat*.03)*strength*s['pulse']);angle=t*s['rotation']*.7
         if s['preset']=='liquid':
             for i in range(5):
                 px=w*(.5+.4*math.sin(t*.15+i));py=h*(.5+.4*math.cos(t*.13+i));r=u*(.08+.04*mid)
@@ -128,14 +148,14 @@ class Scene:
         bars=features[5:]
         if s['spectrum']=='ring':
             for i,energy in enumerate(bars):
-                a=i/BANDS*math.tau-math.pi/2;outer=radius+u*.018+float(energy)*u*.11*strength;inner=radius+u*.018
+                a=i/BANDS*math.tau-math.pi/2;inner=radius+u*.018;outer=inner+float(energy)*u*.11*strength*s['spectrumSize']
                 draw.line((cx+math.cos(a)*inner,cy+math.sin(a)*inner,cx+math.cos(a)*outer,cy+math.sin(a)*outer),fill=(*mix(accent,second,i/BANDS),235),width=max(2,round(u*.005)))
         elif s['spectrum']=='bars':
             for i,energy in enumerate(bars):
-                x=w*.12+i*w*.76/BANDS;height=u*.025+float(energy)*u*.17*strength
-                draw.rounded_rectangle((x,h*.78-height,x+w*.76/BANDS*.6,h*.78),radius=2,fill=(*mix(accent,second,i/BANDS),230))
+                x=w*.12+i*w*.76/BANDS;height=u*.025+float(energy)*u*.17*strength*s['spectrumSize']
+                draw.rounded_rectangle((x,h*s['spectrumY']-height,x+w*.76/BANDS*.6,h*s['spectrumY']),radius=2,fill=(*mix(accent,second,i/BANDS),230))
         elif s['spectrum']=='wave':
-            points=[(w*.1+i*w*.8/(BANDS-1),h*.73+math.sin(i*.55+t*2)*float(energy)*u*.09*strength) for i,energy in enumerate(bars)]
+            points=[(w*.1+i*w*.8/(BANDS-1),h*(s['spectrumY']-.05)+math.sin(i*.55+t*2)*float(energy)*u*.09*strength*s['spectrumSize']) for i,energy in enumerate(bars)]
             draw.line(points,fill=(*accent,240),width=max(2,round(u*.005)),joint='curve')
         if s['shape']!='none':
             mask=Image.new('L',(round(radius*2),round(radius*2)));md=ImageDraw.Draw(mask);r=radius-2
@@ -158,36 +178,46 @@ class Scene:
         image=Image.alpha_composite(image,layer);draw=ImageDraw.Draw(image)
         if s['preset']=='retro':
             for y in range(0,h,max(3,round(u*.006))):draw.line((0,y,w,y),fill=(0,0,0,35))
-        for text,y,face in [(s['title'],h*.855,self.titlefont),(s['subtitle'],h*.915,self.subfont)]:
+        for text,y,face in [(s['title'],h*s['textY'],self.titlefont),(s['subtitle'],h*min(.97,s['textY']+.06),self.subfont)]:
             if text:
+                face=font(face.size*s['textSize'])
                 width=draw.textlength(text,font=face)
                 if width>w*.9:face=font(face.size*w*.9/width)
-                draw.text((w/2,y),text,font=face,anchor='mm',fill='#ffffff',stroke_width=max(1,round(u/720)),stroke_fill='#000000')
-        return image.convert('RGB')
+                draw.text((w/2,y),text,font=face,anchor='mm',fill=s['textColor'],stroke_width=max(1,round(u/720)),stroke_fill='#000000')
+        opacity=min(1,t/min(s['fadeIn'],self.duration/2)) if s['fadeIn'] else 1
+        if s['fadeOut']:opacity=min(opacity,max(0,(self.duration-t)/min(s['fadeOut'],self.duration/2)))
+        image=image.convert('RGB')
+        return Image.blend(Image.new('RGB',(w,h),'black'),image,opacity) if opacity<1 else image
 
 def render(folder):
     folder=Path(folder);s=validate(json.loads((folder/'scene.json').read_text(encoding='utf-8')))
     metadata=json.loads((folder/'analysis.json').read_text());start=s['start'];end=min(s['end'] or metadata['duration'],metadata['duration'])
     if not start<end:raise ValueError('Selected interval is outside audio')
     scene=Scene(folder,s);w,h=scene.w,scene.h;fps=s['fps'];count=math.ceil((end-start)*fps)
+    audio_filters=[]
+    if s['fadeIn']:audio_filters.append(f"afade=t=in:d={min(s['fadeIn'],(end-start)/2)}")
+    if s['fadeOut']:
+        length=min(s['fadeOut'],(end-start)/2);audio_filters.append(f'afade=t=out:st={end-start-length}:d={length}')
     features=np.load(folder/'features.npy',mmap_mode='r');background=None
     stderr=open(folder/'render.log','wb')
     encoder=subprocess.Popen([ffmpeg(),'-nostdin','-hide_banner','-v','error','-y','-f','rawvideo','-pix_fmt','rgb24','-s',f'{w}x{h}','-r',str(fps),'-i','pipe:0',
-        '-ss',str(start),'-protocol_whitelist','file,pipe','-i',str(folder/'audio.input'),'-map','0:v','-map','1:a:0','-t',str(end-start),'-c:v','libx264','-preset','veryfast','-crf','21','-pix_fmt','yuv420p','-threads','1','-c:a','aac','-b:a','192k','-movflags','+faststart',str(folder/'result.pending.mp4')],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=stderr,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+        '-ss',str(start),'-protocol_whitelist','file,pipe','-i',str(folder/'audio.input'),'-map','0:v','-map','1:a:0','-t',str(end-start),*(['-af',','.join(audio_filters)] if audio_filters else []),'-c:v','libx264','-preset','veryfast','-crf','21','-pix_fmt','yuv420p','-threads','1','-c:a','aac','-b:a','192k','-movflags','+faststart',str(folder/'result.pending.mp4')],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=stderr,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
     try:
         if s['backgroundKind']=='video' and (folder/'background.input').exists():
-            background=subprocess.Popen([ffmpeg(),'-nostdin','-hide_banner','-v','error','-stream_loop','-1','-protocol_whitelist','file,pipe','-i',str(folder/'background.input'),'-an','-vf',f'fps={fps},scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}','-threads','1','-f','rawvideo','-pix_fmt','rgb24','pipe:1'],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+            with Image.open(folder/'background-poster.png') as poster:pw,ph=poster.size
+            factor=min(max(w/pw,h/ph),3840/pw,3840/ph);bw=max(2,round(pw*factor/2)*2);bh=max(2,round(ph*factor/2)*2)
+            background=subprocess.Popen([ffmpeg(),'-nostdin','-hide_banner','-v','error','-stream_loop','-1','-protocol_whitelist','file,pipe','-i',str(folder/'background.input'),'-an','-vf',f'fps={fps},scale={bw}:{bh}','-threads','1','-f','rawvideo','-pix_fmt','rgb24','pipe:1'],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
         progress(folder,'render',0)
         for index in range(count):
             if index%fps==0 and shutil.disk_usage(folder).free<512*1024**2:raise OSError('Not enough video workspace')
             frame=None
             if background:
                 body=bytearray()
-                while len(body)<w*h*3:
-                    chunk=background.stdout.read(w*h*3-len(body))
+                while len(body)<bw*bh*3:
+                    chunk=background.stdout.read(bw*bh*3-len(body))
                     if not chunk:raise ValueError('Video background decode failed')
                     body.extend(chunk)
-                frame=Image.frombytes('RGB',(w,h),bytes(body))
+                frame=Image.frombytes('RGB',(bw,bh),bytes(body))
             t=index/fps;encoder.stdin.write(scene.frame(t,sample(features,start+t),frame).tobytes())
             if index%max(1,fps//2)==0:progress(folder,'render',index/count)
         encoder.stdin.close()
@@ -202,8 +232,8 @@ def render(folder):
         (folder/'result.pending.mp4').unlink(missing_ok=True)
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('action',choices=['analyse','render']);parser.add_argument('folder',type=Path);args=parser.parse_args()
-    try:(analyse if args.action=='analyse' else render)(args.folder)
+    parser=argparse.ArgumentParser();parser.add_argument('action',choices=['analyse','assets','render']);parser.add_argument('folder',type=Path);args=parser.parse_args()
+    try:({'analyse':analyse,'assets':analyse_assets,'render':render}[args.action])(args.folder)
     except Exception:
         progress(args.folder,'failed',0)
         raise

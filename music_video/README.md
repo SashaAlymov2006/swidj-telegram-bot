@@ -12,6 +12,14 @@ depend on its renderer. No Telegram polling or library writes happen here.
 - MP4 H.264/AAC, 720p/1080p, 30/60 fps, landscape/portrait/square.
 - Full audio or selected interval. Export settings are immutable per job.
 - Owner-scoped history, cancellation, temporary downloads and RU/EN interface.
+- Logo/spectrum placement, size and pulse; cover/contain background framing,
+  pan, blur, vignette, text color/size/position and audio/video fades.
+- Undo/redo, up to twelve named on-device visual styles and validated JSON transfer.
+- Automatic draft restoration while its server files remain available; imported
+  tracks open a fresh draft. Pending, unuploaded file selections are not restored.
+- A five-second 720p30 video sample before exporting the full selected quality.
+- Image-only updates reuse the original audio, preview and FFT data. Unchanged
+  video backgrounds are reused as well; older drafts remain unchanged.
 
 Preview uses a bounded Canvas surface and precomputed audio features; final frames
 are rendered in a separate process. Preview and export share scene parameters,
@@ -42,8 +50,10 @@ The service validates Telegram initData and checks the existing bot's library
 endpoint for access. It never accepts arbitrary remote media URLs. Download URLs
 are expiring bearer links: do not share them publicly.
 
-The optional button in the audio studio appears only after a successful worker
-probe. `miniapp/visualizer-bridge.js` and `web/bridge.css` are served by the worker.
+The optional Video tab appears only after a successful worker probe. Its shared
+library picker uses the same bot/Mini App collection; the current audio mix is an
+explicit separate source. `miniapp/visualizer-bridge.js` and `web/bridge.css` are
+served by the worker.
 Deployment may override only `/assets/app.js` in the proxy's persistent static
 directory, avoiding a main-bot restart. Keep the original proxy configuration and
 asset hashes; future main-frontend updates must refresh/remove this override.
@@ -64,3 +74,10 @@ presets are stored per user in the device's browser storage, not in the bot DB.
 
 Real iPhone/Android and browser interaction must be checked separately from Python
 pipeline tests. Do not claim physical-device validation from API/render tests.
+
+The Deno tests exercise actual editor code against a minimal DOM contract, plus
+scene state and navigation. They are not browser emulation or physical-device QA:
+
+```sh
+deno test --no-config --allow-read=music_video,miniapp/app.js music_video/tests/state_test.js music_video/tests/editor_flow_test.js music_video/tests/navigation_test.js
+```
