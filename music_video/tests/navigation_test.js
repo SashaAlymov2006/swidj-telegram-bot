@@ -4,6 +4,21 @@ const tabs=source.match(/^function studioTabs\(\).*$/m)?.[0];
 const switching=source.match(/if\(button\.dataset\.studioMode\)\{([^\n]+)\}/)?.[1];
 if(!tabs||!switching)throw Error('Navigation functions missing');
 const assert=(value)=>{if(!value)throw Error('Navigation assertion failed');};
+const resolveSource=source.match(/async function videoTrackBlob\(track\)\{[\s\S]*?\n\}/)?.[0];
+Deno.test('Video sources use shared bot/app library and local files without applying audio effects',async()=>{
+ assert(resolveSource);
+ const original=new Blob(['local audio']);const calls=[];
+ const resolve=new Function('localTracks','location','demo','api','fetch',resolveSource+';return videoTrackBlob;')(
+  new Map([['local:1',{blob:original}]]),{origin:'https://music.example'},false,
+  async(path,body)=>{calls.push([path,body.track]);return {json:async()=>({url:'https://music.example/audio-ticket'})};},
+  async(url)=>{calls.push(['fetch',url]);return {ok:true,blob:async()=>new Blob(['server audio'])};}
+ );
+ assert(await resolve({id:'local:1',local:true})===original);
+ await resolve({id:'saved-by-bot'});assert(calls[0][0]==='stream'&&calls[0][1]==='saved-by-bot');
+ await resolve({id:'saved-by-app',local:true,serverTicket:'own-ticket'});assert(calls.at(-1)[1]==='https://music.example/studio-file/own-ticket');
+ assert(!resolveSource.includes('processMix'));
+ let rejected=false;try{await resolve({id:'missing',local:true});}catch{rejected=true;}assert(rejected);
+});
 Deno.test('Audio, DJ and Video are distinct and only one is selected',()=>{
  for(const mode of ['sound','dj','video'])for(const language of ['ru','en']){
   const labels=language==='ru'?{audioTab:'Аудио',videoTab:'Видео'}:{audioTab:'Audio',videoTab:'Video'};

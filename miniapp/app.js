@@ -104,6 +104,8 @@ let musicVideoAvailable=false;
 let videoMode=false;
 Object.assign(copy.ru,{audioTab:'Аудио',videoTab:'Видео'});
 Object.assign(copy.en,{audioTab:'Audio',videoTab:'Video'});
+Object.assign(copy.ru,{chooseLibraryTrack:'Выбрать из моей музыки',sharedStudioLibrary:'Сохранённые треки из бота и Mini App',filterLibrary:'Найти в моей музыке'});
+Object.assign(copy.en,{chooseLibraryTrack:'Choose from my music',sharedStudioLibrary:'Saved tracks from the bot and Mini App',filterLibrary:'Search my music'});
 Object.assign(copy.ru,{musicVideo:'Музыкальное видео',musicVideoPreparing:'Готовлю звук для видео…'});
 Object.assign(copy.en,{musicVideo:'Music video',musicVideoPreparing:'Preparing audio for video…'});
 Object.assign(copy.ru,{audioStudio:'Аудиостудия',videoStudio:'Видеостудия',videoStudioNote:'Картинка или видео, логотип и анимация под музыку. Готовый результат — MP4.',videoStudioOpen:'Создать музыкальное видео',videoFromMix:'Использовать текущий микс',videoOwnAudio:'Выбери свой аудиофайл внутри видеостудии или перенеси микс из аудиостудии.',videoAudioHint:'Тон, скорость и эффекты настраиваются в аудиостудии.'});
@@ -305,6 +307,7 @@ function render() {
   $('connection').textContent=t(demo?'demo':'connected'); $('language').textContent=language==='ru'?'EN':'RU';
   if(route==='studio'&&videoMode&&musicVideoAvailable&&!failed){
     $('content').innerHTML=studioTabs()+`<section class="studio-hero"><div><p class="eyebrow">SwiDJ / VISUAL STUDIO</p><h1>${e(t('videoStudio'))}</h1><p>${e(t('videoStudioNote'))}</p></div><div class="studio-visual" aria-hidden="true"><div class="visual-orbit"></div><span>MP4 / 720p · 1080p</span></div></section><section class="studio-source"><h2>${e(t('videoStudioOpen'))}</h2><p>${e(t('videoOwnAudio'))}</p><button type="button" class="btn lime" id="open-video-studio">${e(t('videoStudioOpen'))}</button>${trackUrl?`<button type="button" class="btn secondary" id="music-video" ${renderBusy||musicVideoOpening?'disabled':''}>${e(t('videoFromMix'))} · ${e(current?.title||'SwiDJ')}</button>`:''}<p class="fineprint">${e(t('videoAudioHint'))}</p><button type="button" class="text-btn" data-studio-mode="sound">${e(t('audioStudio'))} →</button></section>`;
+    $('open-video-studio').insertAdjacentHTML('afterend',`<button type="button" class="btn secondary" id="choose-studio-track" data-target="video">${icon('library')}${e(t('chooseLibraryTrack'))}</button>`);
     return;
   }
   if(route==='studio'&&djMode&&!failed){
@@ -336,6 +339,7 @@ function render() {
     document.querySelector('.effect-rack').after(actions);
     if(activeRenderJob)actions.insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" id="cancel-mix">${e(t('cancel'))}</button>`);
   }
+  if(route==='studio'&&!failed)$('content').querySelector('.studio-source').insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" id="choose-studio-track" data-target="sound">${icon('library')}${e(t('chooseLibraryTrack'))}</button>`);
   if(route==='studio'&&current?.local&&!failed)$('content').querySelector('.studio-source').insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" id="save-local-file">${icon('heart')}${e(t('saveToLibrary'))}</button>`);
   $('previous').innerHTML=icon('previous'); $('next').innerHTML=icon('next'); $('repeat').innerHTML=icon('repeat');
   $('open-queue').setAttribute('aria-label',t('queue'));$('volume-icon').innerHTML=icon('volume'); $('expand-studio').innerHTML=icon('studio');
@@ -744,6 +748,19 @@ function chooseDJTrack(deck){
   dialog(st(deck==='A'?'loadA':'loadB'),`<div class="dj-picker-search"><input type="search" id="dj-search" placeholder="${e(t('searchPlaceholder'))}" maxlength="120"><button type="button" class="btn secondary" id="dj-search-button">${e(st('find'))}</button></div><div id="dj-pick-list">${djChoices(tracks,deck)}</div>`);
   $('dj-search').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();searchDJTracks().catch(report);}});
 }
+async function chooseStudioTrack(target){
+  if(!demo)await refreshLibrary();
+  const tracks=[...new Map([...state.tracks,...(state.recent||[]),...localTracks.values()].map(track=>[track.id,track])).values()];
+  const choices=query=>tracks.filter(track=>(track.title+' '+(track.artist||'')).toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(track=>`<button type="button" class="dialog-option" data-studio-pick="${e(track.id)}" data-target="${target}"><span>${e(track.title)}<small>${e(track.artist||'')}</small></span></button>`).join('')||`<p>${e(t('emptyLibrary'))}</p>`;
+  $('dialog-form').onsubmit=null;
+  dialog(t('chooseLibraryTrack'),`<p class="fineprint">${e(t('sharedStudioLibrary'))}</p><input type="search" id="studio-library-search" placeholder="${e(t('filterLibrary'))}" aria-label="${e(t('filterLibrary'))}"><div id="studio-library-choices">${choices('')}</div>`);
+  $('studio-library-search').oninput=()=>{$('studio-library-choices').innerHTML=choices($('studio-library-search').value.trim());};
+}
+async function videoTrackBlob(track){
+  if(track.local&&!track.serverTicket){const blob=localTracks.get(track.id)?.blob;if(!blob)throw new Error('linkExpired');return blob;}
+  const url=track.serverTicket?location.origin+'/studio-file/'+track.serverTicket:demo?'/demo/'+track.demo+'.wav':(await(await api('stream',{track:track.id})).json()).url;
+  const response=await fetch(url,{credentials:'omit'});if(!response.ok)throw new Error('linkExpired');return response.blob();
+}
 function djChoices(tracks,deck){return tracks.map(track=>`<button type="button" class="dialog-option" data-dj-pick="${e(track.id)}" data-deck="${deck}"><span>${e(track.title)}<small>${e(track.artist||'')}</small></span></button>`).join('')||`<p>${e(t('emptyLibrary'))}</p>`;}
 async function searchDJTracks(){
   const query=$('dj-search')?.value.trim();if(!query)return;
@@ -877,6 +894,14 @@ document.addEventListener('click',async event=>{
       return;
     }
     if(button.dataset.studioMode){videoMode=button.dataset.studioMode==='video'&&musicVideoAvailable;djMode=button.dataset.studioMode==='dj';if(djMode||videoMode)audio.pause();if(!djMode)djRoom?.pauseAll();render();return;}
+    if(button.id==='choose-studio-track')return await chooseStudioTrack(button.dataset.target);
+    if(button.dataset.studioPick){
+      const track=trackById(button.dataset.studioPick);if(!track)return;
+      if(button.dataset.target!=='video'){$('dialog').close();videoMode=false;djMode=false;if(await playTrack(track,false,'studio'))navigate('studio');return;}
+      if(musicVideoOpening)return;musicVideoOpening=true;button.disabled=true;
+      try{const blob=await videoTrackBlob(track);if(route!=='studio'||!videoMode)return;$('dialog').close();audio.pause();djRoom?.pauseAll();const {openMusicVideo}=await import('/music-video/static/bridge.js');await openMusicVideo({blob,title:track.title,language});}
+      catch(error){report(error);}finally{musicVideoOpening=false;button.disabled=false;}return;
+    }
     if(button.id==='save-sound-preset')return await saveSoundPreset();
     if(button.dataset.soundPreset)return await applySoundPreset(button.dataset.soundPreset);
     if(button.dataset.removePreset)return await removeSoundPreset(button.dataset.removePreset);

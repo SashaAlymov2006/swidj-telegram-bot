@@ -51,7 +51,15 @@ def main():
     print(json.dumps({'passed':True,'presets':8,'render':'1080p60 H264/AAC','range':206,'core_timings_seconds':timings,'fixture_jobs':[draft['id'],job['id']],'telegram_messages_sent':0}),flush=True)
 
 if __name__=='__main__':
-    if '--core' in sys.argv:
+    if '--library-source' in sys.argv:
+        library=json.loads(request('/api/library')[0]);tracks=library.get('tracks',[])+library.get('recent',[])
+        track=next(item for item in tracks if item.get('playable'))
+        raw,status,_=request('/api/stream',json.dumps({'track':track['id']}).encode(),{'Content-Type':'application/json'})
+        info=json.loads(raw)
+        with urllib.request.urlopen(urllib.request.Request(info['url'],headers={'Range':'bytes=0-31'}),timeout=30) as response:
+            assert response.status==206 and len(response.read(32))==32
+        print(json.dumps({'shared_library_source':True,'stream_status':status,'file_range':206,'telegram_messages_sent':0}))
+    elif '--core' in sys.argv:
         with urllib.request.urlopen('https://api.telegram.org/bot'+os.environ['TELEGRAM_TOKEN']+'/getMe',timeout=15) as response:assert json.load(response)['ok']
         print(json.dumps({'telegram_getMe':True,'library_status':request('/api/library')[1],'telegram_messages_sent':0}))
     else:main()
