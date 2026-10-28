@@ -1143,10 +1143,11 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_navigation_entry(context)
     keyboard = home_keyboard()
     from miniapp_server import public_url
-    if public_url():
+    if public_url() and update.effective_chat.type == 'private':
         from telegram import WebAppInfo
-        keyboard = InlineKeyboardMarkup(list(keyboard.inline_keyboard) + [
-            [InlineKeyboardButton(tr("✨ Открыть приложение"), web_app=WebAppInfo(public_url()))]])
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton(tr("🎛 Открыть Mini App"), web_app=WebAppInfo(public_url()), style="primary")]
+        ] + list(keyboard.inline_keyboard))
     if access_policy.is_owner(update):
         keyboard = InlineKeyboardMarkup(list(keyboard.inline_keyboard) + [
             [InlineKeyboardButton("⚙ Панель владельца", callback_data="owner:home")]])
