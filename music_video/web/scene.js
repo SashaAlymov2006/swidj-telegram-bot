@@ -1,4 +1,5 @@
 const TAU=Math.PI*2;
+import {lyricIndex} from './timing.js';
 const rand=(i,seed)=>{const n=Math.sin(i*127.1+seed*311.7)*43758.5453;return n-Math.floor(n);};
 const hex=c=>[1,3,5].map(i=>parseInt(c.slice(i,i+2),16));
 const blend=(a,b,t)=>`rgb(${a.map((v,i)=>Math.round(v*(1-t)+b[i]*t)).join(',')})`;
@@ -36,6 +37,12 @@ export function drawScene(ctx,width,height,scene,time,feature,assets={},duration
  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff';ctx.strokeStyle='#000';ctx.lineWidth=Math.max(1,u/720)*2;
  ctx.fillStyle=s.textColor;
  for(const [text,y,size] of [[s.title,h*s.textY,u*.042*s.textSize],[s.subtitle,h*Math.min(.97,s.textY+.06),u*.025*s.textSize]])if(text){ctx.font=`500 ${size}px "Segoe UI",system-ui,sans-serif`;ctx.strokeText(text,w/2,y,w*.9);ctx.fillText(text,w/2,y,w*.9);}
+ if(s.lyricsOn&&assets.lyrics?.length){
+  const lines=assets.lyrics,index=lyricIndex(lines,s.start+time-s.lyricsOffset);
+  if(index>=0){const cy=h*s.lyricsY,size=u*.034*s.lyricsSize;ctx.fillStyle='rgba(0,0,0,.69)';ctx.fillRect(w*.06,cy-size*2.5,w*.88,size*5);
+   for(const offset of [-1,0,1]){if(!lines[index+offset])continue;let text=lines[index+offset].text,face=size*(offset? .72:(s.lyricsStyle==='pulse'?1+beat*.08:1));ctx.font=`500 ${face}px "Segoe UI",system-ui,sans-serif`;let width=ctx.measureText(text).width;if(width>w*.84){face=Math.max(size*.48,face*w*.84/width);ctx.font=`500 ${face}px "Segoe UI",system-ui,sans-serif`;}while(text&&ctx.measureText(text).width>w*.84)text=text.slice(0,-2)+'…';ctx.fillStyle=offset?'#a3acb7':s.lyricsStyle==='fade'?blend([126,138,152],hex(s.textColor),Math.min(1,Math.max(0,(s.start+time-s.lyricsOffset-lines[index].at)/.4))):s.textColor;ctx.strokeText(text,w/2,cy+offset*size*1.55);ctx.fillText(text,w/2,cy+offset*size*1.55);}
+  }
+ }
  let opacity=s.fadeIn?Math.min(1,time/Math.min(s.fadeIn,duration/2)):1;
  if(s.fadeOut&&Number.isFinite(duration))opacity=Math.min(opacity,Math.max(0,(duration-time)/Math.min(s.fadeOut,duration/2)));
  if(opacity<1){ctx.globalAlpha=1-opacity;ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);}

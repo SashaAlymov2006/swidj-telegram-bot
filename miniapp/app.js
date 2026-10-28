@@ -761,6 +761,12 @@ async function videoTrackBlob(track){
   const url=track.serverTicket?location.origin+'/studio-file/'+track.serverTicket:demo?'/demo/'+track.demo+'.wav':(await(await api('stream',{track:track.id})).json()).url;
   const response=await fetch(url,{credentials:'omit'});if(!response.ok)throw new Error('linkExpired');return response.blob();
 }
+function videoLyricSource(track,mix=false){
+  if(!track)return null;if(mix&&studioEffects.includes('reverse'))return {disabled:true};
+  const duration=Number((mix&&sourceDuration)||track.duration);
+  if(!Number.isFinite(duration)||duration<=0)return null;
+  return {title:track.title,artist:track.artist,duration,speed:mix?engine.speed:1,start:mix?engine.trimStart:0,end:mix?(engine.trimEnd||duration):duration};
+}
 function djChoices(tracks,deck){return tracks.map(track=>`<button type="button" class="dialog-option" data-dj-pick="${e(track.id)}" data-deck="${deck}"><span>${e(track.title)}<small>${e(track.artist||'')}</small></span></button>`).join('')||`<p>${e(t('emptyLibrary'))}</p>`;}
 async function searchDJTracks(){
   const query=$('dj-search')?.value.trim();if(!query)return;
@@ -858,7 +864,7 @@ async function renderMix(preview,keepPosition=false) {
     const streamFile=remotePlayback&&typeof blob.url==='string';
     if(preview) {
       if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=streamFile?blob.url:URL.createObjectURL(blob);
-      if(!bypass&&!tonePreview)lastRendered=streamFile?{url:blob.url,key:studioSignature()}:{blob,key:studioSignature()};
+      if(!bypass&&!tonePreview)lastRendered=streamFile?{url:blob.url,key:studioSignature(),full:applying||!preview}:{blob,key:studioSignature(),full:applying||!preview};
 
       previewStart=tonePreview?auditionStart:engine.trimStart;
       audio.src=previewUrl;audio.playbackRate=1;
@@ -899,7 +905,7 @@ document.addEventListener('click',async event=>{
       const track=trackById(button.dataset.studioPick);if(!track)return;
       if(button.dataset.target!=='video'){$('dialog').close();videoMode=false;djMode=false;if(await playTrack(track,false,'studio'))navigate('studio');return;}
       if(musicVideoOpening)return;musicVideoOpening=true;button.disabled=true;
-      try{const blob=await videoTrackBlob(track);if(route!=='studio'||!videoMode)return;$('dialog').close();audio.pause();djRoom?.pauseAll();const {openMusicVideo}=await import('/music-video/static/bridge.js');await openMusicVideo({blob,title:track.title,language});}
+      try{const blob=await videoTrackBlob(track);if(route!=='studio'||!videoMode)return;$('dialog').close();audio.pause();djRoom?.pauseAll();const {openMusicVideo}=await import('/music-video/static/bridge.js');await openMusicVideo({blob,title:track.title,language,lyricSource:videoLyricSource(track)});}
       catch(error){report(error);}finally{musicVideoOpening=false;button.disabled=false;}return;
     }
     if(button.id==='save-sound-preset')return await saveSoundPreset();
@@ -944,12 +950,12 @@ document.addEventListener('click',async event=>{
       musicVideoOpening=true;audio.pause();button.disabled=true;
       const key=studioSignature(),ticket=loadingTrack,title=current?.title||'SwiDJ';
       try{
-        let source=lastRendered?.key===key?(lastRendered.blob||lastRendered.url):null;
+        let source=lastRendered?.key===key&&lastRendered.full?(lastRendered.blob||lastRendered.url):null;
         if(!source){toast('musicVideoPreparing');source=await processMix(false,true,null,{format:'mp3'});}
         if(key!==studioSignature()||ticket!==loadingTrack)return;
         if(!(source instanceof Blob)){const response=await fetch(typeof source==='string'?source:source.url,{credentials:'omit'});if(!response.ok)throw new Error('linkExpired');source=await response.blob();}
         if(key!==studioSignature()||ticket!==loadingTrack)return;
-        const {openMusicVideo}=await import('/music-video/static/bridge.js');await openMusicVideo({blob:source,title,language});
+        const {openMusicVideo}=await import('/music-video/static/bridge.js');await openMusicVideo({blob:source,title,language,lyricSource:videoLyricSource(current,true)});
       }catch(error){report(error);}finally{musicVideoOpening=false;if(route==='studio')render();}
       return;
     }

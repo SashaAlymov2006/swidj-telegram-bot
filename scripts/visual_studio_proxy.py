@@ -21,7 +21,8 @@ def main():
         fragment=''
         if args.phase=='frontend':
             docker('exec',args.web,'mkdir','-p','/config/swidj-visualizer/assets')
-            docker('cp',str(release/'miniapp'/'app.js'),args.web+':/config/swidj-visualizer/assets/app.js')
+            docker('cp',str(release/'miniapp'/'app.js'),args.web+':/config/swidj-visualizer/assets/app.js.pending')
+            docker('exec',args.web,'mv','/config/swidj-visualizer/assets/app.js.pending','/config/swidj-visualizer/assets/app.js')
             fragment='''    @visualStudioAsset {
         path /assets/app.js
         file {

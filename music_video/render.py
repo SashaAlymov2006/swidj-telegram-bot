@@ -1,5 +1,6 @@
 """CPU-only deterministic scene renderer. Run in its own process, never in bot polling."""
 import argparse
+import bisect
 import json
 import math
 import os
@@ -39,6 +40,19 @@ def analyse(folder):
     pcm=np.memmap(folder/'audio.f32',dtype='<f4',mode='r')
     if not len(pcm):raise ValueError('No audio')
     duration=len(pcm)/RATE;count=math.ceil(len(pcm)/HOP)
+    if not (folder/'lyric_source.json').is_file():
+        # Read bounded embedded tags, never infer a song identity from a filename.
+        tag_process=subprocess.Popen([ffmpeg(),'-nostdin','-v','error','-protocol_whitelist','file,pipe','-i',str(folder/'audio.input'),'-f','ffmetadata','pipe:1'],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+        try:
+            raw=tag_process.stdout.read(16385)
+            if len(raw)<=16384:
+                tags={line.partition('=')[0].casefold():line.partition('=')[2] for line in raw.decode('utf-8',errors='replace').splitlines() if '=' in line}
+                from .lyrics import source_metadata
+                source=source_metadata({'title':tags.get('title'),'artist':tags.get('artist'),'duration':duration})
+                if source:(folder/'lyric_source.json').write_text(json.dumps(source),encoding='utf-8')
+        finally:
+            if tag_process.poll() is None:tag_process.kill()
+            tag_process.wait();tag_process.stdout.close()
     features=np.lib.format.open_memmap(folder/'features.npy',mode='w+',dtype=np.float32,shape=(count,5+BANDS))
     frequencies=np.fft.rfftfreq(FFT,1/RATE);edges=np.geomspace(30,7000,BANDS+1)
     indices=[np.flatnonzero((frequencies>=a)&(frequencies<b)) for a,b in zip(edges[:-1],edges[1:])]
@@ -110,6 +124,9 @@ class Scene:
         self.titlefont=font(self.unit*.042);self.subfont=font(self.unit*.025)
         metadata=json.loads((self.folder/'analysis.json').read_text())
         self.duration=min(config['end'] or metadata['duration'],metadata['duration'])-config['start']
+        self.lyrics=[]
+        if config['lyricsOn'] and (self.folder/'lyrics.json').is_file():self.lyrics=json.loads((self.folder/'lyrics.json').read_text(encoding='utf-8'))['lines']
+        self.lyric_times=[line['at'] for line in self.lyrics]
         self.vignette=Image.radial_gradient('L').resize((self.w,self.h)).point(lambda v:round(v*config['vignette']*.85))
         self.gradient=Image.new('RGB',(self.w,self.h));row=ImageDraw.Draw(self.gradient)
         for y in range(self.h):row.line((0,y,self.w,y),fill=mix(rgb(config['background']),tuple(int(v*.18) for v in rgb(config['color2'])),y/self.h))
@@ -184,6 +201,21 @@ class Scene:
                 width=draw.textlength(text,font=face)
                 if width>w*.9:face=font(face.size*w*.9/width)
                 draw.text((w/2,y),text,font=face,anchor='mm',fill=s['textColor'],stroke_width=max(1,round(u/720)),stroke_fill='#000000')
+        if s['lyricsOn'] and self.lyrics:
+            index=bisect.bisect_right(self.lyric_times,s['start']+t-s['lyricsOffset'])-1
+            if 0<=index<len(self.lyrics) and self.lyrics[index]['text']:
+                cy=h*s['lyricsY'];size=u*.034*s['lyricsSize'];linefont=font(size*(1+float(beat)*.08 if s['lyricsStyle']=='pulse' else 1))
+                panel=Image.new('RGBA',(w,h));pd=ImageDraw.Draw(panel);pd.rounded_rectangle((w*.06,cy-size*2.5,w*.94,cy+size*2.5),radius=round(size*.4),fill=(0,0,0,175))
+                image=Image.alpha_composite(image,panel);draw=ImageDraw.Draw(image)
+                for offset in (-1,0,1):
+                    if not 0<=index+offset<len(self.lyrics):continue
+                    text=self.lyrics[index+offset]['text'];face=linefont if offset==0 else font(size*.72)
+                    width=draw.textlength(text,font=face)
+                    if width>w*.84:face=font(max(size*.48,face.size*w*.84/width))
+                    while text and draw.textlength(text,font=face)>w*.84:text=text[:-2]+'…'
+                    active=rgb(s['textColor'])
+                    if s['lyricsStyle']=='fade':active=mix((126,138,152),active,min(1,max(0,(s['start']+t-s['lyricsOffset']-self.lyrics[index]['at'])/.4)))
+                    draw.text((w/2,cy+offset*size*1.55),text,font=face,anchor='mm',fill=active if offset==0 else '#a3acb7',stroke_width=1,stroke_fill='#000000')
         opacity=min(1,t/min(s['fadeIn'],self.duration/2)) if s['fadeIn'] else 1
         if s['fadeOut']:opacity=min(opacity,max(0,(self.duration-t)/min(s['fadeOut'],self.duration/2)))
         image=image.convert('RGB')

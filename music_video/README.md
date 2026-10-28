@@ -20,6 +20,13 @@ depend on its renderer. No Telegram polling or library writes happen here.
 - A five-second 720p30 video sample before exporting the full selected quality.
 - Image-only updates reuse the original audio, preview and FFT data. Unchanged
   video backgrounds are reused as well; older drafts remain unchanged.
+- Optional synchronized lyrics: the Add lyrics button appears only for a matching
+  recording with valid LRC timestamps. Original artist/title/duration are checked;
+  tempo and trim are mapped to the exported mix. Reverse audio disables lookup.
+  Plain or mismatched lyrics never become a fabricated timed overlay.
+- Lyrics highlight the current line during playback/export, with highlight,
+  soft highlight and pulse styles, placement/size and timing adjustment. Source
+  attribution is retained. The existing ordinary chat lyrics reader is unchanged.
 
 Preview uses a bounded Canvas surface and precomputed audio features; final frames
 are rendered in a separate process. Preview and export share scene parameters,
@@ -79,5 +86,5 @@ The Deno tests exercise actual editor code against a minimal DOM contract, plus
 scene state and navigation. They are not browser emulation or physical-device QA:
 
 ```sh
-deno test --no-config --allow-read=music_video,miniapp/app.js music_video/tests/state_test.js music_video/tests/editor_flow_test.js music_video/tests/navigation_test.js
+deno test --no-config --allow-read=music_video,miniapp/app.js music_video/tests/state_test.js music_video/tests/editor_flow_test.js music_video/tests/navigation_test.js music_video/tests/timing_test.js
 ```

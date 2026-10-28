@@ -10,16 +10,24 @@ Object.assign(words.ru,{styleDownload:'Скачать JSON',styleReady:'Файл
 Object.assign(words.en,{styleDownload:'Download JSON',styleReady:'Settings file ready. Tap Download JSON.',pendingRestore:'Saved draft restored. Reselect any new images you had not uploaded.'});
 Object.assign(words.ru,{stylesFull:'Уже сохранено 12 оформлений. Удали ненужное или обнови оформление с тем же названием.'});
 Object.assign(words.en,{stylesFull:'You have 12 saved styles. Remove one or update a style with the same name.'});
+Object.assign(words.ru,{syncedLyrics:'Текст песни',addLyrics:'Добавить текст',removeLyrics:'Убрать текст',lyricsY:'Положение строк',lyricsSize:'Размер строк',lyricsOffset:'Сдвиг строк, секунды',lyricsSource:'Источник текста',lyricsStyle:'Анимация текста',highlight:'Подсветка',lyricFade:'Плавное выделение',lyricPulse:'Пульсация'});
+Object.assign(words.en,{syncedLyrics:'Song lyrics',addLyrics:'Add lyrics',removeLyrics:'Remove lyrics',lyricsY:'Lyrics position',lyricsSize:'Lyrics size',lyricsOffset:'Lyrics delay, seconds',lyricsSource:'Lyrics source',lyricsStyle:'Lyrics animation',highlight:'Highlight',lyricFade:'Soft highlight',lyricPulse:'Pulse'});
 Object.assign(words.ru,{composition:'Логотип и спектр',framing:'Кадрирование фона',typography:'Текст и переходы',logoX:'Логотип: по горизонтали',logoY:'Логотип: по вертикали',logoSize:'Размер логотипа',pulse:'Пульсация логотипа',spectrumY:'Высота спектра',spectrumSize:'Размах спектра',panX:'Фон: по горизонтали',panY:'Фон: по вертикали',blur:'Размытие фона',vignette:'Затемнение по краям',fit:'Размещение фона',cover:'Заполнить кадр',contain:'Показать целиком',textY:'Положение текста',textSize:'Размер текста',textColor:'Цвет текста',fadeIn:'Плавное начало, секунды',fadeOut:'Плавное окончание, секунды',undo:'Отменить',redo:'Вернуть',shortPreview:'Видеопроба · 5 секунд',previewReady:'Видеопроба готова. Полный ролик создаётся отдельной кнопкой.',styles:'Мои оформления',styleName:'Название оформления',stylePick:'Выбери оформление',saveStyle:'Сохранить оформление',loadStyle:'Применить',deleteStyle:'Удалить оформление',exportStyle:'Скачать настройки',importStyle:'Загрузить настройки',styleNote:'Настройки оформления не содержат музыку и изображения.',nameRequired:'Укажи название оформления.',restored:'Черновик восстановлен. Можно продолжить.',updateAssets:'Обновить изображения',changedAssets:'Изображения изменились. Обнови их — музыка повторно не анализируется.',draftSaved:'Черновик сохранён',draftUntil:'Файлы доступны до',resetLayout:'Сбросить оформление',sessionExpired:'Файлы черновика уже удалены. Выбери музыку заново.',busy:'Очередь занята. Попробуй немного позже.',tooLarge:'Общий размер файлов слишком большой.',noSpace:'Не хватает места для обработки. Попробуй позже.'});
 Object.assign(words.en,{composition:'Logo and spectrum',framing:'Background framing',typography:'Text and transitions',logoX:'Logo horizontal position',logoY:'Logo vertical position',logoSize:'Logo size',pulse:'Logo pulse',spectrumY:'Spectrum vertical position',spectrumSize:'Spectrum amplitude',panX:'Background horizontal position',panY:'Background vertical position',blur:'Background blur',vignette:'Vignette',fit:'Background fit',cover:'Fill frame',contain:'Fit whole image',textY:'Text position',textSize:'Text size',textColor:'Text color',fadeIn:'Fade in, seconds',fadeOut:'Fade out, seconds',undo:'Undo',redo:'Redo',shortPreview:'Video sample · 5 seconds',previewReady:'Video sample ready. Use Create MP4 for the full video.',styles:'My visual styles',styleName:'Style name',stylePick:'Choose a style',saveStyle:'Save style',loadStyle:'Apply',deleteStyle:'Delete style',exportStyle:'Download settings',importStyle:'Import settings',styleNote:'Style settings do not include audio or images.',nameRequired:'Enter a style name.',restored:'Draft restored. Continue editing.',updateAssets:'Update images',changedAssets:'Images changed. Update them without analysing the music again.',draftSaved:'Draft saved',draftUntil:'Files available until',resetLayout:'Reset visual settings',sessionExpired:'Draft files have expired. Choose your audio again.',busy:'The queue is busy. Try again shortly.',tooLarge:'The combined file size is too large.',noSpace:'Not enough processing space. Try again later.'});
 let language=new URLSearchParams(location.search).get('lang')||storage.get('swidj-video-language')||'ru';if(!words[language])language='ru';
 const t=key=>words[language][key]||key;
-const ids=['backgroundKind','shape','spectrum','particles','color','color2','background','title','subtitle','aspect','resolution','fps','fit','textColor',...Object.keys(ranges).filter(key=>key!=='seed')];
+const ids=['backgroundKind','shape','spectrum','particles','color','color2','background','title','subtitle','aspect','resolution','fps','fit','textColor','lyricsStyle',...Object.keys(ranges).filter(key=>key!=='seed')];
 const numeric=new Set([...Object.keys(ranges),'resolution','fps']);
 const history=new SceneHistory();let dirtyAssets=new Set(),needsAudio=true,restoring=false,preparing=false,lastSaved=0;
 let config,scene,draft=null,renderJob=null,pollTimer,revision=0,featureBlock=null,featureRequest=0,featuresBusy=false,lastDraw=0,selectedAudio=null;
 const assets={},audio=$('audio'),video=$('video-background'),canvas=$('canvas'),ctx=canvas.getContext('2d');
 let historyTimer;
+let lyricSource=null;
+function lyricControls(){if(!$('lyrics-toggle'))return;const available=Boolean(assets.lyrics?.length);$('lyrics-toggle').hidden=$('lyrics-controls').hidden=!available;$('lyrics-toggle').textContent=t(scene?.lyricsOn?'removeLyrics':'addLyrics');$('lyrics-toggle').setAttribute('aria-pressed',String(Boolean(scene?.lyricsOn)));}
+async function lookupLyrics(job){
+ const wanted=scene.lyricsOn;assets.lyrics=null;scene.lyricsOn=false;lyricControls();
+ try{const result=await api('lyrics/'+job.id,{method:'POST'});if(draft?.id!==job.id)return;if(result.available&&Array.isArray(result.lines)&&result.lines.length){assets.lyrics=result.lines;scene.lyricsOn=wanted;$('lyrics-source').href=result.source_url;}$('lyrics-controls').open=scene.lyricsOn;lyricControls();draw();persist();}catch{if(draft?.id===job.id)lyricControls();}
+}
 let telegramData='';try{telegramData=window.parent.Telegram?.WebApp?.initData||'';}catch{}
 async function api(path,options={}){
  const response=await fetch('api/'+path,{...options,headers:{'X-SwiDJ-Local':'1','X-Telegram-Init-Data':telegramData,...options.headers}});
@@ -59,7 +67,7 @@ async function refreshHistory(){
  }catch{}
 }
 function translate(){document.documentElement.lang=language;for(const element of document.querySelectorAll('[data-i18n]'))element.textContent=t(element.dataset.i18n);for(const element of document.querySelectorAll('[data-placeholder]')){element.placeholder=t(element.dataset.placeholder);element.setAttribute('aria-label',t(element.dataset.placeholder));}$('language').textContent=language==='ru'?'EN':'RU';if(config?.dev)$('environment').textContent=t('local');for(const element of document.querySelectorAll('[data-slider]'))element.textContent=t(element.dataset.slider);if($('saved-styles'))listStyles($('saved-styles').value);}
-function sync(){for(const id of ids)if($(id))$(id).value=scene[id];for(const output of document.querySelectorAll('[data-output]'))output.textContent=String(scene[output.dataset.output]);for(const button of document.querySelectorAll('[data-preset]'))button.setAttribute('aria-pressed',String(scene.preset===button.dataset.preset));resize();draw();}
+function sync(){for(const id of ids)if($(id))$(id).value=scene[id];for(const output of document.querySelectorAll('[data-output]'))output.textContent=String(scene[output.dataset.output]);for(const button of document.querySelectorAll('[data-preset]'))button.setAttribute('aria-pressed',String(scene.preset===button.dataset.preset));lyricControls();resize();draw();}
 function resize(){const ratio=scene.aspect==='portrait'?9/16:scene.aspect==='square'?1:16/9;const width=Math.min(960,Math.max(240,canvas.parentElement.clientWidth));if(canvas.width!==Math.round(width))canvas.width=Math.round(width);if(canvas.height!==Math.round(width/ratio))canvas.height=Math.round(width/ratio);}
 function clock(seconds){return `${Math.floor(seconds/60)}:${String(Math.floor(seconds%60)).padStart(2,'0')}`;}
 function endTime(){return draft?Math.min(scene.end||draft.duration,draft.duration):0;}
@@ -102,14 +110,15 @@ async function ready(job,preserve=false){
  for(const option of $('backgroundKind').options)option.disabled=option.value!=='color'&&option.value!==job.backgroundKind;
  if(scene.start>=job.duration){scene.start=0;scene.end=0;}if(scene.end>job.duration)scene.end=job.duration;
  needsAudio=false;dirtyAssets.clear();$('prepare').disabled=true;sync();await loadFeatures(scene.start);$('empty-preview').hidden=true;
- $('play').disabled=$('seek').disabled=$('restart').disabled=$('render').disabled=$('sample-render').disabled=false;$('seek').max=job.duration;$('clock').textContent='0:00 / '+clock(job.duration);$('prepare').textContent=t('prepare');notice('ready');draw();persist();
+ $('play').disabled=$('seek').disabled=$('restart').disabled=$('render').disabled=$('sample-render').disabled=false;$('seek').max=job.duration;$('clock').textContent='0:00 / '+clock(job.duration);$('prepare').textContent=t('prepare');notice('ready');draw();persist();lookupLyrics(job);
 }
-function fileChanged(name='audio'){revision++;pause();if(name==='audio'){draft=null;needsAudio=true;}else dirtyAssets.add(name);featureBlock=null;featureRequest++;featuresBusy=false;$('play').disabled=$('seek').disabled=$('restart').disabled=$('render').disabled=$('sample-render').disabled=true;$('prepare').disabled=preparing||Boolean(renderJob);$('prepare').textContent=t(draft?'updateAssets':'prepare');notice(draft?'changedAssets':'changed');persist();}
+function fileChanged(name='audio'){revision++;pause();if(name==='audio'){draft=null;needsAudio=true;assets.lyrics=null;scene.lyricsOn=false;history.past=[];history.future=[];history.key=null;historyButtons();lyricControls();}else dirtyAssets.add(name);featureBlock=null;featureRequest++;featuresBusy=false;$('play').disabled=$('seek').disabled=$('restart').disabled=$('render').disabled=$('sample-render').disabled=true;$('prepare').disabled=preparing||Boolean(renderJob);$('prepare').textContent=t(draft?'updateAssets':'prepare');notice(draft?'changedAssets':'changed');persist();}
 async function prepare(){
  if(preparing||renderJob)return;
  const file=selectedAudio||$('audio-file').files[0];if(!draft&&!file)return notice('chooseAudio');
  const updating=Boolean(draft&&!needsAudio&&dirtyAssets.size);if(draft&&!updating)return;
  pause();const form=new FormData();if(!updating)form.append('audio',file,file.name||'studio-mix.wav');
+ if(!updating&&lyricSource)form.append('lyric_source',JSON.stringify(lyricSource));
  for(const name of ['background','logo'])if(!updating||dirtyAssets.has(name)){if($(name+'-file').files[0])form.append(name,$(name+'-file').files[0]);else if(updating)form.append('remove_'+name,'1');}
  const ticket=revision;preparing=true;$('prepare').disabled=true;notice('uploading');
  try{let job=await api(updating?'assets/'+draft.id:'drafts',{method:'POST',body:form});$('cancel').hidden=false;renderJob=job;
@@ -143,22 +152,24 @@ function listStyles(selected=''){
  for(const style of savedStyles()){const option=document.createElement('option');option.value=style.name;option.textContent=style.name;select.append(option);}select.value=selected;
 }
 function applyStyle(value){
- commit();scene=normalize({...value,title:scene.title,subtitle:scene.subtitle,start:scene.start,end:scene.end},config.defaults,config.presets);
+ commit();scene=normalize({...value,title:scene.title,subtitle:scene.subtitle,start:scene.start,end:scene.end,lyricsOn:scene.lyricsOn,lyricsOffset:scene.lyricsOffset},config.defaults,config.presets);
  if(draft&&scene.backgroundKind!=='color'&&scene.backgroundKind!==draft.backgroundKind)scene.backgroundKind=draft.backgroundKind;
  sync();persist();historyButtons();notice('loaded');
 }
 function editorTools(){
  $('save-preset').dataset.i18n='saveStyle';$('load-preset').dataset.i18n='loadStyle';
- const groups=[['composition',['logoX','logoY','logoSize','pulse','spectrumY','spectrumSize']],['framing',['panX','panY','blur','vignette']],['typography',['textY','textSize','fadeIn','fadeOut']]];
+ const groups=[['composition',['logoX','logoY','logoSize','pulse','spectrumY','spectrumSize']],['framing',['panX','panY','blur','vignette']],['typography',['textY','textSize','fadeIn','fadeOut']],['syncedLyrics',['lyricsY','lyricsSize','lyricsOffset']]];
  for(const [name,keys] of groups.slice().reverse()){
   const details=document.createElement('details');details.className='control-group';const summary=document.createElement('summary');summary.dataset.i18n=name;details.append(summary);
   if(name==='framing')details.insertAdjacentHTML('beforeend','<label><span data-i18n="fit"></span><select id="fit"><option value="cover" data-i18n="cover"></option><option value="contain" data-i18n="contain"></option></select></label>');
   if(name==='typography')details.insertAdjacentHTML('beforeend','<label><span data-i18n="textColor"></span><input type="color" id="textColor"></label>');
+  if(name==='syncedLyrics'){details.id='lyrics-controls';details.hidden=true;details.insertAdjacentHTML('beforeend','<label><span data-i18n="lyricsStyle"></span><select id="lyricsStyle"><option value="highlight" data-i18n="highlight"></option><option value="fade" data-i18n="lyricFade"></option><option value="pulse" data-i18n="lyricPulse"></option></select></label><a id="lyrics-source" class="quiet" target="_blank" rel="noopener noreferrer" data-i18n="lyricsSource"></a>');}
   for(const key of keys){const [min,max,step]=ranges[key];const label=document.createElement('label');label.innerHTML=`<span class="slider-label"><span data-slider="${key}"></span><output data-output="${key}"></output></span><input type="range" id="${key}" min="${min}" max="${max}" step="${step}">`;details.append(label);}
   $('sliders').after(details);
  }
  const toolbar=document.createElement('div');toolbar.className='edit-toolbar';toolbar.innerHTML='<button id="undo" type="button" class="quiet" data-i18n="undo" disabled></button><button id="redo" type="button" class="quiet" data-i18n="redo" disabled></button><button id="reset-layout" type="button" class="quiet" data-i18n="resetLayout"></button><span id="draft-state" role="status"></span>';canvas.parentElement.before(toolbar);
  $('undo').onclick=()=>{scene=history.undo(scene);sync();persist();historyButtons();};$('redo').onclick=()=>{scene=history.redo(scene);sync();persist();historyButtons();};
+ const lyricButton=document.createElement('button');lyricButton.id='lyrics-toggle';lyricButton.type='button';lyricButton.className='quiet';lyricButton.hidden=true;toolbar.append(lyricButton);lyricButton.onclick=()=>{if(!assets.lyrics?.length)return;commit();scene.lyricsOn=!scene.lyricsOn;$('lyrics-controls').open=scene.lyricsOn;sync();persist();};
  $('reset-layout').onclick=()=>{commit();scene=presetScene(scene,config.defaults,config.presets.neon,'neon');sync();persist();historyButtons();};
  const sample=document.createElement('button');sample.id='sample-render';sample.type='button';sample.className='button secondary';sample.dataset.i18n='shortPreview';sample.disabled=true;$('render').before(sample);sample.onclick=()=>render(true);
  const clip=document.createElement('video');clip.id='render-preview';clip.controls=true;clip.playsInline=true;clip.hidden=true;clip.preload='metadata';$('render-status').after(clip);
@@ -191,15 +202,15 @@ async function init(){
  const history=document.createElement('details');history.className='panel history-panel';const summary=document.createElement('summary');summary.dataset.i18n='history';summary.textContent=t('history');const historyList=document.createElement('div');historyList.id='history-list';history.append(summary,historyList);document.querySelector('.footer-note').before(history);history.ontoggle=()=>{if(history.open)refreshHistory();};
  translate();sync();requestAnimationFrame(tick);refreshHistory();$('download').onclick=nativeDownload;
  for(const id of ids)$(id).addEventListener('input',()=>{commit(id);read();});
- $('language').onclick=()=>{language=language==='ru'?'en':'ru';storage.set('swidj-video-language',language);translate();refreshHistory();};
- $('audio-file').onchange=()=>{selectedAudio=$('audio-file').files[0]||null;$('audio-name').textContent=selectedAudio?.name||t('noAudio');if(selectedAudio&&!scene.title){scene.title=selectedAudio.name.replace(/\.[^.]+$/,'').slice(0,120);sync();}fileChanged();};
+ $('language').onclick=()=>{language=language==='ru'?'en':'ru';storage.set('swidj-video-language',language);translate();lyricControls();refreshHistory();};
+ $('audio-file').onchange=()=>{lyricSource=null;selectedAudio=$('audio-file').files[0]||null;$('audio-name').textContent=selectedAudio?.name||t('noAudio');if(selectedAudio&&!scene.title){scene.title=selectedAudio.name.replace(/\.[^.]+$/,'').slice(0,120);sync();}fileChanged();};
  for(const name of ['background','logo']){$(name+'-file').onchange=()=>fileChanged(name);$('remove-'+name).onclick=()=>{$(name+'-file').value='';fileChanged(name);};}
  $('prepare').onclick=prepare;$('render').onclick=()=>render(false);$('play').onclick=()=>play().catch(()=>notice('error'));
  $('restart').onclick=()=>{audio.currentTime=scene.start;loadFeatures(scene.start).then(draw);if(assets.video)video.currentTime=0;};
  $('seek').oninput=()=>{audio.currentTime=Number($('seek').value);if(assets.video&&video.duration)video.currentTime=Math.max(0,audio.currentTime-scene.start)%video.duration;loadFeatures(audio.currentTime).then(draw);$('clock').textContent=clock(audio.currentTime)+' / '+clock(draft.duration);};
  $('cancel').onclick=async()=>{if(renderJob)try{await api('cancel/'+renderJob.id,{method:'POST'});}catch{notice('error');}};
  window.addEventListener('resize',()=>{resize();draw();});document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});audio.onended=pause;audio.onpause=()=>persist();
- window.addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==window.parent||event.data?.type!=='swidj:music-video'||!(event.data.audio instanceof Blob))return;selectedAudio=event.data.audio;$('audio-name').textContent=event.data.title||'Studio mix';scene.title=(event.data.title||scene.title).slice(0,120);if(words[event.data.language]){language=event.data.language;translate();}fileChanged();sync();});
+ window.addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==window.parent||event.data?.type!=='swidj:music-video'||!(event.data.audio instanceof Blob))return;lyricSource=event.data.lyricSource||null;selectedAudio=event.data.audio;$('audio-name').textContent=event.data.title||'Studio mix';scene.title=(event.data.title||scene.title).slice(0,120);if(words[event.data.language]){language=event.data.language;translate();}fileChanged();sync();});
  await restoreSession();
  if(window.parent!==window)window.parent.postMessage({type:'swidj:music-video-ready'},location.origin);
 }

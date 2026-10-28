@@ -4,6 +4,13 @@ const tabs=source.match(/^function studioTabs\(\).*$/m)?.[0];
 const switching=source.match(/if\(button\.dataset\.studioMode\)\{([^\n]+)\}/)?.[1];
 if(!tabs||!switching)throw Error('Navigation functions missing');
 const assert=(value)=>{if(!value)throw Error('Navigation assertion failed');};
+Deno.test('Lyrics source preserves original duration and accounts for mix tempo and trim',()=>{
+ const fn=source.match(/function videoLyricSource\(track,mix=false\)\{[\s\S]*?\n\}/)?.[0];assert(fn);
+ const run=new Function('sourceDuration','engine','studioEffects',fn+';return videoLyricSource;')(200,{speed:1.25,trimStart:10,trimEnd:150},[]);
+ const value=run({title:'Song',artist:'Artist',duration:200},true);assert(value.duration===200&&value.start===10&&value.end===150&&value.speed===1.25);
+ const direct=run({title:'Song',artist:'Artist',duration:180});assert(direct.duration===180&&direct.start===0&&direct.speed===1);
+ const reverse=new Function('sourceDuration','engine','studioEffects',fn+';return videoLyricSource;')(200,{},['reverse']);assert(reverse({},true).disabled===true);
+});
 const resolveSource=source.match(/async function videoTrackBlob\(track\)\{[\s\S]*?\n\}/)?.[0];
 Deno.test('Video sources use shared bot/app library and local files without applying audio effects',async()=>{
  assert(resolveSource);

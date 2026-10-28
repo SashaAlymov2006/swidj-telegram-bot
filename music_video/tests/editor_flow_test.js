@@ -1,8 +1,8 @@
 // Headless DOM contract test, not a claim of real-browser/phone validation.
 const configuration=JSON.parse(await Deno.readTextFile(new URL('./model-config.json',import.meta.url)));
 const html=await Deno.readTextFile(new URL('../web/index.html',import.meta.url));
-const nodes=new Map(),all=[],calls=[];let operations=0;
-const context=new Proxy({}, {get:(_,key)=>key==='createLinearGradient'||key==='createRadialGradient'?()=>({addColorStop(){}}):(...args)=>{for(const v of args)if(typeof v==='number'&&!Number.isFinite(v))throw Error('Non-finite Canvas geometry');operations++;}});
+const nodes=new Map(),all=[],calls=[];let operations=0,lyricsAvailable=false;
+const context=new Proxy({}, {get:(_,key)=>key==='createLinearGradient'||key==='createRadialGradient'?()=>({addColorStop(){}}):key==='measureText'?text=>({width:text.length*10}):(...args)=>{for(const v of args)if(typeof v==='number'&&!Number.isFinite(v))throw Error('Non-finite Canvas geometry');operations++;}});
 class Node{
  constructor(tag='div'){this.tagName=tag.toUpperCase();this.dataset={};this.children=[];this.listeners={};this.style={setProperty(){}};this.classList={add(){},remove(){}};this.value='';this.files=[];this.hidden=false;this.disabled=false;this.options=[];this.clientWidth=390;this.currentTime=0;this.duration=2;this.paused=true;this.videoWidth=160;this.videoHeight=90;this.naturalWidth=100;this.naturalHeight=100;this.width=960;this.height=540;all.push(this);}
  set id(v){this._id=v;nodes.set(v,this);}get id(){return this._id;}
@@ -28,6 +28,7 @@ globalThis.fetch=async(url,options={})=>{
  if(url==='api/config')value={...configuration,dev:true,profile:'fixture'};
  else if(url==='api/history')value={jobs:[]};
  else if(url==='api/settings')value={files:{settings:'files/settings'}};
+ else if(url==='api/lyrics/draft')value={available:lyricsAvailable,source_url:'https://lrclib.net/api/get/123',lines:[{at:0,text:'First fixture line'},{at:1,text:'Следующая строка'}]};
  else if(String(url).startsWith('api/features/'))value={rate:30,offset:0,values:Array.from({length:60},()=>Array(53).fill(.3))};
  else if(url==='api/drafts'||url==='api/jobs/draft'||String(url).startsWith('api/assets/'))value={id:'draft',kind:'draft',state:'ready',expires:Date.now()/1000+3600,duration:2,backgroundKind:'color',files:{audio:'files/audio'}};
  else if(String(url).startsWith('api/render/'))value={id:'video',kind:'video',state:'complete',scene:JSON.parse(options.body),files:{result:'files/result'}};
@@ -40,9 +41,11 @@ Deno.test('Editor prepares audio, edits and undoes, updates only images, preview
  assert(nodes.get('prepare').onclick);
  const file=new File(['fixture'],'audio.wav',{type:'audio/wav'});nodes.get('audio-file').files=[file];nodes.get('audio-file').onchange();
  await nodes.get('prepare').onclick();assert(!nodes.get('render').disabled);
+ for(let i=0;i<5;i++)await Promise.resolve();assert(nodes.get('lyrics-toggle').hidden);
  nodes.get('logoSize').value='1.2';nodes.get('logoSize').listeners.input();nodes.get('undo').click();assert(Number(nodes.get('logoSize').value)===1);
  nodes.get('style-name').value='My design';nodes.get('save-preset').click();assert([...memory.keys()].some(k=>k.includes('styles')));
- nodes.get('logo-file').files=[new File(['picture'],'logo.png')];nodes.get('logo-file').onchange();await nodes.get('prepare').onclick();
+ lyricsAvailable=true;nodes.get('logo-file').files=[new File(['picture'],'logo.png')];nodes.get('logo-file').onchange();await nodes.get('prepare').onclick();
+ for(let i=0;i<10&&nodes.get('lyrics-toggle').hidden;i++)await Promise.resolve();assert(!nodes.get('lyrics-toggle').hidden);nodes.get('lyrics-toggle').click();
  const update=calls.find(([url])=>url==='api/assets/draft');assert(update&&!update[1].body.has('audio')&&update[1].body.has('logo'));
  await nodes.get('sample-render').onclick();const sample=calls.filter(([url])=>url==='api/render/draft').at(-1);assert(JSON.parse(sample[1].body).resolution===720&&!nodes.get('render-preview').hidden);
  await nodes.get('render').onclick();assert(!nodes.get('download').hidden&&operations>0);

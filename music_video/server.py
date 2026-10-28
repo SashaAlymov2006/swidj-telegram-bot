@@ -22,6 +22,7 @@ import numpy as np
 import aiohttp
 from aiohttp import web
 from .model import validate,DEFAULTS,PRESETS
+from .lyrics import TimedLyrics,source_metadata,mapped
 
 STATIC=Path(__file__).parent/'web'
 FILES={'audio':'preview.mp3','background-image':'background.png','background-video':'background-preview.mp4',
@@ -148,6 +149,7 @@ class Jobs:
 
 def create_app(root,*,dev=False,token=''):
     jobs=Jobs(root)
+    timed_lyrics=TimedLyrics()
     main_url=os.getenv('MUSIC_VIDEO_LIBRARY_URL','')
     if main_url:
         parsed=urlsplit(main_url)
@@ -200,7 +202,7 @@ def create_app(root,*,dev=False,token=''):
     async def index(_):return web.FileResponse(STATIC/'index.html')
     async def asset(request):
         if request.match_info['name']=='bridge.js':return web.FileResponse(Path(__file__).parent.parent/'miniapp'/'visualizer-bridge.js')
-        if request.match_info['name'] not in ('editor.js','scene.js','state.js','editor.css','bridge.css'):raise web.HTTPNotFound()
+        if request.match_info['name'] not in ('editor.js','scene.js','state.js','timing.js','editor.css','bridge.css'):raise web.HTTPNotFound()
         return web.FileResponse(STATIC/request.match_info['name'])
     async def config(request):return web.json_response({'dev':dev,'profile':str(request['uid']),'defaults':DEFAULTS,'presets':PRESETS})
     async def upload(request):
@@ -208,8 +210,15 @@ def create_app(root,*,dev=False,token=''):
         try:
             reader=await request.multipart()
             async for part in reader:
-                if part.name not in ('audio','background','logo') or part.name in seen:raise web.HTTPBadRequest()
+                if part.name not in ('audio','background','logo','lyric_source') or part.name in seen:raise web.HTTPBadRequest()
                 seen.add(part.name)
+                if part.name=='lyric_source':
+                    raw=await part.read_chunk(65536)
+                    if len(raw)>2048:raise web.HTTPBadRequest()
+                    try:metadata=source_metadata(json.loads(raw))
+                    except (ValueError,TypeError):metadata=None
+                    if metadata:(folder/'lyric_source.json').write_text(json.dumps(metadata),encoding='utf-8')
+                    continue
                 with (folder/(part.name+'.input')).open('wb') as output:
                     while chunk:=await part.read_chunk(65536):
                         total+=len(chunk)
@@ -222,6 +231,19 @@ def create_app(root,*,dev=False,token=''):
         except BaseException:
             job['state']='failed';jobs.save(job);raise
     async def status(request):return web.json_response(jobs.payload(jobs.get(request['uid'],request.match_info['id'])))
+    async def lyrics(request):
+        draft=jobs.get(request['uid'],request.match_info['id']);folder=jobs.folder(draft)
+        if draft['kind']!='draft' or draft['state']!='ready':raise web.HTTPConflict()
+        if (folder/'lyrics.json').is_file():return web.json_response(dict(available=True,**json.loads((folder/'lyrics.json').read_text(encoding='utf-8'))))
+        try:source=source_metadata(json.loads((folder/'lyric_source.json').read_text(encoding='utf-8')))
+        except (OSError,ValueError,TypeError):source=None
+        if not source or source.get('disabled'):return web.json_response({'available':False})
+        metadata=json.loads((folder/'analysis.json').read_text())
+        if abs((source['end']-source['start'])/source['speed']-metadata['duration'])>3:return web.json_response({'available':False})
+        result=await timed_lyrics.lookup(source)
+        if not result:return web.json_response({'available':False})
+        result=mapped(result,source);pending=folder/'lyrics.pending';pending.write_text(json.dumps(result,ensure_ascii=False),encoding='utf-8');os.replace(pending,folder/'lyrics.json')
+        return web.json_response(dict(available=True,**result))
     async def style_file(request):
         try:scene=validate(await request.json())
         except (ValueError,TypeError):raise web.HTTPBadRequest() from None
@@ -234,7 +256,7 @@ def create_app(root,*,dev=False,token=''):
         if draft['kind']!='draft' or draft['state']!='ready':raise web.HTTPConflict()
         job=jobs.create(request['uid'],'draft');job['action']='assets';folder=jobs.folder(job)
         try:
-            for name in ('audio.input','preview.mp3','features.npy','background.input','logo.input','background.png','background-poster.png','background-preview.mp4','logo.png'):
+            for name in ('audio.input','preview.mp3','features.npy','background.input','logo.input','background.png','background-poster.png','background-preview.mp4','logo.png','lyric_source.json','lyrics.json'):
                 source=jobs.folder(draft)/name
                 if source.is_file():
                     try:os.link(source,folder/name)
@@ -278,6 +300,7 @@ def create_app(root,*,dev=False,token=''):
         except (ValueError,TypeError):raise web.HTTPBadRequest() from None
         metadata=json.loads((jobs.folder(draft)/'analysis.json').read_text())
         if scene['start']>=metadata['duration'] or scene['backgroundKind'] not in ('color',metadata['backgroundKind']):raise web.HTTPBadRequest()
+        if scene['lyricsOn'] and not (jobs.folder(draft)/'lyrics.json').is_file():raise web.HTTPBadRequest()
         job=jobs.create(request['uid'],'video');job['scene']=scene;folder=jobs.folder(job)
         try:
             for name in ('audio.input','features.npy','analysis.json','background.input','background.png','background-poster.png','background-preview.mp4','logo.png','preview.mp3'):
@@ -285,6 +308,7 @@ def create_app(root,*,dev=False,token=''):
                 if source.is_file():
                     try:os.link(source,folder/name)
                     except OSError:await asyncio.to_thread(shutil.copyfile,source,folder/name)
+            if scene['lyricsOn']:shutil.copyfile(jobs.folder(draft)/'lyrics.json',folder/'lyrics.json')
             (folder/'scene.json').write_text(json.dumps(scene,ensure_ascii=False),encoding='utf-8');jobs.submit(job)
             return web.json_response(jobs.payload(job))
         except BaseException:job['state']='failed';jobs.save(job);raise
@@ -304,7 +328,7 @@ def create_app(root,*,dev=False,token=''):
         if kind=='settings':headers['Content-Disposition']='attachment; filename="SwiDJ-style.json"'
         return web.FileResponse(path,headers=headers)
     app.add_routes([web.get('/',index),web.get('/static/{name}',asset),web.get('/api/config',config),web.get('/api/history',history),web.post('/api/drafts',upload),web.post('/api/settings',style_file),
-        web.get('/api/jobs/{id:[0-9a-f]{32}}',status),web.post('/api/assets/{id:[0-9a-f]{32}}',update_assets),web.get('/api/features/{id:[0-9a-f]{32}}',features),web.post('/api/render/{id:[0-9a-f]{32}}',render_job),
+        web.get('/api/jobs/{id:[0-9a-f]{32}}',status),web.post('/api/lyrics/{id:[0-9a-f]{32}}',lyrics),web.post('/api/assets/{id:[0-9a-f]{32}}',update_assets),web.get('/api/features/{id:[0-9a-f]{32}}',features),web.post('/api/render/{id:[0-9a-f]{32}}',render_job),
         web.post('/api/cancel/{id:[0-9a-f]{32}}',cancel),web.get('/files/{id:[0-9a-f]{32}}/{cap}/{kind}',media)])
     return app
 
