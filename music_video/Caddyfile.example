@@ -1,0 +1,18 @@
+# Replace music.example.org with the existing Mini App hostname.
+music.example.org {
+    handle_path /music-video/* {
+        reverse_proxy music-video:8792
+    }
+    @visualStudioAsset {
+        path /assets/app.js
+        file { root /config/swidj-visualizer }
+    }
+    handle @visualStudioAsset {
+        root * /config/swidj-visualizer
+        header Cache-Control "no-store"
+        file_server
+    }
+    handle {
+        reverse_proxy bot:8765
+    }
+}

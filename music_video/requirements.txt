@@ -1,0 +1,2 @@
+-r requirements-server.txt
+imageio-ffmpeg>=0.6,<1

@@ -1,0 +1,38 @@
+# OPTIONAL overlay. Not enabled or deployed by development/testing.
+# Run as a separate compose project on the existing bot's Docker network.
+services:
+  music-video:
+    profiles: [music-video]
+    image: swidj:visual-studio
+    build:
+      context: ..
+      dockerfile: music_video/Dockerfile
+    environment:
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:?Required for Telegram validation}
+      MUSIC_VIDEO_LIBRARY_URL: http://bot:8765/api/library
+      MUSIC_VIDEO_TTL: '10800'
+      MUSIC_VIDEO_UPLOAD_BYTES: '536870912'
+      MUSIC_VIDEO_MAX_WORKSPACE_BYTES: '12884901888'
+    volumes:
+      - music-video-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=128m,mode=1777
+    cpus: '1.0'
+    mem_limit: 2g
+    pids_limit: 64
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '2'
+volumes:
+  music-video-data:
+networks:
+  default:
+    external: true
+    name: ${SWIDJ_NETWORK:?Set the existing bot Docker network name}

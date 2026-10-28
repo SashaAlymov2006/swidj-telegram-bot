@@ -99,6 +99,10 @@ let renderBusy = false, refreshing = false, sourceDuration = 0;
 let djMode=false,djRoom=null,djModule=null,djChoosingDeck='A',soundPresets=null,presetsOpen=false;
 let preparation = null, searchQuery = '', searchSource='all', searchGroups=null, searchAvailable=null;
 let lastRendered=null;
+let musicVideoOpening=false;
+let musicVideoAvailable=false;
+Object.assign(copy.ru,{musicVideo:'Музыкальное видео',musicVideoPreparing:'Готовлю звук для видео…'});
+Object.assign(copy.en,{musicVideo:'Music video',musicVideoPreparing:'Preparing audio for video…'});
 function studioSignature(){return JSON.stringify([loadingTrack,engine.bass,engine.speed,engine.treble,studioPitch,studioEffects,engine.trimStart,engine.trimEnd,engine.fade,engine.ambience,engine.linked,engine.params]);}
 let toneUrl=null;
 const toneCache=new Map();
@@ -324,6 +328,7 @@ function render() {
     if(activeRenderJob)actions.insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" id="cancel-mix">${e(t('cancel'))}</button>`);
   }
   if(route==='studio'&&current?.local&&!failed)$('content').querySelector('.studio-source').insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" id="save-local-file">${icon('heart')}${e(t('saveToLibrary'))}</button>`);
+  if(route==='studio'&&musicVideoAvailable&&!failed)$('content').querySelector('.studio-source').insertAdjacentHTML('beforeend',`<button type="button" class="btn secondary" id="music-video" ${!trackUrl||renderBusy||musicVideoOpening?'disabled':''}>${e(t('musicVideo'))}</button>`);
   $('previous').innerHTML=icon('previous'); $('next').innerHTML=icon('next'); $('repeat').innerHTML=icon('repeat');
   $('open-queue').setAttribute('aria-label',t('queue'));$('volume-icon').innerHTML=icon('volume'); $('expand-studio').innerHTML=icon('studio');
   for (const [id,key] of [['previous','previous'],['next','next'],['repeat','repeat'],['seek','seek'],['volume','volume'],['language','language'],['player-art','nowPlaying'],['open-player','nowPlaying'],['expand-studio','openStudio'],['player-like','favorite']]) $(id).setAttribute('aria-label',t(key));
@@ -896,6 +901,20 @@ document.addEventListener('click',async event=>{
     if(button.dataset.lyric!==undefined)return readLyrics(Number(button.dataset.lyric));
     if(button.id==='native-export')return nativeExportDownload();
     if(button.dataset.effect){const playing=!audio.paused;invalidateMix();engine.setBypass(false);const value=button.dataset.effect;if(studioEffects.includes(value))studioEffects=studioEffects.filter(x=>x!==value);else if(studioEffects.length<8)studioEffects.push(value);engine.setEffects(studioEffects);render();await engine.unlock();if(playing)await audio.play();return;}
+    if(button.id==='music-video'){
+      if(musicVideoOpening||renderBusy||!trackUrl)return;
+      musicVideoOpening=true;audio.pause();button.disabled=true;
+      const key=studioSignature(),ticket=loadingTrack,title=current?.title||'SwiDJ';
+      try{
+        let source=lastRendered?.key===key?(lastRendered.blob||lastRendered.url):null;
+        if(!source){toast('musicVideoPreparing');source=await processMix(false,true,null,{format:'mp3'});}
+        if(key!==studioSignature()||ticket!==loadingTrack)return;
+        if(!(source instanceof Blob)){const response=await fetch(typeof source==='string'?source:source.url,{credentials:'omit'});if(!response.ok)throw new Error('linkExpired');source=await response.blob();}
+        if(key!==studioSignature()||ticket!==loadingTrack)return;
+        const {openMusicVideo}=await import('/music-video/static/bridge.js');await openMusicVideo({blob:source,title,language});
+      }catch(error){report(error);}finally{musicVideoOpening=false;if(route==='studio')render();}
+      return;
+    }
     if(button.id==='apply-mix')return await renderMix('apply');
     if(button.id==='record-voice')return await recordVoice();
     if(button.id==='transcribe-voice')return await transcribeVoice();
@@ -1083,3 +1102,13 @@ window.addEventListener('orientationchange',()=>{keyboardBase=0;syncKeyboardView
 tg?.onEvent?.('viewportChanged',syncKeyboardViewport);
 document.addEventListener('focusin',()=>{syncKeyboardViewport();clearTimeout(keyboardTimer);keyboardTimer=setTimeout(syncKeyboardViewport,350);});
 document.addEventListener('focusout',()=>{clearTimeout(keyboardTimer);keyboardTimer=setTimeout(syncKeyboardViewport,100);});
+
+// Optional independent service: failure never prevents the existing app loading.
+if(!demo&&initData){
+  try{
+    const videoProbe=new AbortController(),videoProbeTimer=setTimeout(()=>videoProbe.abort(),5000);
+    fetch('/music-video/api/config',{headers:{'X-Telegram-Init-Data':initData},signal:videoProbe.signal})
+      .then(response=>response.ok?response.json():null).then(value=>{if(value?.presets){musicVideoAvailable=true;if(route==='studio'&&!renderBusy)render();}})
+      .catch(()=>{}).finally(()=>clearTimeout(videoProbeTimer));
+  }catch{}
+}
