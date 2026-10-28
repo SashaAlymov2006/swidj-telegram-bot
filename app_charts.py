@@ -139,11 +139,11 @@ class Charts:
                 if entry and time.monotonic()-entry[0]<7*86400:return dict(entry[1],stale=True)
                 raise web.HTTPServiceUnavailable() from None
 
-    async def resolve(self,country,identifier,bridge,source=None):
+    async def resolve(self,country,identifier,bridge,source=None,*,uid=None):
         chart=await self.get(country)
         item=next((row for row in chart['tracks'] if row['id']==identifier),None)
         if not item:raise web.HTTPNotFound()
-        key=(country,identifier,source)
+        key=(uid,country,identifier,source)
         async with self.resolve_lock:
             cached=self.recordings.get(key)
             if cached and time.monotonic()-cached[0]<300:return item,cached[1]
@@ -151,7 +151,7 @@ class Charts:
             async with bridge.search_slots:
                 if source:
                     from versions import source_search
-                    result=await asyncio.to_thread(source_search,item,source)
+                    result=await asyncio.to_thread(source_search,dict(item,_availability_uid=uid),source)
                 else:
                     result=await asyncio.to_thread(find_versions,item['query'],limit=10)
                 if not source and not matching_versions(item,result):
@@ -160,7 +160,7 @@ class Charts:
                     extra=await asyncio.to_thread(find_versions,(artist+' '+title+' official audio')[:240],limit=10)
                     seen={row['url'] for row in result};result+= [row for row in extra if row['url'] not in seen]
             from recording_availability import verified_choices
-            result=await asyncio.to_thread(verified_choices,result,item['query'],limit=5)
+            result=await asyncio.to_thread(verified_choices,result,item['query'],uid,limit=5)
             for song in result:
                 song['id']=10**15+int.from_bytes(hashlib.sha256(song['url'].encode()).digest()[:6],'big')
                 song['_catalog_song']={k:item.get(k,'') for k in ('title','artist')}
@@ -199,9 +199,25 @@ def register(app,bridge):
         source=value.get('source')
         if source not in (None,'yt','sc','aud','jam'):raise web.HTTPBadRequest()
         if country not in COUNTRIES or not identifier.isdigit() or len(identifier)>20:raise web.HTTPBadRequest()
-        item,recordings=await service.resolve(country,identifier,bridge,source)
         from versions import source_inventory
-        inventory=await source_inventory(dict(item,_inventory_limit=2),uid,{source or 'yt':recordings})
+        chart=await service.get(country)
+        seed=next((row for row in chart['tracks'] if row['id']==identifier),None)
+        if seed is None:raise web.HTTPNotFound()
+        selected=source or 'yt'
+        # Independent catalogs need not wait for primary extraction/preflight.
+        # Cancel both branches together if the request stops.
+        primary=asyncio.create_task(service.resolve(country,identifier,bridge,source,uid=uid))
+        others=asyncio.create_task(source_inventory(dict(seed,_inventory_limit=2),uid,skip=(selected,)))
+        try:
+            (item,recordings),inventory=await asyncio.gather(primary,others)
+        except BaseException:
+            primary.cancel();others.cancel()
+            await asyncio.gather(primary,others,return_exceptions=True)
+            raise
+        checked=await source_inventory(dict(item,_inventory_limit=2),uid,{selected:recordings},
+                                       skip=tuple(key for key in ('yt','sc','aud','jam') if key!=selected))
+        inventory.update(checked)
+        inventory={key:inventory[key] for key in ('yt','sc','jam','aud') if key in inventory}
         if source is None:
             merged=[];seen=set()
             for index in range(5):

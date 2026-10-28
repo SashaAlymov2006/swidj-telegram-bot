@@ -6,6 +6,7 @@ import secrets
 import time
 import threading
 from copy import deepcopy
+from contextlib import contextmanager
 import yt_dlp
 from telegram import InlineKeyboardButton as Button
 from ui_layout import comfortable_keyboard as Markup
@@ -89,7 +90,15 @@ def source_search(song, source):
     origin = song.get('_catalog_song') or song
     query = (None if song.get('_catalog_song') else song.get('_search_query')) or ' '.join(str(origin.get(k) or '') for k in ('title', 'artist')).strip()
     limit = max(1, min(5, int(song.get('_availability_limit', 5))))
-    key = (song.get('_availability_uid'), query, source)
+    from download_cache import operation_uid
+    uid=song.get('_availability_uid') or operation_uid()
+    song=dict(song,_availability_uid=uid)
+    key = (uid, query, source)
+    with coalesced_search(key):
+        return checked_source_search(song,source,query,limit,key)
+
+
+def checked_source_search(song,source,query,limit,key):
     cached = _source_checks.get(key)
     if cached and cached[0] > time.monotonic() and (len(cached)<3 or cached[2]>=limit):
         return deepcopy(cached[1][:limit])
@@ -115,8 +124,9 @@ def source_search(song, source):
             while len(_source_metadata)>128:_source_metadata.pop(next(iter(_source_metadata)))
     from artist_catalog import normalized
     artist_query=any(normalized(query)==normalized(row.get('artist','')) for row in rows)
-    if artist_query:return verified_choices(rows,query,song.get('_availability_uid'),limit=limit,artist_query=True)
-    return verified_choices(rows,query,song.get('_availability_uid'),limit=limit)
+    result=verified_choices(rows,query,song.get('_availability_uid'),limit=limit,artist_query=True) if artist_query else verified_choices(rows,query,song.get('_availability_uid'),limit=limit)
+    remember_checked(key,result,limit)
+    return result
 
 
 def source_rows(token, request):
@@ -129,9 +139,38 @@ def source_rows(token, request):
 _source_checks = {}
 _source_metadata = {}
 _metadata_lock = threading.Lock()
+_inflight_searches = {}
 
 
-async def source_inventory(song, uid, known=None):
+@contextmanager
+def coalesced_search(key):
+    """Share identical in-flight work for one owner, without sharing private state."""
+    checkpoint()
+    with _metadata_lock:
+        entry=_inflight_searches.setdefault(key,[threading.Lock(),0])
+        entry[1]+=1
+    acquired=False
+    try:
+        while not acquired:
+            checkpoint()
+            acquired=entry[0].acquire(timeout=0.2)
+        checkpoint()
+        yield
+    finally:
+        if acquired:entry[0].release()
+        with _metadata_lock:
+            entry[1]-=1
+            if not entry[1]:_inflight_searches.pop(key,None)
+
+
+def remember_checked(key,rows,limit):
+    snapshot=deepcopy(rows)
+    with _metadata_lock:
+        _source_checks[key]=(time.monotonic()+(60 if snapshot else 20),snapshot,limit)
+        while len(_source_checks)>1000:_source_checks.pop(next(iter(_source_checks)))
+
+
+async def source_inventory(song, uid, known=None, *, skip=()):
     """Only advertise providers with checked recordings for this exact query/owner."""
     origin = song.get('_catalog_song') or song
     query = (None if song.get('_catalog_song') else song.get('_search_query')) or ' '.join(str(origin.get(k) or '') for k in ('title', 'artist')).strip()
@@ -160,13 +199,11 @@ async def source_inventory(song, uid, known=None):
                 (source == 'aud' and canonical(row.get('url'))) or
                 (source == 'yt' and re.fullmatch(r'https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}', row.get('url', '')))]
         checked_limit = song.get('_availability_limit',5) if known is not None and source in known else wanted
-        _source_checks[key] = (time.monotonic() + (60 if rows else 20), deepcopy(rows),checked_limit)
-        while len(_source_checks) > 1000:
-            _source_checks.pop(next(iter(_source_checks)))
+        remember_checked(key,rows,checked_limit)
         return source, deepcopy(rows)
     from audius_source import enabled
     sources=('yt','sc','jam')+(('aud',) if enabled() else ())
-    return dict(await asyncio.gather(*(check(source) for source in sources)))
+    return dict(await asyncio.gather(*(check(source) for source in sources if source not in skip)))
 
 
 async def catalog_choices(song,uid,limit=5):
