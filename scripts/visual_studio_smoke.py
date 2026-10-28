@@ -31,7 +31,7 @@ def main():
     timings=[]
     for path in ('/','/assets/app.js','/api/library','/api/charts'):
         _,status,seconds=request(path);assert status==200;timings.append([path,seconds])
-    config=api('config');assert len(config['presets'])==8 and config['profile']==str(user)
+    config=api('config');assert len(config['presets'])==12 and config['profile']==str(user)
     buffer=io.BytesIO();rate=24000
     with wave.open(buffer,'wb') as audio:
         audio.setparams((1,2,rate,0,'NONE',''))
@@ -58,7 +58,7 @@ def main():
     try:request('/music-video/api/config',extra={'X-Telegram-Init-Data':''})
     except urllib.error.HTTPError as error:assert error.code==401
     else:raise AssertionError('Unsigned access accepted')
-    print(json.dumps({'passed':True,'presets':8,'render':'1080p60 H264/AAC','range':206,'core_timings_seconds':timings,'fixture_jobs':[draft['id'],job['id']],'telegram_messages_sent':0}),flush=True)
+    print(json.dumps({'passed':True,'presets':12,'render':'1080p60 H264/AAC','range':206,'core_timings_seconds':timings,'fixture_jobs':[draft['id'],job['id']],'telegram_messages_sent':0}),flush=True)
 
 if __name__=='__main__':
     if '--library-source' in sys.argv:

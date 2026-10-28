@@ -1,5 +1,5 @@
 // Opt-in frontend flow checks; no browser session or remote service is used.
-const source=await Deno.readTextFile('/app/miniapp/app.js');
+const source=await Deno.readTextFile(new URL('../miniapp/app.js',import.meta.url));
 const assert=(value,message)=>{if(!value)throw new Error(message);};
 assert(!/\?{3,}/.test(source),'Corrupted UI labels');
 let preparation=null,extraTracks=new Map(),copy={ru:{},en:{}},rendered=null,calls=[],responses=[];
