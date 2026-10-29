@@ -42,6 +42,9 @@ axes[1].set(ylabel='RAM, GiB',xlabel='Время от начала теста, �
 labels={'baseline':'Простой','setup_public_audio':'Подготовка','five_listeners':'5 плееров','five_searches':'5 поисков',
         'five_chat_download_workers_cold':'5 загрузчиков бота','five_studio_submissions':'5 запросов студии',
         'video_prepare_five':'Подготовка видео','five_video_renders':'5 видео в очереди','cooldown':'После теста'}
+sessions=result.get('sessions',5)
+if sessions!=5:
+    labels={key.replace('five_', 'three_') if sessions==3 else key:value.replace('5 ',str(sessions)+' ') for key,value in labels.items()}
 for i,row in enumerate(phase_stats):
     if row['phase'] not in labels:continue
     points=[s['seconds'] for s in samples if s['phase']==row['phase']];start,end=points[0],points[-1]
@@ -50,6 +53,6 @@ for i,row in enumerate(phase_stats):
         axis.axvline(start,color='#b2bec8',linewidth=.6)
     axes[0].text((start+end)/2,100,labels[row['phase']],rotation=75,ha='left',va='bottom',fontsize=8)
 for axis in axes:axis.grid(alpha=.18)
-fig.suptitle('SwiDJ: пять тестовых сессий на действующем VPS · 4 vCPU / 16 GB RAM\n124 секунды; 45-секундное аудио и 2-секундные видео 1080p30',fontsize=13)
+fig.suptitle(f'SwiDJ: тестовых сессий — {sessions} · действующий VPS · 4 vCPU / 16 GB RAM\n{stats["duration_seconds"]:.1f} секунды; 45-секундное аудио и 2-секундные видео 1080p30',fontsize=13)
 fig.savefig(root/'load-five-users.png',dpi=150)
 print(json.dumps({k:v for k,v in stats.items() if k!='phases'},indent=2))
