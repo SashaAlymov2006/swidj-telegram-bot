@@ -2,11 +2,23 @@
 import asyncio
 import re
 import secrets
+from telegram.error import BadRequest
 from telegram import InlineKeyboardButton as Button
 from ui_layout import comfortable_keyboard as Markup
 from artist_catalog import browse,creator,details,PROVIDERS,NAMES
 
 def tr(context,ru,en):return en if context.user_data.get('language')=='en' else ru
+
+
+async def edit_catalog(message,text,**kwargs):
+    """Telegram media cards have captions, not editable message text."""
+    try:
+        if any(getattr(message,kind,None) for kind in ('photo','audio','video','document','voice')):
+            kwargs.pop('disable_web_page_preview',None)
+            return await message.edit_caption(caption=text,**kwargs)
+        return await message.edit_text(text,**kwargs)
+    except BadRequest as error:
+        if 'message is not modified' not in str(error).lower():raise
 
 
 def discovery_button(context,query,token=None):
@@ -35,7 +47,9 @@ async def callback(update,context):
     if discovery:
         from expanded_catalog import discover
         name=context.user_data.get('artist_discovery_queries',{}).get(discovery[1])
-        if not name:return
+        if not name:
+            return await query.message.reply_text(tr(context,'Начни новый поиск или открой «О треке / автор».','Start a new search or open track / artist details.'))
+        await edit_catalog(query.message,tr(context,'Ищу исполнителей…','Finding artists…'),reply_markup=None,parse_mode=None)
         rows=await asyncio.to_thread(discover,name);buttons=[];views=context.user_data.setdefault('artist_views',{})
         for row in rows:
             token=secrets.token_hex(5);views[token]=row
@@ -44,7 +58,7 @@ async def callback(update,context):
         while len(views)>24:views.pop(next(iter(views)))
         text=tr(context,'Исполнители','Artists')+' · '+name
         if not buttons:text+='\n'+tr(context,'Профили не найдены. Поиск треков остаётся доступен.','No profiles found. Track search remains available.')
-        return await query.message.edit_text(text,reply_markup=Markup(buttons) if buttons else None,parse_mode=None)
+        return await edit_catalog(query.message,text,reply_markup=Markup(buttons) if buttons else None,parse_mode=None)
     profile=re.fullmatch(r'arf:([0-9a-f]{10}):(\d{1,16})',query.data or '')
     if profile:
         views=context.user_data.get('artist_views',{})
@@ -88,7 +102,7 @@ async def callback(update,context):
     buttons.append([Button(tr(context,'Все','All'),callback_data=f'art:{match[1]}:all:0')]+[Button(NAMES[p],callback_data=f'art:{match[1]}:{p}:0') for p in page['available_sources'] if p!=match[2]])
     content=page['name']+'\n'+tr(context,'Треки автора','Artist tracks')
     if not page['tracks']:content+='\n'+tr(context,'Записи не найдены.','No recordings found.')
-    return await query.message.edit_text(content,reply_markup=Markup(buttons),parse_mode=None)
+    return await edit_catalog(query.message,content,reply_markup=Markup(buttons),parse_mode=None)
 
 
 async def track_page(update,context,page,origin,*,remix=False,album_id=None):
@@ -111,7 +125,7 @@ async def track_page(update,context,page,origin,*,remix=False,album_id=None):
     buttons.append([Button(tr(context,'← Альбомы','← Albums') if album_id else tr(context,'← Треки автора','← Artist tracks'),callback_data=f'arl:{origin}:0' if album_id else f'art:{origin}:all:0')])
     content=page['name']+'\n'+(page.get('title') or tr(context,'Ремиксы','Remixes'))
     if not page['tracks']:content+='\n'+tr(context,'Записи не найдены.','No recordings found.')
-    return await update.callback_query.message.edit_text(content,reply_markup=Markup(buttons),parse_mode=None,disable_web_page_preview=True)
+    return await edit_catalog(update.callback_query.message,content,reply_markup=Markup(buttons),parse_mode=None,disable_web_page_preview=True)
 
 
 async def release_page(update,context,match):
@@ -143,4 +157,4 @@ async def release_page(update,context,match):
     content=result['name']+'\n'+tr(context,'Альбомы и релизы','Albums & releases')
     if result.get('profiles') and not result.get('selected_profile'):content+='\n'+tr(context,'Выбери исполнителя по его релизу:','Choose the artist by their release:')
     elif not result['releases']:content+='\n'+tr(context,'Альбомы здесь не найдены. Треки автора доступны отдельно.','No albums found here. Artist tracks remain available separately.')
-    return await query.message.edit_text(content,reply_markup=Markup(buttons),parse_mode=None)
+    return await edit_catalog(query.message,content,reply_markup=Markup(buttons),parse_mode=None)

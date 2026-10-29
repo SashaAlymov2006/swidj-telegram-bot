@@ -129,6 +129,42 @@ class ArtistDiscoveryApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bridge.chart_recordings[77],[{'id':999,'title':'Existing chart song'}])
 
 class ArtistDiscoveryChatTests(unittest.IsolatedAsyncioTestCase):
+    async def test_legacy_photo_discovery_and_artist_navigation_edit_caption(self):
+        from artist_ui import discovery_button,callback
+        from telegram.error import BadRequest
+        for language in ('ru','en'):
+            context=NS(user_data={'language':language})
+            button=discovery_button(context,'Artist')
+            message=NS(photo=[object()],edit_caption=AsyncMock(),
+                       edit_text=AsyncMock(side_effect=BadRequest('There is no text in the message to edit')))
+            query=NS(answer=AsyncMock(),data=button.callback_data,message=message)
+            update=NS(callback_query=query,effective_message=message)
+            row={'id':123,'name':'Artist','artist':'Artist','title':'Artist','source':'MusicBrainz','description':'composer'}
+            with patch('expanded_catalog.discover',return_value=[row]):await callback(update,context)
+            self.assertEqual(message.edit_caption.await_count,2)
+            target=message.edit_caption.call_args.kwargs['reply_markup'].inline_keyboard[0][0].callback_data
+            query.data=target
+            page={'name':'Artist','tracks':[],'offset':0,'next_offset':None,'available_sources':[]}
+            with patch('artist_ui.browse',return_value=page):await callback(update,context)
+            message.edit_text.assert_not_awaited()
+            self.assertEqual(message.edit_caption.await_count,3)
+
+    async def test_expired_artist_button_explains_how_to_reopen(self):
+        from artist_ui import callback
+        message=NS(reply_text=AsyncMock())
+        update=NS(callback_query=NS(answer=AsyncMock(),data='afd:0123456789',message=message))
+        await callback(update,NS(user_data={'language':'en'}))
+        message.reply_text.assert_awaited_once()
+
+    async def test_repeated_catalog_click_ignores_only_unchanged_message(self):
+        from artist_ui import edit_catalog
+        from telegram.error import BadRequest
+        message=NS(photo=[object()],edit_caption=AsyncMock(side_effect=BadRequest('Message is not modified')))
+        await edit_catalog(message,'Artist',disable_web_page_preview=True)
+        self.assertNotIn('disable_web_page_preview',message.edit_caption.call_args.kwargs)
+        message.edit_caption.side_effect=BadRequest('Unrelated error')
+        with self.assertRaises(BadRequest):await edit_catalog(message,'Artist')
+
     async def test_discovered_artist_opens_existing_catalog_in_both_languages(self):
         from artist_ui import discovery_button,callback
         for language in ('ru','en'):

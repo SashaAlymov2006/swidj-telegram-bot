@@ -1446,9 +1446,8 @@ async def send_song(update: Update, context: ContextTypes.DEFAULT_TYPE, index=0,
 
     song = dict(songs[index], _search_page=[search_token,index])
     from track_card import show_card
-    from artist_ui import discovery_button
-    artist_query=song.get('_search_query') or context.user_data.get('artist_search_query') or song.get('artist','')
-    extra = ([[discovery_button(context,artist_query,search_token)]] if artist_query else [])+[[InlineKeyboardButton("← Меню", callback_data="ui:home")]]
+    # Artist tracks and albums are available through the existing track-info card.
+    extra = [[InlineKeyboardButton("← Меню", callback_data="ui:home")]]
     from library_ui import collections, all_saved
     folders = await collections(context, user_id, state_store)
     saved = any(item["id"] == song["id"] for item in all_saved(user_id, user_favorites, folders, context.user_data.get('miniapp_library',[])))
