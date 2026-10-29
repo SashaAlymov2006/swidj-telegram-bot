@@ -11,6 +11,14 @@ def recordings(name='Artist',source='sc',count=25):
 
 class CatalogTests(unittest.TestCase):
     def setUp(self):artists._cache.clear();self.addCleanup(artists._cache.clear)
+    def test_remix_tab_hides_empty_sources_without_replacing_artist_tracks(self):
+        def search(name,source,song):
+            return recordings(count=2) if source=='sc' else [dict(recordings(count=1)[0],title='Original',url='https://www.youtube.com/watch?v=jNQXAC9IVRw')] if source=='yt' else []
+        with patch('artist_catalog._search',side_effect=search):
+            remix=artists.browse({'artist':'Artist'},remixes=True)
+            normal=artists.browse({'artist':'Artist'})
+        self.assertEqual(remix['available_sources'],['sc']);self.assertEqual(len(remix['tracks']),2)
+        self.assertEqual(len(normal['tracks']),3)
     def test_artist_pages_keep_different_works_and_remixes_not_just_versions(self):
         with patch('artist_catalog._search',side_effect=lambda name,source,song:recordings() if source=='sc' else []) as search:
             first=artists.browse({'artist':'Artist'},'all',0)

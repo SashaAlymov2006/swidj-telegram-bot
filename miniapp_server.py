@@ -564,7 +564,7 @@ def create_app(*, token='', bridge=None):
                 uid = user['id']
                 bridge.allowed(uid)
                 from dispatch import user_lock
-                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts','/api/charts/resolve','/api/artist','/api/versions','/api/dj/analysis'):
+                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts','/api/charts/resolve','/api/artist','/api/artist/releases','/api/versions','/api/dj/analysis'):
                     response=await handler(request)
                 else:
                     async with user_lock(uid):

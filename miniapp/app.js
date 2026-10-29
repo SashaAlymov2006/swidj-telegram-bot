@@ -144,28 +144,42 @@ function trackById(id) { return [...(current?[current]:[]),...state.tracks,...(s
 function color(track) { return track.demo ?? [...track.id].reduce((n,c)=>n+c.charCodeAt(0),0)%6; }
 Object.assign(copy.en,{artistTracks:'Artist tracks',trackInfo:'About this track',artistBack:'Back to search',artistMore:'More tracks',artistOpen:'Browse artist',artistEmpty:'No public recordings found here.'});
 Object.assign(copy.ru,{artistTracks:'Треки автора',trackInfo:'О треке',artistBack:'Назад к поиску',artistMore:'Ещё треки',artistOpen:'Открыть автора',artistEmpty:'Доступные записи здесь не найдены.'});
+Object.assign(copy.ru,{artistAlbums:'Альбомы',artistReleases:'Альбомы и релизы',artistRemixes:'Ремиксы',releaseAlbum:'Альбом',releaseSingle:'Сингл',releaseEP:'EP',releaseTracks:'треков',releaseBack:'К альбомам',releaseEmpty:'Альбомы здесь не найдены. Открой треки автора.',releaseMore:'Ещё релизы',releaseCatalog:'Каталог Apple Music ↗'});
+Object.assign(copy.en,{artistAlbums:'Albums',artistReleases:'Albums & releases',artistRemixes:'Remixes',releaseAlbum:'Album',releaseSingle:'Single',releaseEP:'EP',releaseTracks:'tracks',releaseBack:'Back to albums',releaseEmpty:'No albums found here. Browse artist tracks instead.',releaseMore:'More releases',releaseCatalog:'Apple Music catalog ↗'});
+Object.assign(copy.ru,{releaseProfile:'Выбери исполнителя по его релизу',releaseProfiles:'Другой исполнитель с таким именем'});Object.assign(copy.en,{releaseProfile:'Choose the artist by their release',releaseProfiles:'Another artist with this name'});
 let artistPage=null;
 async function openArtist(track){
  if(demo)return toast('needsTelegram');if(!track?.artist)return;
- $('dialog')?.close();artistPage={origin:track,name:track.artist,source:'all',tracks:[],available:[],next:null,busy:false,ticket:0};
+ $('dialog')?.close();artistPage={origin:track,name:track.artist,source:'all',section:'tracks',releases:[],album:null,tracks:[],available:[],next:null,busy:false,ticket:0};
  if(route!=='search')navigate('search');
  await loadArtist(false);
 }
 async function loadArtist(more=false){
  const page=artistPage;if(!page||page.busy)return;
- const ticket=++page.ticket;page.busy=true;if(!more)page.tracks=[];render();
+ const ticket=++page.ticket;page.busy=true;if(!more){page.tracks=[];page.releases=[];}render();
  try{
-  const data=await(await api('artist?'+new URLSearchParams({track:page.origin.id,name:page.origin.artist,source:page.source,offset:more?page.next||0:0}))).json();
+  const albums=page.section==='albums';
+  const params=albums?{track:page.origin.id,...(page.album?{album:page.album.id}:{offset:more?page.next||0:0})}:{track:page.origin.id,name:page.origin.artist,source:page.source,section:page.section||'tracks',offset:more?page.next||0:0};
+  if(albums&&page.releaseProfile)params.profile=page.releaseProfile;
+  const data=await(await api((albums?'artist/releases?':'artist?')+new URLSearchParams(params))).json();
   if(artistPage!==page||page.ticket!==ticket)return;
   page.name=data.name;page.available=data.available_sources||[];page.next=data.next_offset;
-  const existing=more?page.tracks:[];page.tracks=[...new Map([...existing,...data.tracks].map(row=>[row.id,row])).values()];
+  const existing=more?page.tracks:[];page.tracks=[...new Map([...existing,...(data.tracks||[])].map(row=>[row.id,row])).values()];
+  page.releases=[...new Map([...(more?page.releases||[]:[]),...(data.releases||[])].map(item=>[item.id,item])).values()];
+  if(data.album)page.album=data.album;
+  if(data.profiles)page.profiles=data.profiles;
   for(const track of page.tracks)extraTracks.set(track.id,track);
  }catch(error){report(error);}finally{if(artistPage===page){page.busy=false;if(route==='search')render();}}
 }
 function artistScreen(){
  const page=artistPage;
  const providers=[['all',t('allSources')],['yt','YouTube'],['sc','SoundCloud'],['aud','Audius'],['jam','Jamendo']].filter(([source])=>source==='all'||page.available.includes(source));
- return `<button type="button" class="text-btn" id="artist-back">← ${e(t('artistBack'))}</button><section class="hero"><div class="hero-copy"><p class="eyebrow">${e(t('artistTracks'))}</p><h1>${e(page.name)}</h1></div></section><details><summary>${e(t('recordingSource'))}</summary><div class="search-tabs">${providers.map(([source,name])=>`<button type="button" data-artist-source="${source}" aria-pressed="${page.source===source}" ${page.busy?'disabled':''}>${e(name)}</button>`).join('')}</div></details><section class="track-list">${page.tracks.map(row).join('')}</section>${page.busy?`<p role="status">${e(t('loading'))}</p>`:!page.tracks.length?`<p>${e(t('artistEmpty'))}</p>`:''}${page.next!==null?`<button type="button" class="btn secondary" id="artist-more" ${page.busy?'disabled':''}>${e(t('artistMore'))}</button>`:''}`;
+ const section=page.section||'tracks',albums=section==='albums',release=albums?page.album:null;
+ const tabs=`<nav class="artist-sections" aria-label="${e(page.name)}">${[['tracks','artistTracks'],['albums','artistAlbums'],['remixes','artistRemixes']].map(([key,label])=>`<button type="button" data-artist-section="${key}" aria-pressed="${section===key}" ${page.busy?'disabled':''}>${e(t(label))}</button>`).join('')}</nav>`;
+ const badge=`<a class="release-credit" href="${e(release?.source_url||'https://music.apple.com/')}" target="_blank" rel="noopener noreferrer">${e(t('releaseCatalog'))}</a>`;
+ const profileChoice=albums&&!release&&page.profiles?.length>1&&!page.releaseProfile;
+ const body=profileChoice?`<p>${e(t('releaseProfile'))}</p><div class="release-grid">${page.profiles.map(profile=>`<button type="button" class="release-card" data-release-profile="${e(profile.id)}"><div class="release-art">${profile.cover?`<img src="${e(profile.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">`:icon('music')}</div><strong>${e(profile.name)}</strong><small>${e(profile.example)}</small></button>`).join('')}</div>${badge}`:albums&&!release?`${page.profiles?.length>1?`<button class="text-btn" type="button" id="release-profile-back">${e(t('releaseProfiles'))}</button>`:''}<div class="release-grid">${(page.releases||[]).map(item=>`<button type="button" class="release-card" data-artist-album="${e(item.id)}"><div class="release-art">${item.cover?`<img src="${e(item.cover)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`:icon('music')}</div><strong>${e(item.title)}</strong><small>${e(t(item.kind==='single'?'releaseSingle':item.kind==='ep'?'releaseEP':'releaseAlbum'))}${item.release_date?' · '+e(item.release_date.slice(0,4)):''}</small></button>`).join('')}</div>${badge}`:`<section class="track-list">${page.tracks.map(track=>release?`<div class="release-track"><span>${track.disc_number>1?track.disc_number+'.':''}${e(track.track_number)}</span>${row(track)}</div>`:row(track)).join('')}</section>${release?badge:''}`;
+ return `<button type="button" class="text-btn" id="artist-back">← ${e(t('artistBack'))}</button><section class="hero release-heading">${release?.cover?`<img src="${e(release.cover)}" alt="" class="release-heading-art" referrerpolicy="no-referrer">`:''}<div class="hero-copy"><p class="eyebrow">${e(release?page.name:t(albums?'artistReleases':section==='remixes'?'artistRemixes':'artistTracks'))}</p><h1>${e(release?release.title:page.name)}</h1>${release?`<button class="text-btn" type="button" id="release-back">← ${e(t('releaseBack'))}</button>`:''}</div></section>${tabs}${!albums?`<details><summary>${e(t('recordingSource'))}</summary><div class="search-tabs">${providers.map(([source,name])=>`<button type="button" data-artist-source="${source}" aria-pressed="${page.source===source}" ${page.busy?'disabled':''}>${e(name)}</button>`).join('')}</div></details>`:''}${body}${page.busy?`<p role="status">${e(t('loading'))}</p>`:!profileChoice&&!(albums&&!release?page.releases?.length:page.tracks.length)?`<p>${e(t(albums?'releaseEmpty':'artistEmpty'))}</p>`:''}${page.next!=null?`<button type="button" class="btn secondary" id="artist-more" ${page.busy?'disabled':''}>${e(t(albums?'releaseMore':'artistMore'))}</button>`:''}`;
 }
 function trackInfo(track){
  const source=track.source||(/^https:\/\/www\.youtube\.com\//.test(track.recording_url||'')?'YouTube':'');
@@ -1020,6 +1034,10 @@ document.addEventListener('click',async event=>{
     if(button.dataset.addPlaylist){const track=trackById(button.dataset.track);if(!track)return;if(track.local&&!await saveLocalTrack(track))return;await mutate({action:'playlist',track:track.id,playlist:button.dataset.addPlaylist});$('dialog').close();return toast('saved');}
     if(button.id==='artist-back'){artistPage=null;render();return;}
     if(button.id==='artist-more')return await loadArtist(true);
+    if(button.dataset.artistSection){if(!artistPage||artistPage.busy)return;artistPage.section=button.dataset.artistSection;artistPage.album=null;artistPage.next=null;return await loadArtist(false);}
+    if(button.dataset.artistAlbum){if(!artistPage||artistPage.busy)return;artistPage.album=artistPage.releases.find(item=>item.id===button.dataset.artistAlbum);if(artistPage.album)return await loadArtist(false);return;}
+    if(button.id==='release-back'){if(!artistPage||artistPage.busy)return;artistPage.album=null;return await loadArtist(false);}
+    if(button.dataset.releaseProfile||button.id==='release-profile-back'){if(!artistPage||artistPage.busy)return;artistPage.releaseProfile=button.dataset.releaseProfile||null;artistPage.album=null;return await loadArtist(false);}
     if(button.dataset.artistSource){artistPage.source=button.dataset.artistSource;return await loadArtist(false);}
     if(button.dataset.action){
       const track=trackById(button.dataset.track);if(!track)return;

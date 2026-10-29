@@ -2468,7 +2468,7 @@ def build_application(*, request=None, updates_request=None):
     from lyrics_ui import callback as lyrics_page_callback
     app.add_handler(CallbackQueryHandler(serialize_user(lyrics_page_callback), pattern=r"^lyr:"))
     from artist_ui import callback as artist_page_callback
-    app.add_handler(CallbackQueryHandler(serialize_user(artist_page_callback), pattern=r"^(art|arp):"))
+    app.add_handler(CallbackQueryHandler(serialize_user(artist_page_callback), pattern=r"^(art|arp|arl|alb|arm|arf):"))
     app.add_handler(CallbackQueryHandler(serialize_user(library_callback), pattern=r"^lib:"))
     app.add_handler(CallbackQueryHandler(serialize_user(upload_callback), pattern=r"^upload:(save|studio):-?[0-9]{1,19}$"))
     app.add_handler(CommandHandler("clearfavorites", serialize_user(clearfavorites_command)))

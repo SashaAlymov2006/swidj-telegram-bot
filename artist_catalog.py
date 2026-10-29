@@ -65,7 +65,7 @@ def _search(name,source,song):
         rows=search(name,50)
     return [dict(row,source=NAMES[source]) for row in rows if matches(name,row)]
 
-def browse(song,source='all',offset=0):
+def browse(song,source='all',offset=0,*,remixes=False):
     if source not in ('all',)+PROVIDERS or type(offset) is not int or not 0<=offset<=200 or offset%10:raise ValueError('Invalid artist page')
     name=creator(song)
     if not name:raise ValueError('Artist unavailable')
@@ -86,6 +86,7 @@ def browse(song,source='all',offset=0):
         with _lock:
             while len(_cache)>=64:_cache.pop(next(iter(_cache)))
             _cache[key]=(time.monotonic()+90,deepcopy(groups))
+    if remixes:groups={source:[row for row in items if re.search(r'\b(remix|bootleg|rework|mashup|edit)\b',row.get('title',''),re.I)] for source,items in groups.items()}
     rows=[];seen=set()
     for index in range(50):
         for s in PROVIDERS:
@@ -111,7 +112,8 @@ def register(app,bridge):
         try:
             offset=int(request.query.get('offset','0'));source=request.query.get('source','all')
             async with bridge.search_slots:
-                worker=asyncio.create_task(asyncio.to_thread(browse,song,source,offset))
+                if request.query.get('section','tracks') not in ('tracks','remixes'):raise ValueError('Invalid section')
+                worker=asyncio.create_task(asyncio.to_thread(browse,song,source,offset,remixes=request.query.get('section')=='remixes'))
                 try:result=await asyncio.shield(worker)
                 except asyncio.CancelledError:
                     await asyncio.gather(worker,return_exceptions=True)
@@ -131,3 +133,37 @@ def register(app,bridge):
         result['tracks']=[public_song(row,bool(bridge.audio_path(uid,row))) for row in rows]
         return web.json_response(result)
     app.router.add_get('/api/artist',artist)
+    async def release_page(request):
+        from release_catalog import releases,album
+        uid=request['user']['id'];bridge.allowed(uid,'search')
+        song=await bridge.find(uid,request.query.get('track',''))
+        if request.query.get('profile'):
+            if not re.fullmatch(r'\d{1,16}',request.query['profile']):raise web.HTTPBadRequest()
+            song=dict(song,_release_artist_id=request.query['profile'])
+        if uid in busy:raise web.HTTPTooManyRequests()
+        busy.add(uid)
+        try:
+            async with bridge.search_slots:
+                if request.query.get('album'):
+                    task=asyncio.create_task(asyncio.to_thread(album,song,request.query['album']))
+                else:
+                    task=asyncio.create_task(asyncio.to_thread(releases,song,int(request.query.get('offset','0'))))
+                try:result=await asyncio.shield(task)
+                except asyncio.CancelledError:
+                    await asyncio.gather(task,return_exceptions=True);raise
+            if 'tracks' in result:
+                from dispatch import user_lock
+                from miniapp_server import public_song
+                async with user_lock(uid):
+                    previous=bridge.chart_recordings.get(uid,[])
+                    bridge.chart_recordings[uid]=list({r['id']:r for r in previous+result['tracks']}.values())[-200:]
+                while len(bridge.chart_recordings)>1000:bridge.chart_recordings.pop(next(iter(bridge.chart_recordings)))
+                result['tracks']=[dict(public_song(row,bool(bridge.audio_path(uid,row))),disc_number=row['disc_number'],track_number=row['track_number']) for row in result['tracks']]
+            return web.json_response(result)
+        except (ValueError,TypeError):raise web.HTTPBadRequest() from None
+        except Exception as error:
+            import requests
+            if isinstance(error,(requests.RequestException,TimeoutError)):raise web.HTTPServiceUnavailable() from None
+            raise
+        finally:busy.discard(uid)
+    app.router.add_get('/api/artist/releases',release_page)
