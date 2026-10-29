@@ -26,7 +26,7 @@ class Job:
 
 
 class AudioJobs:
-    def __init__(self, downloader=None, root=None, *, max_bytes=TEMP_CACHE_BYTES, queue_timeout=30, download_timeout=900):
+    def __init__(self, downloader=None, root=None, *, max_bytes=TEMP_CACHE_BYTES, queue_timeout=300, download_timeout=900):
         active = Path(os.getenv('AUDIO_CACHE_DIR', '/app/data/audio'))
         self.root = Path(root or os.getenv('MINIAPP_CACHE_DIR') or active.parent/'miniapp-cache')
         self.store = MediaStore(self.root)

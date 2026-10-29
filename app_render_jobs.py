@@ -27,7 +27,8 @@ class RenderJobs:
    completed=next((key for key,job in self.jobs.items() if job.task.done()),None)
    if completed is None:raise ValueError('Studio busy')
    self.jobs.pop(completed)
-  if any(not job.task.done() for job in self.jobs.values()):raise ValueError('Studio busy')
+  if any(job.uid==uid and not job.task.done() for job in self.jobs.values()):raise ValueError('User already has an active render')
+  if sum(not job.task.done() for job in self.jobs.values())>=20:raise ValueError('Render queue full')
   job=RenderJob(uid,source,directory,dict(settings),cleanup);self.jobs[job.token]=job;job.task=asyncio.create_task(self.work(job))
   def finished(task):
    if task.cancelled():
@@ -43,6 +44,9 @@ class RenderJobs:
   if job and not job.task.done():job.task.cancel()
  def payload(self,job,origin):
   value={'job':job.token,'status':job.state,'error':job.error}
+  if job.state=='queued':
+   value['position']=[item.token for item in self.jobs.values() if item.state=='queued'].index(job.token)+1
+   value['waiting']=self.slots.locked() or value['position']>1
   if job.file:value['file']={'url':origin.rstrip('/')+'/studio-file/'+job.file['ticket'],'filename':job.file['filename'],'expires_in':3600}
   return value
  async def work(self,job):

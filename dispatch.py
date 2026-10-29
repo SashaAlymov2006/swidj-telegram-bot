@@ -2,8 +2,36 @@
 import asyncio
 import functools
 from weakref import WeakValueDictionary
+from contextlib import asynccontextmanager
 
 _locks = WeakValueDictionary()
+
+
+class QueueFull(ValueError):
+    pass
+
+
+class WorkQueue:
+    """Bounded admission with cancellable FIFO waiting and one request per user."""
+    def __init__(self, workers=1, capacity=24, timeout=600):
+        self.slots=asyncio.Semaphore(workers);self.capacity=capacity;self.timeout=timeout;self.entries={}
+
+    def status(self,uid):
+        if uid not in self.entries:return {'status':'idle','position':0}
+        entry=self.entries[uid]
+        waiting=[key for key,value in self.entries.items() if value=='queued']
+        return {'status':entry,'position':waiting.index(uid)+1 if entry=='queued' else 0}
+
+    @asynccontextmanager
+    async def enter(self,uid):
+        if uid in self.entries or len(self.entries)>=self.capacity:raise QueueFull('Queue capacity reached')
+        self.entries[uid]='queued';acquired=False
+        try:
+            await asyncio.wait_for(self.slots.acquire(),self.timeout);acquired=True;self.entries[uid]='processing'
+            yield
+        finally:
+            if acquired:self.slots.release()
+            self.entries.pop(uid,None)
 
 
 def user_lock(user_id):

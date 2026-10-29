@@ -159,6 +159,9 @@ async def read_upload(request, target, limit, settings=False):
 class Studio:
     def __init__(self):
         self.slots=asyncio.Semaphore(1)
+        from dispatch import WorkQueue
+        self.uploads=WorkQueue(workers=2,capacity=24,timeout=600)
+        self.voices=WorkQueue(workers=1,capacity=12,timeout=600)
         from app_exports import ExportFiles
         from app_render_jobs import RenderJobs
         self.exports=ExportFiles()
@@ -167,64 +170,71 @@ class Studio:
     async def handle(self, request, voice=False):
         uid=request['user']['id'];bridge=request.app['studio_bridge']
         bridge.allowed(uid,'voice' if voice else 'studio');bridge.allowed(uid,'search' if voice else 'downloads')
-        if self.slots.locked():raise web.HTTPTooManyRequests()
-        async with self.slots:
-            from scratch import scratch_root
-            temporary=tempfile.TemporaryDirectory(dir=scratch_root(),prefix='app-studio-')
-            folder=temporary.name;source=Path(folder)/'source.audio';handed=False
-            try:
-                if not voice and request.content_type=='application/json':
-                    settings=await request.json()
-                    if not isinstance(settings,dict):raise ValueError('Invalid settings')
-                    if settings.get('source_ticket'):
-                        item=self.exports.get(str(settings['source_ticket']))
-                        if not item or item['uid']!=uid or item['path'].suffix not in ('.mp3','.wav','.mp4'):raise web.HTTPGone()
-                        shutil.copyfile(item['path'],source)
-                    elif settings.get('source_track'):
-                        from dispatch import user_lock
-                        async with user_lock(uid):
-                            song=await bridge.find(uid,str(settings['source_track']))
-                            path=bridge.audio_path(uid,song)
-                            if not path:raise web.HTTPGone()
-                            shutil.copyfile(path,source)
-                    else:raise ValueError('Missing owned source')
-                    if source.stat().st_size>MAX_INPUT:raise OverflowError()
-                else:settings=await read_upload(request,source,8*1024**2 if voice else MAX_INPUT,not voice)
-                if voice:
-                    duration=await probe(source,allow_unknown=True)
-                    if duration>30:raise ValueError('Voice too long')
-                    clip=Path(folder)/'voice.wav'
-                    await process(['ffmpeg','-nostdin','-v','error','-protocol_whitelist','file,pipe','-format_whitelist','mp3,wav,ogg,flac,mov,matroska,webm','-i',str(source),'-t','31','-vn','-ar','16000','-ac','1',str(clip)],30)
-                    if not .3<=await probe(clip)<=30:raise ValueError('Invalid voice duration')
-                    raw=await process([sys.executable,str(Path(__file__).resolve()),'transcribe',str(clip)],240)
-                    return web.json_response({'text':str(json.loads(raw).get('text',''))[:120]})
-                from miniapp_server import public_url
-                if settings.get('delivery')=='ticket' or settings.get('background'):
-                    if not public_url():raise web.HTTPConflict()
-                if settings.get('background') is True:
-                    try:job=self.jobs.start(uid,source,folder,settings,temporary.cleanup)
-                    except ValueError:raise web.HTTPTooManyRequests() from None
-                    handed=True
-                    return web.json_response(self.jobs.payload(job,public_url()))
+        from dispatch import QueueFull
+        try:
+            async with (self.voices if voice else self.uploads).enter(uid):
+                return await self.handle_admitted(request,uid,bridge,voice)
+        except QueueFull:raise web.HTTPTooManyRequests() from None
+        except asyncio.TimeoutError:raise web.HTTPGatewayTimeout() from None
+
+    async def handle_admitted(self,request,uid,bridge,voice):
+        from scratch import scratch_root
+        temporary=tempfile.TemporaryDirectory(dir=scratch_root(),prefix='app-studio-')
+        folder=temporary.name;source=Path(folder)/'source.audio';handed=False
+        try:
+            if not voice and request.content_type=='application/json':
+                settings=await request.json()
+                if not isinstance(settings,dict):raise ValueError('Invalid settings')
+                if settings.get('source_ticket'):
+                    item=self.exports.get(str(settings['source_ticket']))
+                    if not item or item['uid']!=uid or item['path'].suffix not in ('.mp3','.wav','.mp4'):raise web.HTTPGone()
+                    shutil.copyfile(item['path'],source)
+                elif settings.get('source_track'):
+                    from dispatch import user_lock
+                    async with user_lock(uid):
+                        song=await bridge.find(uid,str(settings['source_track']))
+                        path=bridge.audio_path(uid,song)
+                        if not path:raise web.HTTPGone()
+                        shutil.copyfile(path,source)
+                else:raise ValueError('Missing owned source')
+                if source.stat().st_size>MAX_INPUT:raise OverflowError()
+            else:settings=await read_upload(request,source,8*1024**2 if voice else MAX_INPUT,not voice)
+            if voice:
+                duration=await probe(source,allow_unknown=True)
+                if duration>30:raise ValueError('Voice too long')
+                clip=Path(folder)/'voice.wav'
+                await process(['ffmpeg','-nostdin','-v','error','-protocol_whitelist','file,pipe','-format_whitelist','mp3,wav,ogg,flac,mov,matroska,webm','-i',str(source),'-t','31','-vn','-ar','16000','-ac','1',str(clip)],30)
+                if not .3<=await probe(clip)<=30:raise ValueError('Invalid voice duration')
+                raw=await process([sys.executable,str(Path(__file__).resolve()),'transcribe',str(clip)],240)
+                return web.json_response({'text':str(json.loads(raw).get('text',''))[:120]})
+            from miniapp_server import public_url
+            if settings.get('delivery')=='ticket' or settings.get('background'):
+                if not public_url():raise web.HTTPConflict()
+            if settings.get('background') is True:
+                try:job=self.jobs.start(uid,source,folder,settings,temporary.cleanup)
+                except ValueError:raise web.HTTPTooManyRequests() from None
+                handed=True
+                return web.json_response(self.jobs.payload(job,public_url()))
+            async with self.slots:
                 target=await render(source,folder,settings)
-                if settings.get('delivery')=='ticket':
-                    token,item=self.exports.retain(uid,target,settings.get('title','SwiDJ mix'))
-                    return web.json_response({'url':public_url().rstrip('/')+'/studio-file/'+token,'filename':item['filename'],'expires_in':self.exports.ttl})
-                response=web.StreamResponse(headers={'Content-Type':'audio/mpeg' if target.suffix=='.mp3' else 'audio/wav',
-                    'Content-Length':str(target.stat().st_size),'Content-Disposition':'attachment; filename="SwiDJ-mix'+target.suffix+'"',
-                    'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'})
-                await response.prepare(request)
-                async def transfer():
-                    with target.open('rb') as stream:
-                        while chunk:=stream.read(65536):await response.write(chunk)
-                    await response.write_eof()
-                await asyncio.wait_for(transfer(),180)
-                return response
-            except OverflowError:raise web.HTTPRequestEntityTooLarge(max_size=MAX_INPUT,actual_size=MAX_INPUT+1) from None
-            except (ValueError,KeyError,TypeError):raise web.HTTPBadRequest() from None
-            except asyncio.TimeoutError:raise web.HTTPGatewayTimeout() from None
-            finally:
-                if not handed:temporary.cleanup()
+            if settings.get('delivery')=='ticket':
+                token,item=self.exports.retain(uid,target,settings.get('title','SwiDJ mix'))
+                return web.json_response({'url':public_url().rstrip('/')+'/studio-file/'+token,'filename':item['filename'],'expires_in':self.exports.ttl})
+            response=web.StreamResponse(headers={'Content-Type':'audio/mpeg' if target.suffix=='.mp3' else 'audio/wav',
+                'Content-Length':str(target.stat().st_size),'Content-Disposition':'attachment; filename="SwiDJ-mix'+target.suffix+'"',
+                'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'})
+            await response.prepare(request)
+            async def transfer():
+                with target.open('rb') as stream:
+                    while chunk:=stream.read(65536):await response.write(chunk)
+                await response.write_eof()
+            await asyncio.wait_for(transfer(),180)
+            return response
+        except OverflowError:raise web.HTTPRequestEntityTooLarge(max_size=MAX_INPUT,actual_size=MAX_INPUT+1) from None
+        except (ValueError,KeyError,TypeError):raise web.HTTPBadRequest() from None
+        except asyncio.TimeoutError:raise web.HTTPGatewayTimeout() from None
+        finally:
+            if not handed:temporary.cleanup()
 
 
 def register(app,bridge):

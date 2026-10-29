@@ -93,79 +93,91 @@ async def audio_worker(uid,function,*args):
     finally:_current.reset(marker)
 
 def register(app,bridge):
-    slots=asyncio.Semaphore(1)
+    from dispatch import WorkQueue,QueueFull
+    queue=WorkQueue(workers=2,capacity=24,timeout=600)
     running={}
     async def import_link(request):
         uid=request['user']['id'];bridge.allowed(uid,'downloads')
         try:payload=await request.json();url,mode,height,platform=validate(payload)
         except (ValueError,TypeError):raise web.HTTPBadRequest() from None
-        if slots.locked():raise web.HTTPTooManyRequests()
         from miniapp_server import public_url
         if not public_url():raise web.HTTPConflict()
-        async with slots:
-            running[uid]=asyncio.current_task()
-            from scratch import scratch_root
-            with tempfile.TemporaryDirectory(dir=scratch_root(),prefix='app-link-') as directory:
-                try:
-                    from download_cache import restore, retain as cache_retain
-                    variant='audio-mp3-192' if mode=='audio' else f'app-video-{height}'
-                    cached=await asyncio.to_thread(restore,url,variant,directory,uid)
-                    if not cached and mode=='audio':
-                        from media_recovery import recover_audio
-                        cached=await audio_worker(uid,recover_audio,url,directory,uid)
-                    if cached:
-                        path,metadata=cached
-                        result=dict(metadata,path=path)
-                    else:
-                        raw=await process([sys.executable,str(Path(__file__).resolve()),'fetch',json.dumps({'url':url,'mode':mode,'height':height,'platform':platform}),directory],600)
-                        result=json.loads(raw)
-                    if result.get('kind')=='search':return web.json_response(result)
-                    if result.get('error') in ('sourceUnavailable','sourceAuth','sourceRestricted','sourceRateLimit','sourceLogin') and mode=='audio' and platform=='youtube':
-                        from media_recovery import download_with_reserve
-                        def unavailable(_):raise RuntimeError('Source unavailable')
-                        from scratch import remove_owned_file
-                        reserved=None
-                        try:reserved=await audio_worker(uid,download_with_reserve,unavailable,url,{},None,uid)
-                        except Exception:pass
-                        if reserved:
-                            path,metadata=reserved
-                            target=Path(directory)/'reserved.mp3'
-                            try:shutil.copyfile(path,target)
-                            finally:remove_owned_file(path)
-                            cached=(str(target),metadata);result=dict(metadata,path=str(target))
-                    if result.get('error') and result.get('recovery_query') and mode=='audio' and platform=='youtube':
-                        return web.json_response({'kind':'search','query':result['recovery_query'],'source_search':'sc'})
-                    if result.get('error'):return web.json_response({'reason':result['error']},status=502)
-                    source=Path(result['path'])
-                    if source.is_symlink() or source.resolve().parent!=Path(directory).resolve() or not source.stat().st_size>0:raise ValueError('Invalid output')
-                    target=Path(directory)/('ready.mp4' if mode=='video' else 'ready.mp3')
-                    if cached:
-                        shutil.copyfile(source,target)
-                        duration=float(result.get('duration') or await probe(source))
-                    else:
+        if uid in running:raise web.HTTPConflict()
+        running[uid]=asyncio.current_task()
+        try:
+            async with queue.enter(uid):
+                return await import_admitted(request,uid,url,mode,height,platform)
+        except QueueFull:raise web.HTTPTooManyRequests() from None
+        except asyncio.TimeoutError:raise web.HTTPGatewayTimeout() from None
+        finally:running.pop(uid,None)
+    async def import_admitted(request,uid,url,mode,height,platform):
+        from miniapp_server import public_url
+        from scratch import scratch_root
+        with tempfile.TemporaryDirectory(dir=scratch_root(),prefix='app-link-') as directory:
+            try:
+                from download_cache import restore, retain as cache_retain
+                variant='audio-mp3-192' if mode=='audio' else f'app-video-{height}'
+                cached=await asyncio.to_thread(restore,url,variant,directory,uid)
+                if not cached and mode=='audio':
+                    from media_recovery import recover_audio
+                    cached=await audio_worker(uid,recover_audio,url,directory,uid)
+                if cached:
+                    path,metadata=cached
+                    result=dict(metadata,path=path)
+                else:
+                    raw=await process([sys.executable,str(Path(__file__).resolve()),'fetch',json.dumps({'url':url,'mode':mode,'height':height,'platform':platform}),directory],600)
+                    result=json.loads(raw)
+                if result.get('kind')=='search':return web.json_response(result)
+                if result.get('error') in ('sourceUnavailable','sourceAuth','sourceRestricted','sourceRateLimit','sourceLogin') and mode=='audio' and platform=='youtube':
+                    from media_recovery import download_with_reserve
+                    def unavailable(_):raise RuntimeError('Source unavailable')
+                    from scratch import remove_owned_file
+                    reserved=None
+                    try:reserved=await audio_worker(uid,download_with_reserve,unavailable,url,{},None,uid)
+                    except Exception:pass
+                    if reserved:
+                        path,metadata=reserved
+                        target=Path(directory)/'reserved.mp3'
+                        try:shutil.copyfile(path,target)
+                        finally:remove_owned_file(path)
+                        cached=(str(target),metadata);result=dict(metadata,path=str(target))
+                if result.get('error') and result.get('recovery_query') and mode=='audio' and platform=='youtube':
+                    return web.json_response({'kind':'search','query':result['recovery_query'],'source_search':'sc'})
+                if result.get('error'):return web.json_response({'reason':result['error']},status=502)
+                source=Path(result['path'])
+                if source.is_symlink() or source.resolve().parent!=Path(directory).resolve() or not source.stat().st_size>0:raise ValueError('Invalid output')
+                target=Path(directory)/('ready.mp4' if mode=='video' else 'ready.mp3')
+                if cached:
+                    shutil.copyfile(source,target)
+                    duration=float(result.get('duration') or await probe(source))
+                else:
+                    async with app['studio_worker'].slots:
                         duration=await normalize(source,target,mode,height)
-                        await asyncio.to_thread(cache_retain,url,variant,target,dict(result,duration=duration),uid)
-                    token,item=app['studio_worker'].exports.retain(uid,target,result.get('title','SwiDJ'),feature='downloads',ttl=max(3600,duration+600))
-                    poster=None;has_audio=True
-                    if mode=='video':
-                        streams=json.loads(await process(['ffprobe','-v','error','-select_streams','a:0','-show_entries','stream=codec_name','-of','json',str(target)],15))
-                        has_audio=bool(streams.get('streams'))
-                        try:
-                            image=Path(directory)/'poster.jpg'
-                            await process(['ffmpeg','-nostdin','-v','error','-i',str(target),'-frames:v','1','-vf','scale=360:-2','-q:v','4',str(image)],20)
-                            image_token,_=app['studio_worker'].exports.retain(uid,image,'preview',feature='downloads')
-                            poster=public_url().rstrip('/')+'/studio-file/'+image_token
-                        except (ValueError,OSError):pass
-                    return web.json_response({'source':result.get('source'),'source_url':result.get('source_url'),'license_url':result.get('license_url'), 'kind':mode,'url':public_url().rstrip('/')+'/studio-file/'+token,
-                                              'filename':item['filename'],'title':result.get('title','SwiDJ'),
-                                              'artist':result.get('artist',''),'duration':duration,'expires_in':int(item['expires']-time.time()),'poster':poster,'has_audio':has_audio,
-                                              'video_quality_limit':result.get('video_quality_limit') if mode=='video' else None})
-                except asyncio.TimeoutError:raise web.HTTPGatewayTimeout() from None
-                except (ValueError,KeyError,TypeError,OSError) as error:
-                    message=str(error).lower()
-                    reason='diskSpace' if 'disk space' in message else 'mediaTooLong' if 'too long' in message else 'mediaTooLarge' if 'too large' in message else 'sourceUnavailable'
-                    return web.json_response({'reason':reason},status=502)
-                finally:running.pop(uid,None)
+                    await asyncio.to_thread(cache_retain,url,variant,target,dict(result,duration=duration),uid)
+                token,item=app['studio_worker'].exports.retain(uid,target,result.get('title','SwiDJ'),feature='downloads',ttl=max(3600,duration+600))
+                poster=None;has_audio=True
+                if mode=='video':
+                    streams=json.loads(await process(['ffprobe','-v','error','-select_streams','a:0','-show_entries','stream=codec_name','-of','json',str(target)],15))
+                    has_audio=bool(streams.get('streams'))
+                    try:
+                        image=Path(directory)/'poster.jpg'
+                        await process(['ffmpeg','-nostdin','-v','error','-i',str(target),'-frames:v','1','-vf','scale=360:-2','-q:v','4',str(image)],20)
+                        image_token,_=app['studio_worker'].exports.retain(uid,image,'preview',feature='downloads')
+                        poster=public_url().rstrip('/')+'/studio-file/'+image_token
+                    except (ValueError,OSError):pass
+                return web.json_response({'source':result.get('source'),'source_url':result.get('source_url'),'license_url':result.get('license_url'), 'kind':mode,'url':public_url().rstrip('/')+'/studio-file/'+token,
+                                          'filename':item['filename'],'title':result.get('title','SwiDJ'),
+                                          'artist':result.get('artist',''),'duration':duration,'expires_in':int(item['expires']-time.time()),'poster':poster,'has_audio':has_audio,
+                                          'video_quality_limit':result.get('video_quality_limit') if mode=='video' else None})
+            except asyncio.TimeoutError:raise web.HTTPGatewayTimeout() from None
+            except (ValueError,KeyError,TypeError,OSError) as error:
+                message=str(error).lower()
+                reason='diskSpace' if 'disk space' in message else 'mediaTooLong' if 'too long' in message else 'mediaTooLarge' if 'too large' in message else 'sourceUnavailable'
+                return web.json_response({'reason':reason},status=502)
+    async def queue_status(request):
+        uid=request['user']['id'];bridge.allowed(uid,'downloads')
+        return web.json_response(queue.status(uid))
+    app.router.add_get('/api/link/status',queue_status)
     async def cancel(request):
         task=running.get(request['user']['id'])
         if task:task.cancel()
@@ -176,10 +188,9 @@ def register(app,bridge):
         if not isinstance(payload,dict):raise web.HTTPBadRequest()
         item=app['studio_worker'].exports.get(str(payload.get('ticket','')))
         if not item or item['uid']!=uid or item['path'].suffix!='.mp4':raise web.HTTPNotFound()
-        if slots.locked():raise web.HTTPTooManyRequests()
         from miniapp_server import public_url
         if not public_url():raise web.HTTPConflict()
-        async with slots:
+        async with app['studio_worker'].slots:
             from scratch import scratch_root
             with tempfile.TemporaryDirectory(dir=scratch_root(),prefix='app-video-audio-') as directory:
                 try:
