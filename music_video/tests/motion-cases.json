@@ -1,0 +1,522 @@
+[
+  {
+    "scene": {
+      "pulseMode": "bass",
+      "motion": "still",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      195.0,
+      379.8,
+      107.59319999999998,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "bass",
+      "motion": "float",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      200.8835383299416,
+      389.93156296505276,
+      107.59319999999998,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "bass",
+      "motion": "orbit",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      210.85452207195434,
+      384.35422315317896,
+      107.59319999999998,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "bass",
+      "motion": "sway",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      195.0,
+      379.8,
+      107.59319999999998,
+      0.2535646217936026
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "beat",
+      "motion": "still",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      195.0,
+      379.8,
+      117.73007999999999,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "beat",
+      "motion": "float",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      200.8835383299416,
+      389.93156296505276,
+      117.73007999999999,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "beat",
+      "motion": "orbit",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      210.85452207195434,
+      384.35422315317896,
+      117.73007999999999,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "beat",
+      "motion": "sway",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      195.0,
+      379.8,
+      117.73007999999999,
+      0.2535646217936026
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "breath",
+      "motion": "still",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      195.0,
+      379.8,
+      107.38591278116611,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "breath",
+      "motion": "float",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      200.8835383299416,
+      389.93156296505276,
+      107.38591278116611,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "breath",
+      "motion": "orbit",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      210.85452207195434,
+      384.35422315317896,
+      107.38591278116611,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "breath",
+      "motion": "sway",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      195.0,
+      379.8,
+      107.38591278116611,
+      0.2535646217936026
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "double",
+      "motion": "still",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      195.0,
+      379.8,
+      121.09656013754685,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "double",
+      "motion": "float",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      200.8835383299416,
+      389.93156296505276,
+      121.09656013754685,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "double",
+      "motion": "orbit",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      210.85452207195434,
+      384.35422315317896,
+      121.09656013754685,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "double",
+      "motion": "sway",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      195.0,
+      379.8,
+      121.09656013754685,
+      0.2535646217936026
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "off",
+      "motion": "still",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      195.0,
+      379.8,
+      88.91999999999999,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "off",
+      "motion": "float",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      200.8835383299416,
+      389.93156296505276,
+      88.91999999999999,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "off",
+      "motion": "orbit",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      210.85452207195434,
+      384.35422315317896,
+      88.91999999999999,
+      0.119
+    ]
+  },
+  {
+    "scene": {
+      "pulseMode": "off",
+      "motion": "sway",
+      "motionAmount": 0.65,
+      "logoSize": 1.2,
+      "pulse": 1.5,
+      "strength": 2
+    },
+    "time": 1.7,
+    "feature": [
+      0.4,
+      0.3,
+      0.2,
+      0.5,
+      0.6
+    ],
+    "width": 390,
+    "height": 844,
+    "expected": [
+      195.0,
+      379.8,
+      88.91999999999999,
+      0.2535646217936026
+    ]
+  }
+]

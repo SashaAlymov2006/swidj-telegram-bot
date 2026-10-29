@@ -86,7 +86,7 @@ The Deno tests exercise actual editor code against a minimal DOM contract, plus
 scene state and navigation. They are not browser emulation or physical-device QA:
 
 ```sh
-deno test --no-config --allow-read=music_video,miniapp/app.js music_video/tests/state_test.js music_video/tests/editor_flow_test.js music_video/tests/navigation_test.js music_video/tests/timing_test.js music_video/tests/player_lyrics_test.js
+deno test --no-config --allow-read=music_video,miniapp/app.js music_video/tests/state_test.js music_video/tests/editor_flow_test.js music_video/tests/navigation_test.js music_video/tests/timing_test.js music_video/tests/animation_test.js music_video/tests/player_lyrics_test.js tests/worklet_test.js
 ```
 
 ## Optional lyrics in the ordinary player
@@ -99,7 +99,18 @@ lyrics still work if timed lookup is unavailable. No guessed timing or paid AI
 transcription is used. Processed previews map back to the original source clock;
 reverse playback uses reading only. The existing chat lyrics remain unchanged.
 
-The video editor now has twelve presets, including Vinyl, Neon Tunnel, Aurora
-and Neon Grid, plus a mirrored spectrum and optional rotating cover. These use
+The video editor now has eighteen presets, including Vinyl, Neon Tunnel, Aurora,
+Neon Grid, Club Pulse, Ocean, Constellation, Floating Lyrics, Bloom and Festival,
+plus a mirrored spectrum and optional rotating cover. These use
 the existing Canvas preview and isolated Pillow/FFmpeg worker. Old scene defaults
 and the main bot's resource allocation are preserved.
+
+Ready templates work with audio alone; background images/video and a logo are
+optional. Motion and pulse controls are collapsed by default: bass, beat,
+breathing, double pulse or off; centered, floating, orbit or sway; speed and
+amount. Hexagon/star masks, expanding rings and twin waves run in both preview
+and export. Animation speed changes visual motion only, not audio or lyric time.
+
+In timed-lyrics controls, choose No panel to draw directly on the background,
+or adjust panel darkness from transparent to 90%. Text retains a thin outline
+for readability. Existing drafts/styles normalize missing fields to old defaults.

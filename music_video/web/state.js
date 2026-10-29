@@ -1,5 +1,6 @@
-export const ranges={strength:[0,3,.05],glow:[0,1,.05],particleCount:[0,200,1],rotation:[-1,1,.05],dim:[0,.95,.05],zoom:[1,1.5,.01],logoX:[.1,.9,.01],logoY:[.1,.9,.01],logoSize:[.4,1.6,.05],pulse:[0,2,.05],spectrumY:[.2,.95,.01],spectrumSize:[.5,1.5,.05],panX:[0,1,.01],panY:[0,1,.01],blur:[0,20,.5],vignette:[0,1,.05],textY:[.1,.9,.01],textSize:[.5,1.5,.05],fadeIn:[0,3,.1],fadeOut:[0,3,.1],start:[0,86400,.1],end:[0,86400,.1],seed:[0,2147483647,1],lyricsY:[.15,.9,.01],lyricsSize:[.6,1.4,.05],lyricsOffset:[-10,10,.1]};
-const enums={shape:['none','circle','triangle','square'],spectrum:['none','ring','bars','wave','mirror'],particles:['none','stars','sparks','snow'],backgroundKind:['color','image','video'],aspect:['landscape','portrait','square'],fit:['cover','contain'],resolution:[720,1080],fps:[30,60],version:[1]};
+export const ranges={strength:[0,3,.05],glow:[0,1,.05],particleCount:[0,200,1],rotation:[-1,1,.05],dim:[0,.95,.05],zoom:[1,1.5,.01],logoX:[.1,.9,.01],logoY:[.1,.9,.01],logoSize:[.4,1.6,.05],pulse:[0,2,.05],spectrumY:[.2,.95,.01],spectrumSize:[.5,1.5,.05],panX:[0,1,.01],panY:[0,1,.01],blur:[0,20,.5],vignette:[0,1,.05],textY:[.1,.9,.01],textSize:[.5,1.5,.05],fadeIn:[0,3,.1],fadeOut:[0,3,.1],start:[0,86400,.1],end:[0,86400,.1],seed:[0,2147483647,1],lyricsY:[.15,.9,.01],lyricsSize:[.6,1.4,.05],lyricsOffset:[-10,10,.1],lyricsOpacity:[0,.9,.05],animationSpeed:[.2,2,.05],motionAmount:[0,1,.05]};
+const enums={shape:['none','circle','triangle','square','hexagon','star'],spectrum:['none','ring','bars','wave','mirror','ripple','dualwave'],particles:['none','stars','sparks','snow'],backgroundKind:['color','image','video'],aspect:['landscape','portrait','square'],fit:['cover','contain'],resolution:[720,1080],fps:[30,60],version:[1]};
+enums.lyricsBackdrop=['panel','none'];enums.pulseMode=['bass','beat','breath','double','off'];enums.motion=['still','float','orbit','sway'];
 enums.lyricsStyle=['highlight','fade','pulse'];
 export function normalize(value,defaults,presets={}){
  const result={...defaults};if(!value||typeof value!=='object'||Array.isArray(value))return result;
@@ -25,4 +26,14 @@ export class SceneHistory{
  }
  undo(scene){if(!this.past.length)return scene;this.future.push(JSON.stringify(scene));this.key=null;return JSON.parse(this.past.pop());}
  redo(scene){if(!this.future.length)return scene;this.past.push(JSON.stringify(scene));this.key=null;return JSON.parse(this.future.pop());}
+}
+
+export function movement(s,t,features,w,h){
+ const [low,mid,high,rms,beat]=features,u=Math.min(w,h),amount=s.motionAmount;
+ const response={bass:low*.13+beat*.03,beat:beat*.18,breath:(.5+.5*Math.sin(t*2))*.1+low*.08,double:beat*(.1+.08*(.5+.5*Math.sin(t*8)))+low*.04,off:0}[s.pulseMode];
+ let cx=w*s.logoX,cy=h*s.logoY,angle=t*s.rotation*.7;
+ if(s.motion==='float'){cx+=Math.sin(t*.7)*u*.025*amount;cy+=Math.sin(t*.9)*u*.04*amount;}
+ if(s.motion==='orbit'){cx+=Math.sin(t*.65)*u*.07*amount;cy+=Math.cos(t*.65)*u*.04*amount;}
+ if(s.motion==='sway')angle+=Math.sin(t*1.4)*.3*amount;
+ return [cx,cy,u*.19*s.logoSize*(1+response*s.strength*s.pulse),angle];
 }

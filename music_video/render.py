@@ -12,7 +12,7 @@ import sys
 import time
 import numpy as np
 from PIL import Image,ImageDraw,ImageFilter,ImageFont,ImageOps
-from .model import validate,dimensions
+from .model import validate,dimensions,movement
 
 RATE=15360
 HOP=512
@@ -132,7 +132,7 @@ class Scene:
         for y in range(self.h):row.line((0,y,self.w,y),fill=mix(rgb(config['background']),tuple(int(v*.18) for v in rgb(config['color2'])),y/self.h))
 
     def frame(self,t,features,video=None):
-        s=self.config;w,h,u=self.w,self.h,self.unit;low,mid,high,rms,beat=features[:5];strength=s['strength']
+        s=self.config;clock=t;t*=s['animationSpeed'];w,h,u=self.w,self.h,self.unit;low,mid,high,rms,beat=features[:5];strength=s['strength']
         zoom=1 if s['fit']=='contain' else 1+(s['zoom']-1)*(.5+.5*math.sin(t*.2))
         source=video if video is not None else self.background if s['backgroundKind']=='image' else None
         image=self.gradient.copy()
@@ -144,7 +144,7 @@ class Scene:
             image=Image.blend(image,Image.new('RGB',(w,h),s['background']),s['dim'])
         if s['vignette']:image.paste(Image.new('RGB',(w,h),'black'),(0,0),self.vignette)
         layer=Image.new('RGBA',(w,h));draw=ImageDraw.Draw(layer);accent=rgb(s['color']);second=rgb(s['color2'])
-        cx,cy=w*s['logoX'],h*s['logoY'];radius=u*.19*s['logoSize']*(1+(low*.13+beat*.03)*strength*s['pulse']);angle=t*s['rotation']*.7
+        cx,cy,radius,angle=movement(s,t,features,w,h)
         if s['preset']=='vinyl':
             for i in range(14):
                 r=radius*(1.03+i*.025);draw.ellipse((cx-r,cy-r,cx+r,cy+r),outline=(*mix(accent,second,i/14),76),width=max(1,round(u*.001)))
@@ -180,6 +180,14 @@ class Scene:
                 draw.ellipse((px-size,py-size,px+size,py+size),fill=color)
                 if s['particles']=='stars':draw.line((px-size*2,py,px+size*2,py),fill=color,width=1);draw.line((px,py-size*2,px,py+size*2),fill=color,width=1)
         bars=features[5:]
+        if s['spectrum']=='ripple':
+            for i in range(5):
+                phase=(i/5+t*.22)%1;r=radius*(.7+phase*1.7)*(1+float(beat)*.05*strength)
+                draw.ellipse((cx-r,cy-r,cx+r,cy+r),outline=(*mix(accent,second,phase),round((1-phase)*.7*255)),width=max(1,round(u*.003*s['spectrumSize'])))
+        if s['spectrum']=='dualwave':
+            for sign in (-1,1):
+                points=[(w*.1+i*w*.8/(BANDS-1),h*s['spectrumY']+sign*math.sin(i*.28+t*1.5)*float(energy)*u*.13*strength*s['spectrumSize']) for i,energy in enumerate(bars)]
+                draw.line(points,fill=(*(accent if sign==1 else second),255),width=max(2,round(u*.004)),joint='curve')
         if s['spectrum']=='ring':
             for i,energy in enumerate(bars):
                 a=i/BANDS*math.tau-math.pi/2;inner=radius+u*.018;outer=inner+float(energy)*u*.11*strength*s['spectrumSize']
@@ -199,16 +207,16 @@ class Scene:
             mask=Image.new('L',(round(radius*2),round(radius*2)));md=ImageDraw.Draw(mask);r=radius-2
             if s['shape']=='circle':md.ellipse((1,1,2*r,2*r),fill=255)
             else:
-                n=3 if s['shape']=='triangle' else 4
-                points=[(radius+math.cos(angle-math.pi/2+j*math.tau/n)*r,radius+math.sin(angle-math.pi/2+j*math.tau/n)*r) for j in range(n)]
+                n=3 if s['shape']=='triangle' else 6 if s['shape']=='hexagon' else 10 if s['shape']=='star' else 4
+                points=[(radius+math.cos(angle-math.pi/2+j*math.tau/n)*r*(.5 if s['shape']=='star' and j%2 else 1),radius+math.sin(angle-math.pi/2+j*math.tau/n)*r*(.5 if s['shape']=='star' and j%2 else 1)) for j in range(n)]
                 md.polygon(points,fill=255)
             fill=ImageOps.fit(self.logo,mask.size) if self.logo is not None else Image.new('RGBA',mask.size,(*rgb(s['background']),240))
             if self.logo is not None and s['spinLogo']:fill=fill.rotate(-math.degrees(angle),resample=Image.Resampling.BICUBIC)
             layer.paste(fill,(round(cx-radius),round(cy-radius)),mask)
             if s['shape']=='circle':draw.ellipse((cx-radius,cy-radius,cx+radius,cy+radius),outline=(*accent,255),width=max(2,round(u*.004)))
             else:
-                n=3 if s['shape']=='triangle' else 4
-                points=[(cx+math.cos(angle-math.pi/2+j*math.tau/n)*r,cy+math.sin(angle-math.pi/2+j*math.tau/n)*r) for j in range(n)]
+                n=3 if s['shape']=='triangle' else 6 if s['shape']=='hexagon' else 10 if s['shape']=='star' else 4
+                points=[(cx+math.cos(angle-math.pi/2+j*math.tau/n)*r*(.5 if s['shape']=='star' and j%2 else 1),cy+math.sin(angle-math.pi/2+j*math.tau/n)*r*(.5 if s['shape']=='star' and j%2 else 1)) for j in range(n)]
                 draw.line(points+[points[0]],fill=(*accent,255),width=max(2,round(u*.004)),joint='curve')
         image=image.convert('RGBA')
         if s['glow']:
@@ -224,11 +232,12 @@ class Scene:
                 if width>w*.9:face=font(face.size*w*.9/width)
                 draw.text((w/2,y),text,font=face,anchor='mm',fill=s['textColor'],stroke_width=max(1,round(u/720)),stroke_fill='#000000')
         if s['lyricsOn'] and self.lyrics:
-            index=bisect.bisect_right(self.lyric_times,s['start']+t-s['lyricsOffset'])-1
+            index=bisect.bisect_right(self.lyric_times,s['start']+clock-s['lyricsOffset'])-1
             if 0<=index<len(self.lyrics) and self.lyrics[index]['text']:
                 cy=h*s['lyricsY'];size=u*.034*s['lyricsSize'];linefont=font(size*(1+float(beat)*.08 if s['lyricsStyle']=='pulse' else 1))
-                panel=Image.new('RGBA',(w,h));pd=ImageDraw.Draw(panel);pd.rounded_rectangle((w*.06,cy-size*2.5,w*.94,cy+size*2.5),radius=round(size*.4),fill=(0,0,0,175))
-                image=Image.alpha_composite(image,panel);draw=ImageDraw.Draw(image)
+                if s['lyricsBackdrop']=='panel' and s['lyricsOpacity']:
+                    panel=Image.new('RGBA',(w,h));pd=ImageDraw.Draw(panel);pd.rounded_rectangle((w*.06,cy-size*2.5,w*.94,cy+size*2.5),radius=round(size*.4),fill=(0,0,0,round(255*s['lyricsOpacity'])))
+                    image=Image.alpha_composite(image,panel);draw=ImageDraw.Draw(image)
                 for offset in (-1,0,1):
                     if not 0<=index+offset<len(self.lyrics):continue
                     text=self.lyrics[index+offset]['text'];face=linefont if offset==0 else font(size*.72)
@@ -236,10 +245,10 @@ class Scene:
                     if width>w*.84:face=font(max(size*.48,face.size*w*.84/width))
                     while text and draw.textlength(text,font=face)>w*.84:text=text[:-2]+'…'
                     active=rgb(s['textColor'])
-                    if s['lyricsStyle']=='fade':active=mix((126,138,152),active,min(1,max(0,(s['start']+t-s['lyricsOffset']-self.lyrics[index]['at'])/.4)))
+                    if s['lyricsStyle']=='fade':active=mix((126,138,152),active,min(1,max(0,(s['start']+clock-s['lyricsOffset']-self.lyrics[index]['at'])/.4)))
                     draw.text((w/2,cy+offset*size*1.55),text,font=face,anchor='mm',fill=active if offset==0 else '#a3acb7',stroke_width=1,stroke_fill='#000000')
-        opacity=min(1,t/min(s['fadeIn'],self.duration/2)) if s['fadeIn'] else 1
-        if s['fadeOut']:opacity=min(opacity,max(0,(self.duration-t)/min(s['fadeOut'],self.duration/2)))
+        opacity=min(1,clock/min(s['fadeIn'],self.duration/2)) if s['fadeIn'] else 1
+        if s['fadeOut']:opacity=min(opacity,max(0,(self.duration-clock)/min(s['fadeOut'],self.duration/2)))
         image=image.convert('RGB')
         return Image.blend(Image.new('RGB',(w,h),'black'),image,opacity) if opacity<1 else image
 

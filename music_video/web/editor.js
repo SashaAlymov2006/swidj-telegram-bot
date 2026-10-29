@@ -17,7 +17,9 @@ Object.assign(words.en,{composition:'Logo and spectrum',framing:'Background fram
 let language=new URLSearchParams(location.search).get('lang')||storage.get('swidj-video-language')||'ru';if(!words[language])language='ru';
 const t=key=>words[language][key]||key;
 Object.assign(words.ru,{mirror:'Зеркальный спектр',spinLogo:'Вращать обложку'});Object.assign(words.en,{mirror:'Mirrored spectrum',spinLogo:'Spin cover'});
-const ids=['spinLogo','backgroundKind','shape','spectrum','particles','color','color2','background','title','subtitle','aspect','resolution','fps','fit','textColor','lyricsStyle',...Object.keys(ranges).filter(key=>key!=='seed')];
+Object.assign(words.ru,{presets:'02 / Готовые шаблоны видео',animations:'Движение и пульсация',pulseMode:'Как пульсирует фигура',bass:'По басу',beat:'По ударам',breath:'Дыхание',double:'Двойной пульс',motion:'Движение фигуры',still:'На месте',float:'Плавание',orbit:'По орбите',sway:'Покачивание',animationSpeed:'Скорость анимации',motionAmount:'Размах движения',lyricsBackdrop:'Фон под текстом',panel:'Тёмная подложка',noBackdrop:'Без подложки',lyricsOpacity:'Затемнение подложки',hexagon:'Шестиугольник',star:'Звезда',ripple:'Расходящиеся кольца',dualwave:'Две волны',club:'Клубный пульс',ocean:'Океан',constellation:'Созвездие',lyric:'Текст на фоне',bloom:'Цветение',festival:'Фестиваль'});
+Object.assign(words.en,{presets:'02 / Ready video templates',animations:'Motion and pulse',pulseMode:'Shape pulse',bass:'Bass response',beat:'Beat response',breath:'Breathing',double:'Double pulse',motion:'Shape motion',still:'Stay centered',float:'Floating',orbit:'Orbit',sway:'Swaying',animationSpeed:'Animation speed',motionAmount:'Motion amount',lyricsBackdrop:'Lyrics background',panel:'Dark panel',noBackdrop:'No panel',lyricsOpacity:'Panel darkness',hexagon:'Hexagon',star:'Star',ripple:'Expanding rings',dualwave:'Twin waves',club:'Club Pulse',ocean:'Ocean',constellation:'Constellation',lyric:'Floating Lyrics',bloom:'Bloom',festival:'Festival'});
+const ids=['pulseMode','motion','lyricsBackdrop','spinLogo','backgroundKind','shape','spectrum','particles','color','color2','background','title','subtitle','aspect','resolution','fps','fit','textColor','lyricsStyle',...Object.keys(ranges).filter(key=>key!=='seed')];
 const numeric=new Set([...Object.keys(ranges),'resolution','fps']);
 const history=new SceneHistory();let dirtyAssets=new Set(),needsAudio=true,restoring=false,preparing=false,lastSaved=0;
 let config,scene,draft=null,renderJob=null,pollTimer,revision=0,featureBlock=null,featureRequest=0,featuresBusy=false,lastDraw=0,selectedAudio=null;
@@ -68,11 +70,12 @@ async function refreshHistory(){
  }catch{}
 }
 function translate(){document.documentElement.lang=language;for(const element of document.querySelectorAll('[data-i18n]'))element.textContent=t(element.dataset.i18n);for(const element of document.querySelectorAll('[data-placeholder]')){element.placeholder=t(element.dataset.placeholder);element.setAttribute('aria-label',t(element.dataset.placeholder));}$('language').textContent=language==='ru'?'EN':'RU';if(config?.dev)$('environment').textContent=t('local');for(const element of document.querySelectorAll('[data-slider]'))element.textContent=t(element.dataset.slider);if($('saved-styles'))listStyles($('saved-styles').value);}
-function sync(){for(const id of ids)if($(id)){if(id==='spinLogo')$(id).checked=scene[id];else $(id).value=scene[id];};for(const output of document.querySelectorAll('[data-output]'))output.textContent=String(scene[output.dataset.output]);for(const button of document.querySelectorAll('[data-preset]'))button.setAttribute('aria-pressed',String(scene.preset===button.dataset.preset));lyricControls();resize();draw();}
+function sync(){extraControls();for(const id of ids)if($(id)){if(id==='spinLogo')$(id).checked=scene[id];else $(id).value=scene[id];};for(const output of document.querySelectorAll('[data-output]'))output.textContent=String(scene[output.dataset.output]);for(const button of document.querySelectorAll('[data-preset]'))button.setAttribute('aria-pressed',String(scene.preset===button.dataset.preset));lyricControls();resize();draw();}
 function resize(){const ratio=scene.aspect==='portrait'?9/16:scene.aspect==='square'?1:16/9;const width=Math.min(960,Math.max(240,canvas.parentElement.clientWidth));if(canvas.width!==Math.round(width))canvas.width=Math.round(width);if(canvas.height!==Math.round(width/ratio))canvas.height=Math.round(width/ratio);}
 function clock(seconds){return `${Math.floor(seconds/60)}:${String(Math.floor(seconds%60)).padStart(2,'0')}`;}
 function endTime(){return draft?Math.min(scene.end||draft.duration,draft.duration):0;}
-function read(){for(const id of ids){const node=$(id);if(node)scene[id]=id==='spinLogo'?node.checked:numeric.has(id)?Number(node.value):node.value;}for(const output of document.querySelectorAll('[data-output]'))output.textContent=String(scene[output.dataset.output]);resize();draw();persist();}
+function extraControls(){if($('lyricsOpacity'))$('lyricsOpacity').disabled=scene.lyricsBackdrop==='none';if($('motionAmount'))$('motionAmount').disabled=scene.motion==='still';}
+function read(){for(const id of ids){const node=$(id);if(node)scene[id]=id==='spinLogo'?node.checked:numeric.has(id)?Number(node.value):node.value;}for(const output of document.querySelectorAll('[data-output]'))output.textContent=String(scene[output.dataset.output]);extraControls();resize();draw();persist();}
 function interpolate(time){
  if(!featureBlock)return new Array(53).fill(0);
  const pos=time*featureBlock.rate-featureBlock.offset;if(pos<0||pos>=featureBlock.values.length)return new Array(53).fill(0);
@@ -158,10 +161,16 @@ function applyStyle(value){
  sync();persist();historyButtons();notice('loaded');
 }
 function editorTools(){
+ $('shape').insertAdjacentHTML('beforeend','<option value="hexagon" data-i18n="hexagon"></option><option value="star" data-i18n="star"></option>');
+ $('spectrum').insertAdjacentHTML('beforeend','<option value="ripple" data-i18n="ripple"></option><option value="dualwave" data-i18n="dualwave"></option>');
+ function selectControl(details,key,values){const label=document.createElement('label');label.innerHTML=`<span data-i18n="${key}"></span><select id="${key}">${values.map(([value,text])=>`<option value="${value}" data-i18n="${text}"></option>`).join('')}</select>`;details.append(label);}
+
  $('save-preset').dataset.i18n='saveStyle';$('load-preset').dataset.i18n='loadStyle';
- const groups=[['composition',['logoX','logoY','logoSize','pulse','spectrumY','spectrumSize']],['framing',['panX','panY','blur','vignette']],['typography',['textY','textSize','fadeIn','fadeOut']],['syncedLyrics',['lyricsY','lyricsSize','lyricsOffset']]];
+ const groups=[['animations',['animationSpeed','motionAmount']],['composition',['logoX','logoY','logoSize','pulse','spectrumY','spectrumSize']],['framing',['panX','panY','blur','vignette']],['typography',['textY','textSize','fadeIn','fadeOut']],['syncedLyrics',['lyricsY','lyricsSize','lyricsOffset','lyricsOpacity']]];
  for(const [name,keys] of groups.slice().reverse()){
   const details=document.createElement('details');details.className='control-group';const summary=document.createElement('summary');summary.dataset.i18n=name;details.append(summary);
+  if(name==='animations'){selectControl(details,'pulseMode',['bass','beat','breath','double','off'].map(v=>[v,v]));selectControl(details,'motion',['still','float','orbit','sway'].map(v=>[v,v]));}
+  if(name==='syncedLyrics')selectControl(details,'lyricsBackdrop',[['panel','panel'],['none','noBackdrop']]);
   if(name==='composition')details.insertAdjacentHTML('beforeend','<label><span data-i18n="spinLogo"></span><input type="checkbox" id="spinLogo"></label>');
   if(name==='framing')details.insertAdjacentHTML('beforeend','<label><span data-i18n="fit"></span><select id="fit"><option value="cover" data-i18n="cover"></option><option value="contain" data-i18n="contain"></option></select></label>');
   if(name==='typography')details.insertAdjacentHTML('beforeend','<label><span data-i18n="textColor"></span><input type="color" id="textColor"></label>');
@@ -200,7 +209,7 @@ async function init(){
  for(const [key,min,max,step] of controls){const label=document.createElement('label');const line=document.createElement('span');line.className='slider-label';const text=document.createElement('span');text.dataset.slider=key;const output=document.createElement('output');output.dataset.output=key;line.append(text,output);const input=document.createElement('input');Object.assign(input,{type:'range',id:key,min,max,step});label.append(line,input);$('sliders').append(label);}
  editorTools();
  const names={vinyl:'Vinyl',tunnel:'Neon Tunnel',aurora:'Aurora',grid:'Neon Grid',neon:'Neon Orbit',prism:'Prism',stars:'Starfield',minimal:'Minimal',retro:'Retro',liquid:'Liquid',stage:'Stage',photo:'Photo Motion'};
- for(const [key,value] of Object.entries(config.presets)){const button=document.createElement('button');button.type='button';button.className='preset';button.dataset.preset=key;button.textContent=names[key];button.style.setProperty('--a',value.color||'#334b57');button.style.setProperty('--b',value.color2||'#121b2c');button.onclick=()=>{commit();scene=presetScene(scene,config.defaults,value,key);sync();persist();};$('presets').append(button);}
+ for(const [key,value] of Object.entries(config.presets)){const button=document.createElement('button');button.type='button';button.className='preset';button.dataset.preset=key;if(['club','ocean','constellation','lyric','bloom','festival'].includes(key))button.dataset.i18n=key;button.textContent=names[key]||t(key);button.style.setProperty('--a',value.color||'#334b57');button.style.setProperty('--b',value.color2||'#121b2c');button.onclick=()=>{commit();scene=presetScene(scene,config.defaults,value,key);sync();persist();};$('presets').append(button);}
  const history=document.createElement('details');history.className='panel history-panel';const summary=document.createElement('summary');summary.dataset.i18n='history';summary.textContent=t('history');const historyList=document.createElement('div');historyList.id='history-list';history.append(summary,historyList);document.querySelector('.footer-note').before(history);history.ontoggle=()=>{if(history.open)refreshHistory();};
  translate();sync();requestAnimationFrame(tick);refreshHistory();$('download').onclick=nativeDownload;
  for(const id of ids)$(id).addEventListener('input',()=>{commit(id);read();});

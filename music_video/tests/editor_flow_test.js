@@ -49,7 +49,10 @@ Deno.test('Editor prepares audio, edits and undoes, updates only images, preview
  const update=calls.find(([url])=>url==='api/assets/draft');assert(update&&!update[1].body.has('audio')&&update[1].body.has('logo'));
  await nodes.get('sample-render').onclick();const sample=calls.filter(([url])=>url==='api/render/draft').at(-1);assert(JSON.parse(sample[1].body).resolution===720&&!nodes.get('render-preview').hidden);
  await nodes.get('render').onclick();assert(!nodes.get('download').hidden&&operations>0);
- for(const key of ['vinyl','tunnel','aurora','grid']){const preset=all.find(node=>node.dataset.preset===key);assert(preset);preset.click();assert(nodes.get('spectrum').value===configuration.presets[key].spectrum);}
+ for(const key of ['vinyl','tunnel','aurora','grid','club','ocean','constellation','lyric','bloom','festival']){const preset=all.find(node=>node.dataset.preset===key);assert(preset);preset.click();assert(nodes.get('spectrum').value===configuration.presets[key].spectrum);}
+ nodes.get('lyricsBackdrop').value='none';nodes.get('lyricsBackdrop').listeners.input();assert(nodes.get('lyricsOpacity').disabled);
+ nodes.get('motion').value='still';nodes.get('motion').listeners.input();assert(nodes.get('motionAmount').disabled);
+ nodes.get('motion').value='orbit';nodes.get('motion').listeners.input();assert(!nodes.get('motionAmount').disabled);
  nodes.get('spinLogo').checked=true;nodes.get('spinLogo').listeners.input();
  await nodes.get('render').onclick();assert(JSON.parse(calls.filter(([url])=>url==='api/render/draft').at(-1)[1].body).spinLogo===true);
  await nodes.get('export-style').onclick();assert(!nodes.get('settings-download').hidden&&nodes.get('settings-download').href==='files/settings');
