@@ -16,3 +16,17 @@ Deno.test('Artist, remix navigation and the existing version choice remain avail
  assert(source.includes('data-artist-section=')&&source.includes('artistRemixes')&&source.includes('if(button.dataset.artistAlbum)'));
  assert(source.includes("recordingChoices(await(await api('versions'"));
 });
+Deno.test('Artist discovery ignores stale searches and does not interrupt playback',async()=>{
+ const start=source.indexOf('async function loadDiscovery('),end=source.indexOf('function searchScreen()',start);
+ const pending=[];const api=()=>new Promise(resolve=>pending.push(resolve));
+ const run=new Function('api',`let searchGeneration=1,searchArtists=[],searchAlbums=[],artistDiscovering=false;const demo=false,route='search',artistPage=null,extraTracks=new Map(),render=()=>{};${source.slice(start,end)};return {loadDiscovery,setGeneration:n=>searchGeneration=n,state:()=>({searchArtists,searchAlbums,artistDiscovering})};`)(api);
+ const old=run.loadDiscovery('old',1);run.setGeneration(2);const fresh=run.loadDiscovery('fresh',2);
+ pending[0]({json:async()=>({artists:[{id:'old',artist:'Old'}],albums:[]})});await old;
+ assert(run.state().searchArtists.length===0&&run.state().artistDiscovering);
+ pending[1]({json:async()=>({artists:[{id:'new',artist:'New'}],albums:[]})});await fresh;
+ assert(run.state().searchArtists[0].id==='new'&&!run.state().artistDiscovering);
+});
+Deno.test('Search offers explicit artist cards and album opening instead of an automatic jump',()=>{
+ assert(source.includes('function discoveryPanel()')&&source.includes('data-search-album=')&&source.includes('void loadDiscovery(query,generation)'));
+ assert(!source.includes('await openArtist(data.artist_suggestion)'));
+});

@@ -19,6 +19,9 @@ def song(number,disc=1):
 
 
 class ReleaseCatalogTests(unittest.TestCase):
+    def setUp(self):
+        releases._views.clear();self.addCleanup(releases._views.clear)
+        self.enterContext(patch('release_catalog._additional',return_value=[]))
     def test_same_name_artists_are_selected_without_merging_discographies(self):
         other=header(10);other['artistId']=8
         with patch('release_catalog._request',return_value=[header(),other]):
@@ -61,7 +64,10 @@ class ReleaseCatalogTests(unittest.TestCase):
 
 
 class ReleaseApiTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=fixtures.MiniApiTests.asyncSetUp
+    async def asyncSetUp(self):
+        await fixtures.MiniApiTests.asyncSetUp(self)
+        releases._views.clear();self.addCleanup(releases._views.clear)
+        self.enterContext(patch('release_catalog._additional',return_value=[]))
     async def test_album_discovery_is_owner_scoped_and_reuses_existing_version_flow(self):
         seed={'id':1,'title':'Seed','artist':'Artist','url':'https://soundcloud.com/artist/seed'}
         self.bridge.favorites[77]=[seed]
@@ -80,13 +86,14 @@ class ReleaseApiTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ReleaseChatTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):releases._views.clear();self.addCleanup(releases._views.clear)
     async def test_both_languages_navigate_album_to_existing_track_card(self):
         from artist_ui import callback
         for language in ('ru','en'):
             message=NS(reply_text=AsyncMock(),edit_text=AsyncMock());query=NS(data='arl:0123456789:0',message=message,answer=AsyncMock())
             update=NS(callback_query=query,effective_message=message)
             context=NS(user_data={'language':language,'artist_views':{'0123456789':{'artist':'Artist'}}})
-            with patch('release_catalog._request',return_value=[header(),song(1)]):
+            with patch('release_catalog._request',return_value=[header(),song(1)]),patch('release_catalog._additional',return_value=[]):
                 await callback(update,context)
                 query.data=message.edit_text.call_args.kwargs['reply_markup'].inline_keyboard[0][0].callback_data
                 self.assertEqual(query.data,'alb:0123456789:9:0');await callback(update,context)

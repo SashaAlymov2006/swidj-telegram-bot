@@ -66,19 +66,27 @@ def _search(name,source,song):
     return [dict(row,source=NAMES[source]) for row in rows if matches(name,row)]
 
 def browse(song,source='all',offset=0,*,remixes=False):
-    if source not in ('all',)+PROVIDERS or type(offset) is not int or not 0<=offset<=200 or offset%10:raise ValueError('Invalid artist page')
+    if source not in ('all',)+PROVIDERS or type(offset) is not int or not 0<=offset<=990 or offset%10:raise ValueError('Invalid artist page')
     name=creator(song)
     if not name:raise ValueError('Artist unavailable')
     seed=song.get('url') if provider(song)=='sc' else ''
     if seed:seed='/'.join(str(seed).split('/')[:4])
-    key=(name,source,seed)
+    from expanded_catalog import browse_names
+    aliases=tuple(browse_names(song))
+    key=(name,source,seed,aliases)
     with _lock:cached=_cache.get(key)
     if cached and cached[0]>time.monotonic():groups=deepcopy(cached[1])
     else:
         sources=PROVIDERS if source=='all' else (source,)
         groups={}
         with ThreadPoolExecutor(max_workers=4,thread_name_prefix='artist-catalog') as pool:
-            tasks={s:pool.submit(copy_context().run,_search,name,s,song) for s in sources}
+            def expanded(s):
+                records=[]
+                for alias in aliases:
+                    try:records.extend(_search(alias,s,song))
+                    except Exception:checkpoint()
+                return list({row['url']:row for row in records}.values())[:150]
+            tasks={s:pool.submit(copy_context().run,expanded,s) for s in sources}
             for s,task in tasks.items():
                 try:groups[s]=task.result()
                 except Exception:groups[s]=[]
@@ -88,7 +96,7 @@ def browse(song,source='all',offset=0,*,remixes=False):
             _cache[key]=(time.monotonic()+90,deepcopy(groups))
     if remixes:groups={source:[row for row in items if re.search(r'\b(remix|bootleg|rework|mashup|edit)\b',row.get('title',''),re.I)] for source,items in groups.items()}
     rows=[];seen=set()
-    for index in range(50):
+    for index in range(max((len(items) for items in groups.values()),default=0)):
         for s in PROVIDERS:
             group=groups.get(s,[])
             if index<len(group) and group[index]['url'] not in seen:
@@ -101,6 +109,7 @@ def browse(song,source='all',offset=0,*,remixes=False):
 def register(app,bridge):
     from aiohttp import web
     busy=set()
+    catalog_slots=asyncio.Semaphore(2)
     async def artist(request):
         uid=request['user']['id'];bridge.allowed(uid,'search')
         song=await bridge.find(uid,request.query.get('track',''))
@@ -127,9 +136,9 @@ def register(app,bridge):
         # Reuse existing owner-scoped discovery storage; this never changes a library.
         from dispatch import user_lock
         async with user_lock(uid):
-            previous=bridge.chart_recordings.get(uid,[])
-            bridge.chart_recordings[uid]=list({r['id']:r for r in previous+rows}.values())[-200:]
-        while len(bridge.chart_recordings)>1000:bridge.chart_recordings.pop(next(iter(bridge.chart_recordings)))
+            previous=bridge.catalog_recordings.get(uid,[])
+            bridge.catalog_recordings[uid]=list({r['id']:r for r in previous+rows}.values())[-600:]
+        while len(bridge.catalog_recordings)>500:bridge.catalog_recordings.pop(next(iter(bridge.catalog_recordings)))
         result['tracks']=[public_song(row,bool(bridge.audio_path(uid,row))) for row in rows]
         return web.json_response(result)
     app.router.add_get('/api/artist',artist)
@@ -143,7 +152,7 @@ def register(app,bridge):
         if uid in busy:raise web.HTTPTooManyRequests()
         busy.add(uid)
         try:
-            async with bridge.search_slots:
+            async with catalog_slots:
                 if request.query.get('album'):
                     task=asyncio.create_task(asyncio.to_thread(album,song,request.query['album']))
                 else:
@@ -155,9 +164,9 @@ def register(app,bridge):
                 from dispatch import user_lock
                 from miniapp_server import public_song
                 async with user_lock(uid):
-                    previous=bridge.chart_recordings.get(uid,[])
-                    bridge.chart_recordings[uid]=list({r['id']:r for r in previous+result['tracks']}.values())[-200:]
-                while len(bridge.chart_recordings)>1000:bridge.chart_recordings.pop(next(iter(bridge.chart_recordings)))
+                    previous=bridge.catalog_recordings.get(uid,[])
+                    bridge.catalog_recordings[uid]=list({r['id']:r for r in previous+result['tracks']}.values())[-600:]
+                while len(bridge.catalog_recordings)>500:bridge.catalog_recordings.pop(next(iter(bridge.catalog_recordings)))
                 result['tracks']=[dict(public_song(row,bool(bridge.audio_path(uid,row))),disc_number=row['disc_number'],track_number=row['track_number']) for row in result['tracks']]
             return web.json_response(result)
         except (ValueError,TypeError):raise web.HTTPBadRequest() from None
@@ -167,3 +176,25 @@ def register(app,bridge):
             raise
         finally:busy.discard(uid)
     app.router.add_get('/api/artist/releases',release_page)
+    async def discover(request):
+        from expanded_catalog import discover as find_artists,search_albums
+        from dispatch import user_lock
+        uid=request['user']['id'];bridge.allowed(uid,'search')
+        query=request.query.get('q','').strip()
+        if not 2<=len(query)<=120:raise web.HTTPBadRequest()
+        async with catalog_slots:
+            def find():
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    artists=pool.submit(find_artists,query);albums=pool.submit(search_albums,query)
+                    return artists.result(),albums.result()
+            task=asyncio.create_task(asyncio.to_thread(find))
+            try:rows,albums=await asyncio.shield(task)
+            except asyncio.CancelledError:
+                await asyncio.gather(task,return_exceptions=True);raise
+        async with user_lock(uid):
+            previous=bridge.catalog_recordings.get(uid,[])
+            bridge.catalog_recordings[uid]=list({r['id']:r for r in previous+[a['origin'] for a in albums]+rows}.values())[-600:]
+        while len(bridge.catalog_recordings)>500:bridge.catalog_recordings.pop(next(iter(bridge.catalog_recordings)))
+        return web.json_response({'artists':[{'id':str(r['id']),'title':r['name'],'artist':r['name'],'source':r['source'],'description':r['description']} for r in rows],
+                                  'albums':[dict(a,origin={'id':str(a['origin']['id']),'title':a['artist'],'artist':a['artist']}) for a in albums]})
+    app.router.add_get('/api/artists',discover)

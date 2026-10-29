@@ -1446,7 +1446,9 @@ async def send_song(update: Update, context: ContextTypes.DEFAULT_TYPE, index=0,
 
     song = dict(songs[index], _search_page=[search_token,index])
     from track_card import show_card
-    extra = [[InlineKeyboardButton("← Меню", callback_data="ui:home")]]
+    from artist_ui import discovery_button
+    artist_query=song.get('_search_query') or context.user_data.get('artist_search_query') or song.get('artist','')
+    extra = ([[discovery_button(context,artist_query,search_token)]] if artist_query else [])+[[InlineKeyboardButton("← Меню", callback_data="ui:home")]]
     from library_ui import collections, all_saved
     folders = await collections(context, user_id, state_store)
     saved = any(item["id"] == song["id"] for item in all_saved(user_id, user_favorites, folders, context.user_data.get('miniapp_library',[])))
@@ -1578,10 +1580,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for item in songs:item['id']=10**15+int.from_bytes(hashlib.sha256(item['url'].encode()).digest()[:6],'big')
     checkpoint()
     if not songs:
-        await update.message.reply_text("❌ Не удалось найти песню. Попробуй другой фрагмент.")
+        from artist_ui import discovery_button
+        await update.message.reply_text("❌ Не удалось найти песню. Попробуй другой фрагмент.",reply_markup=InlineKeyboardMarkup([[discovery_button(context,query)]]))
         return
 
     user_search_results[user_id] = songs
+    context.user_data['artist_search_query']=query
     await send_song(update, context, index=0)
 
     # Текст для рассылки
@@ -2468,7 +2472,7 @@ def build_application(*, request=None, updates_request=None):
     from lyrics_ui import callback as lyrics_page_callback
     app.add_handler(CallbackQueryHandler(serialize_user(lyrics_page_callback), pattern=r"^lyr:"))
     from artist_ui import callback as artist_page_callback
-    app.add_handler(CallbackQueryHandler(serialize_user(artist_page_callback), pattern=r"^(art|arp|arl|alb|arm|arf):"))
+    app.add_handler(CallbackQueryHandler(serialize_user(artist_page_callback), pattern=r"^(art|arp|arl|alb|arm|arf|afd):"))
     app.add_handler(CallbackQueryHandler(serialize_user(library_callback), pattern=r"^lib:"))
     app.add_handler(CallbackQueryHandler(serialize_user(upload_callback), pattern=r"^upload:(save|studio):-?[0-9]{1,19}$"))
     app.add_handler(CommandHandler("clearfavorites", serialize_user(clearfavorites_command)))

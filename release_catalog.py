@@ -13,6 +13,7 @@ _lock=threading.Lock()
 _slots=threading.BoundedSemaphore(2)
 _inflight={}
 _next_call=0.0
+_views={}
 
 
 def _request(path,params):
@@ -43,7 +44,7 @@ def _request(path,params):
             at=max(time.monotonic(),_next_call);_next_call=at+3.1
         while time.monotonic()<at:
             checkpoint();time.sleep(min(.2,at-time.monotonic()) if at>time.monotonic() else 0)
-        with requests.get('https://itunes.apple.com/'+path,params=dict(country='de',media='music',**params),
+        with requests.get('https://itunes.apple.com/'+path,params={'country':'de','media':'music',**params},
                           stream=True,timeout=(5,12),allow_redirects=False) as response:
             response.raise_for_status()
             if response.status_code!=200:raise ValueError('Catalog unavailable')
@@ -86,12 +87,17 @@ def release(row):
             'release_date':str(row.get('releaseDate') or '')[:10],'track_count':row.get('trackCount') if type(row.get('trackCount')) is int else None}
 
 
-def releases(song,offset=0):
+def _apple_releases(song,offset=0,*,all_rows=False):
     from artist_catalog import creator,normalized
     if type(offset) is not int or offset<0 or offset>190 or offset%10:raise ValueError('Invalid release page')
     name=creator(song)
     if not name:raise ValueError('Artist unavailable')
     rows=_request('search',{'term':name,'entity':'album','attribute':'artistTerm','limit':200})
+    artist_ids=list(dict.fromkeys(str(r.get('artistId')) for r in rows if normalized(r.get('artistName'))==normalized(name) and str(r.get('artistId','')).isdecimal()))
+    rows=list(rows)
+    for aid in artist_ids[:2]:
+        try:rows.extend(_request('lookup',{'id':aid,'entity':'album','limit':200}))
+        except (ValueError,requests.RequestException,TimeoutError):pass
     albums=[];seen=set()
     for raw in rows:
         item=release(raw)
@@ -105,17 +111,18 @@ def releases(song,offset=0):
         if selected not in profiles:raise ValueError('Artist profile unavailable')
         albums=[item for item in albums if item['artist_id']==selected]
     elif len(profiles)>1:albums=[]
-    return {'name':name,'releases':albums[offset:offset+10],'offset':offset,
+    return {'name':name,'releases':albums if all_rows else albums[offset:offset+10],'offset':offset,
             'next_offset':offset+10 if offset+10<len(albums) else None,'source':'Apple Music',
             'profiles':list(profiles.values()) if len(profiles)>1 else [],'selected_profile':selected}
 
 
-def album(song,identifier):
+def _apple_album(song,identifier):
     from artist_catalog import creator,normalized
     if not re.fullmatch(r'\d{1,16}',str(identifier)):raise ValueError('Invalid album')
     rows=_request('lookup',{'id':str(identifier),'entity':'song','limit':200})
     header=next((release(r) for r in rows if str(r.get('collectionId'))==str(identifier) and release(r)),None)
-    if not header or normalized(header['artist'])!=normalized(creator(song)):raise ValueError('Album belongs to another artist')
+    from expanded_catalog import known_names
+    if not header or normalized(header['artist']) not in {normalized(n) for n in (song.get('_artist_aliases') or known_names(creator(song)))}:raise ValueError('Album belongs to another artist')
     if song.get('_release_artist_id') and str(song['_release_artist_id'])!=header['artist_id']:raise ValueError('Album belongs to another profile')
     tracks=[];seen=set()
     for row in rows:
@@ -132,3 +139,80 @@ def album(song,identifier):
                        '_catalog_song':{'title':title,'artist':artist}})
     tracks.sort(key=lambda t:(t['disc_number'],t['track_number']))
     return {'name':creator(song),'album':header,'tracks':tracks,'source':'Apple Music'}
+
+
+def _additional(song):
+    from expanded_catalog import collect
+    return collect(song)
+
+
+def _combined(song):
+    from artist_catalog import creator,normalized
+    from expanded_catalog import browse_names
+    extra=_additional(song)
+    page=None;apple=[]
+    for name in ([] if song.get('_catalog_scope') in ('aud','jam') else browse_names(song)):
+        origin=dict(song,artist=name);origin.pop('_catalog_song',None)
+        try:
+            result=_apple_releases(origin,all_rows=True)
+            if song.get('_mb_artist_id') and result.get('profiles') and not result.get('selected_profile'):
+                continue  # A chosen MusicBrainz entity does not need an ambiguous Apple profile.
+            if page is None:page=result
+            apple.extend(dict(row,source='Apple Music') for row in result['releases'])
+        except (ValueError,requests.RequestException,TimeoutError):pass
+    if page is None:page={'name':creator(song),'profiles':[],'selected_profile':''}
+    if page.get('profiles'):
+        if not page.get('selected_profile'):extra=[]
+        else:extra=[]  # An unverified same-name cross-catalog identity must not be merged.
+    combined={}
+    for item in apple+extra:
+        title=re.sub(r'\s[-–—]\s(?:Single|EP)$','',item['title'],flags=re.I)
+        key=(normalized(title),item['kind'],item.get('release_date','')[:4])
+        known=combined.get(key)
+        if known:
+            if item['id'] not in [a['id'] for a in known['alternatives']]:known['alternatives'].append({k:item.get(k,'') for k in ('id','source','source_url')})
+            if not known.get('cover') and item.get('cover'):known['cover']=item['cover']
+        else:
+            combined[key]=dict(item,alternatives=[{k:item.get(k,'') for k in ('id','source','source_url')}])
+    rows=sorted(combined.values(),key=lambda a:(a.get('release_date',''),a['title']),reverse=True)
+    catalogs=list(dict.fromkeys(a['source'] for row in rows for a in row['alternatives']))
+    return dict(name=creator(song),releases=rows,
+                profiles=page.get('profiles',[]),selected_profile=page.get('selected_profile',''),source=' / '.join(catalogs),catalogs=catalogs,total=len(rows))
+
+
+def releases(song,offset=0):
+    from artist_catalog import creator
+    if type(offset) is not int or not 0<=offset<=990 or offset%10:raise ValueError('Invalid release page')
+    key=(creator(song),song.get('_mb_artist_id'),song.get('_release_artist_id'),tuple(song.get('_artist_aliases') or []),song.get('_catalog_scope'),song.get('_audius_user_id'),song.get('_jam_artist_id'))
+    with _lock:known=_views.get(key)
+    if known and known[0]>time.monotonic():view=deepcopy(known[1])
+    else:
+        view=_combined(song)
+        with _lock:
+            while len(_views)>=64:_views.pop(next(iter(_views)))
+            _views[key]=(time.monotonic()+(300 if len(view['catalogs'])>1 else 60),deepcopy(view))
+    rows=view.pop('releases')
+    return dict(view,releases=rows[offset:offset+10],offset=offset,next_offset=offset+10 if offset+10<len(rows) else None)
+
+
+def album(song,identifier):
+    from expanded_catalog import album as other_album
+    def open_one(value):
+        result=_apple_album(song,value) if re.fullmatch(r'\d{1,16}',str(value)) else other_album(song,str(value))
+        for track in result['tracks']:
+            track['_catalog_metadata']=True
+            track.setdefault('_catalog_song',{'title':track['title'],'artist':track['artist']})
+        return result
+    try:return open_one(identifier)
+    except (ValueError,requests.RequestException,TimeoutError):
+        from artist_catalog import creator
+        with _lock:views=[deepcopy(v[1]) for key,v in _views.items() if key[0]==creator(song)]
+        alternatives=[]
+        for view in views:
+            for item in view['releases']:
+                ids=[a['id'] for a in item['alternatives']]
+                if identifier in ids:alternatives.extend(value for value in ids if value!=identifier)
+        for value in list(dict.fromkeys(alternatives))[:3]:
+            try:return open_one(value)
+            except (ValueError,requests.RequestException,TimeoutError):pass
+        raise

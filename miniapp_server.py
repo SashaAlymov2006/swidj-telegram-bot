@@ -112,6 +112,7 @@ class BotLibrary:
         self.saved_sessions, self.owner_ids = saved_sessions, owner_ids
         self.searches = {}
         self.chart_recordings = {}
+        self.catalog_recordings = {}
         self.source_searching = set()
         self.search_times = {}
         self.search_results = {}
@@ -203,6 +204,7 @@ class BotLibrary:
             sources.append(active)
         sources.extend(self.searches.get(uid, []))
         sources.extend(self.chart_recordings.get(uid, []))
+        sources.extend(self.catalog_recordings.get(uid, []))
         sources.extend(await self.app_history(uid))
         from dj_studio import projects
         for project in await projects(self.store,uid):
@@ -346,6 +348,16 @@ class BotLibrary:
             return {'status':'ready', 'track':public_song(song, True)}
         if song.get('kind') == 'upload':
             raise web.HTTPGone()
+        if song.get('_catalog_metadata'):
+            self.allowed(uid,'search')
+            from versions import catalog_choices
+            candidates,inventory=await catalog_choices(song,uid)
+            for item in candidates:
+                item['id']=10**15+int.from_bytes(hashlib.sha256(item['url'].encode()).digest()[:6],'big')
+                item['_catalog_song']={k:song.get(k,'') for k in ('title','artist')}
+            self.searches[uid]=candidates
+            return {'status':'choices','tracks':[public_song(item) for item in candidates],
+                    'available_sources':[key for key,rows in inventory.items() if rows]}
         from jamendo_source import identifier as jamendo_id
         from soundcloud_source import public_url as sc_url
         from audius_source import canonical as aud_url
@@ -564,7 +576,7 @@ def create_app(*, token='', bridge=None):
                 uid = user['id']
                 bridge.allowed(uid)
                 from dispatch import user_lock
-                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts','/api/charts/resolve','/api/artist','/api/artist/releases','/api/versions','/api/dj/analysis'):
+                if request.path in ('/api/studio','/api/voice','/api/link','/api/link/cancel','/api/link/audio','/api/recognize','/api/charts','/api/charts/resolve','/api/artist','/api/artist/releases','/api/artists','/api/versions','/api/dj/analysis'):
                     response=await handler(request)
                 else:
                     async with user_lock(uid):
