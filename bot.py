@@ -1438,6 +1438,9 @@ async def send_song(update: Update, context: ContextTypes.DEFAULT_TYPE, index=0,
         while len(pages) > 5:
             pages.pop(next(iter(pages)))
     if not songs or index < 0 or index >= len(songs):
+        if update.callback_query and search_token and not songs:
+            from search_recovery import offer
+            return await offer(update,context,search_token)
         if update.callback_query:
             await update.callback_query.answer("Больше вариантов нет.", show_alert=True)
         else:
@@ -1445,6 +1448,10 @@ async def send_song(update: Update, context: ContextTypes.DEFAULT_TYPE, index=0,
         return
 
     song = dict(songs[index], _search_page=[search_token,index])
+    from search_recovery import remember,lookup
+    bookmark=lookup(context,search_token)
+    remember(context,search_token,bookmark['query'] if bookmark else song.get('_search_query') or context.user_data.get('artist_search_query') or ' '.join(str(song.get(k) or '') for k in ('artist','title')),
+             bookmark['mode'] if bookmark else context.user_data.get('search_mode'))
     from track_card import show_card
     # Artist tracks and albums are available through the existing track-info card.
     extra = [[InlineKeyboardButton("← Меню", callback_data="ui:home")]]
@@ -1459,6 +1466,31 @@ async def search_result_callback(update: Update, context: ContextTypes.DEFAULT_T
     match = re.fullmatch(r"srch:([0-9a-f]{10}):([0-9]{1,2})", update.callback_query.data or "")
     if match:
         return await send_song(update, context, int(match[2]), search_token=match[1])
+
+
+async def recover_search_callback(update,context):
+    await update.callback_query.answer()
+    from search_recovery import lookup,offer
+    token=update.callback_query.data.split(':',1)[-1]
+    entry=lookup(context,token)
+    if not entry:return await offer(update,context,token)
+    from artist_ui import edit_catalog
+    await edit_catalog(update.effective_message,'Searching…' if context.user_data.get('language')=='en' else 'Ищу…',reply_markup=None,parse_mode=None)
+    query=entry['query']
+    if entry['mode']=='lyrics':
+        from lyrics_search import search_lyrics
+        songs=await search_lyrics(query,search_songs,search_deezer,get_lyrics)
+    else:
+        a,b=await asyncio.gather(search_songs(query),search_deezer(query))
+        songs=merge_catalog_results(a,b,query=query)
+        if not songs:
+            from artist_catalog import browse
+            songs=(await asyncio.to_thread(browse,{'artist':query},'all',0))['tracks']
+    if not songs:return await offer(update,context,token)
+    user_search_results[update.effective_user.id]=songs
+    context.user_data['artist_search_query']=query
+    context.user_data['search_mode']=entry['mode']
+    return await send_song(update,context)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2220,7 +2252,8 @@ async def track_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from library_ui import collections, all_saved, save_song
     action, song = selected_song(context, update.callback_query.data)
     if not song:
-        return await update.effective_message.reply_text("Открой трек ещё раз — эта карточка уже недоступна.")
+        from search_recovery import offer
+        return await offer(update,context,update.callback_query.data.rsplit(':',1)[-1])
     uid = update.effective_user.id
     if action == 'info':
         from artist_ui import info
@@ -2365,7 +2398,7 @@ async def initialize_app(app):
         logger.warning("Command menu configuration failed (%s)", type(exc).__name__)
 
 
-SESSION_KEYS = ('language', 'search_pages', 'link_queues', 'awaiting_catalog', 'ringtone_requests', 'awaiting_ringtone', 'version_requests', 'track_cards', 'upload_requests', 'search_mode', 'downloaded_song', 'dl_requests', 'recognized_song', 'last_audio_path', 'pending_effects', 'awaiting_pitch', 'dl_url',
+SESSION_KEYS = ('search_recovery', 'artist_search_query', 'artist_discovery_queries', 'artist_views', 'artist_pages', 'artist_page_origins', 'language', 'search_pages', 'link_queues', 'awaiting_catalog', 'ringtone_requests', 'awaiting_ringtone', 'version_requests', 'track_cards', 'upload_requests', 'search_mode', 'downloaded_song', 'dl_requests', 'recognized_song', 'last_audio_path', 'pending_effects', 'awaiting_pitch', 'dl_url',
                 'dl_platform', 'awaiting_broadcast_text', 'awaiting_media_type')
 
 
@@ -2466,6 +2499,7 @@ def build_application(*, request=None, updates_request=None):
     app.add_handler(CommandHandler("history", serialize_user(history_command)))
     app.add_handler(CommandHandler("favorites", serialize_user(favorites_command)))
     app.add_handler(CommandHandler("collection", serialize_user(collection_command)))
+    app.add_handler(CallbackQueryHandler(serialize_user(recover_search_callback), pattern=r"^recover:[0-9a-f]{10}$"))
     app.add_handler(CallbackQueryHandler(serialize_user(search_result_callback), pattern=r"^srch:"))
     app.add_handler(CallbackQueryHandler(serialize_user(track_callback), pattern=r"^track:"))
     from lyrics_ui import callback as lyrics_page_callback

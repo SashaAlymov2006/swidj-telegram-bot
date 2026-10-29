@@ -14,6 +14,11 @@ def card_keyboard(context, song, saved=False, extra_rows=None, *, delivered=Fals
     token = secrets.token_hex(5)
     snapshots = context.user_data.setdefault("track_cards", {})
     snapshots[token] = dict(song)
+    from search_recovery import remember,lookup
+    reference=song.get('_search_page')
+    bookmark=lookup(context,reference[0]) if isinstance(reference,(list,tuple)) and reference else None
+    remember(context,token,bookmark['query'] if bookmark else song.get('_search_query') or ' '.join(str(song.get(k) or '') for k in ('artist','title')),
+             bookmark['mode'] if bookmark else context.user_data.get('search_mode') if song.get('_search_query') else 'title')
     while len(snapshots) > 40:
         snapshots.pop(next(iter(snapshots)))
     def button(text, action, style=None):
