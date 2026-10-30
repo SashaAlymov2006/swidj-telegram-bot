@@ -6,6 +6,7 @@ import asyncio
 import importlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -996,7 +997,7 @@ assert 78 not in h
         self.assertIn("Choose your language",self.texts()[-1])
         await self.app.process_update(self.callback("lang:set:en"))
         self.assertEqual(self.app.user_data[77]["language"],"en")
-        self.assertIn("Your music. Your mix.",self.texts()[-1])
+        self.assertIn("Find songs by title, lyrics and voice",self.texts()[-1])
         saved=StateStore(self.bot.state_store.path).load_named("sessions")[77]
         self.assertEqual(saved["language"],"en")
         self.app.user_data[77].pop("language")
@@ -1558,3 +1559,29 @@ asyncio.run(run())'''
         self.assertTrue(Path(path).exists())
         scratch.remove_owned_file(path)
         self.assertFalse(Path(path).parent.exists())
+
+    async def test_start_feature_card_and_all_sections_use_selected_language(self):
+        from feature_guide import TOPICS
+        for language in ('ru','en'):
+            self.app.user_data[77]['language']=language
+            with patch.dict(os.environ,{'MINIAPP_URL':'https://preview.example.test'}):
+                await self.app.process_update(self.message('/start'))
+                self.assertIn('Find songs' if language=='en' else 'Поиск',self.texts()[-1])
+                for topic in ['home',*TOPICS]:
+                    await self.app.process_update(self.callback('features:'+topic))
+                    text=self.texts()[-1]
+                    if language=='en':self.assertIsNone(re.search('[А-Яа-я]',text))
+                await self.app.process_update(self.callback('ui:search'))
+                self.assertIn('search' if language=='en' else 'ищем',self.texts()[-1].lower())
+
+    async def test_first_language_choice_shows_feature_card_once_and_preserves_library(self):
+        self.app.user_data[77].pop('language',None)
+        before=list(self.bot.user_favorites.get(77,[]))
+        await self.app.process_update(self.message('/start'))
+        self.assertTrue(self.app.user_data[77].get('welcome_pending'))
+        await self.app.process_update(self.callback('lang:set:en'))
+        self.assertIn('Music-video creation',self.texts()[-1])
+        self.assertNotIn('welcome_pending',self.app.user_data[77])
+        await self.app.process_update(self.callback('lang:set:ru'))
+        self.assertNotIn('Скачивание',self.texts()[-1])
+        self.assertEqual(self.bot.user_favorites.get(77,[]),before)

@@ -1124,7 +1124,8 @@ def home_keyboard():
          InlineKeyboardButton("🎙 Голосом", callback_data="ui:recognize")],
         [InlineKeyboardButton("🎛 Студия", callback_data="ui:audio"),
          InlineKeyboardButton("⭐ Моя музыка", callback_data="ui:favorites", style="success")],
-        [InlineKeyboardButton("❓ Помощь", callback_data="ui:help")],
+        [InlineKeyboardButton("📚 Возможности", callback_data="features:home"),
+         InlineKeyboardButton("❓ Помощь", callback_data="ui:help")],
         [InlineKeyboardButton("🌐 Язык / Language", callback_data="lang:choose")],
     ])
 
@@ -1141,6 +1142,14 @@ async def miniapp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_navigation_entry(context)
+    keyboard = entry_keyboard(update,context)
+    text = "🎧 <b>SwiDJ</b>\nТвоя музыка. Твой микс."
+    if update.callback_query and update.callback_query.message.text:
+        return await update.callback_query.edit_message_text(text, parse_mode="HTML", reply_markup=keyboard)
+    return await update.effective_message.reply_text(text, parse_mode="HTML", reply_markup=keyboard)
+
+
+def entry_keyboard(update,context):
     keyboard = home_keyboard()
     from miniapp_server import public_url
     if public_url() and update.effective_chat.type == 'private':
@@ -1151,10 +1160,14 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if access_policy.is_owner(update):
         keyboard = InlineKeyboardMarkup(list(keyboard.inline_keyboard) + [
             [InlineKeyboardButton("⚙ Панель владельца", callback_data="owner:home")]])
-    text = "🎧 <b>SwiDJ</b>\nТвоя музыка. Твой микс."
-    if update.callback_query and update.callback_query.message.text:
-        return await update.callback_query.edit_message_text(text, parse_mode="HTML", reply_markup=keyboard)
-    return await update.effective_message.reply_text(text, parse_mode="HTML", reply_markup=keyboard)
+    return keyboard
+
+
+async def welcome_card(update,context):
+    clear_navigation_entry(context)
+    context.user_data.pop('welcome_pending',None)
+    from feature_guide import WELCOME,lang
+    return await update.effective_message.reply_text(WELCOME[lang(context)],parse_mode='HTML',reply_markup=entry_keyboard(update,context))
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1243,18 +1256,20 @@ async def language_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.set_my_commands(commands, scope=BotCommandScopeChat(update.effective_chat.id))
         except TelegramError as exc:
             logger.warning("User command language setup failed (%s)", type(exc).__name__)
+    if context.user_data.pop('welcome_pending',False):return await welcome_card(update,context)
     return await menu_command(update, context)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await save_user(update.effective_chat.id)
     if context.user_data.get("language") not in ("ru", "en"):
+        context.user_data['welcome_pending']=True
         return await update.effective_message.reply_text(
-            "🎧 <b>SwiDJ</b>\nТвоя музыка. Твой микс.\n\nВыбери язык / Choose your language",
+            "🎧 <b>SwiDJ</b>\nТвоя музыка. Твой микс.\nПоиск · студия · DJ · музыкальные видео\nSearch · studio · DJ · music videos\n\nВыбери язык / Choose your language",
             parse_mode="HTML", reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🇷🇺 Русский", callback_data="lang:set:ru"),
                  InlineKeyboardButton("🇬🇧 English", callback_data="lang:set:en")]]))
-    await menu_command(update, context)
+    await welcome_card(update, context)
 
 # Функции клавы
 def build_effects_keyboard():
@@ -2398,7 +2413,7 @@ async def initialize_app(app):
         logger.warning("Command menu configuration failed (%s)", type(exc).__name__)
 
 
-SESSION_KEYS = ('search_recovery', 'artist_search_query', 'artist_discovery_queries', 'artist_views', 'artist_pages', 'artist_page_origins', 'language', 'search_pages', 'link_queues', 'awaiting_catalog', 'ringtone_requests', 'awaiting_ringtone', 'version_requests', 'track_cards', 'upload_requests', 'search_mode', 'downloaded_song', 'dl_requests', 'recognized_song', 'last_audio_path', 'pending_effects', 'awaiting_pitch', 'dl_url',
+SESSION_KEYS = ('welcome_pending', 'search_recovery', 'artist_search_query', 'artist_discovery_queries', 'artist_views', 'artist_pages', 'artist_page_origins', 'language', 'search_pages', 'link_queues', 'awaiting_catalog', 'ringtone_requests', 'awaiting_ringtone', 'version_requests', 'track_cards', 'upload_requests', 'search_mode', 'downloaded_song', 'dl_requests', 'recognized_song', 'last_audio_path', 'pending_effects', 'awaiting_pitch', 'dl_url',
                 'dl_platform', 'awaiting_broadcast_text', 'awaiting_media_type')
 
 
@@ -2492,6 +2507,8 @@ def build_application(*, request=None, updates_request=None):
     app.add_handler(CallbackQueryHandler(serialize_user(studio_callback), pattern=r"^studio:(home|reset|help|trim|preview|mp3|wav|info|formats|more|bass(?::(?:off|bass_less|bass_light|bass_boost|bass_strong))?|group:(level|tone|color|space))$"))
     app.add_handler(CommandHandler("help", serialize_user(help_command)))
     app.add_handler(CommandHandler("cancel", localized_callback(cancel_entry)))
+    from feature_guide import callback as feature_callback
+    app.add_handler(CallbackQueryHandler(serialize_user(feature_callback), pattern=r"^features:(home|search|links|library|studio|dj|video|lyrics|comfort)$"))
     app.add_handler(CallbackQueryHandler(serialize_user(menu_callback), pattern=r"^ui:(search|title|lyrics|recognize|audio|help|home|favorites|history)$"))
     app.add_handler(CommandHandler("download", serialize_user(download_command)))
     app.add_handler(CallbackQueryHandler(serialize_user(versions_callback), pattern=r"^ver:(pick|refresh|other|source):"))
