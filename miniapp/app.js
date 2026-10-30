@@ -611,7 +611,8 @@ async function playTrack(track,autoplay=true,intent='play') {
   const ticket=++loadingTrack;
   if(autoplay)await engine.unlock();
   if(!demo&&!track.local){const ready=await prepareTrack(track,intent);if(!ready)return false;}
-  if($('dialog').open&&!$('full-play'))$('dialog').close();
+  // Keep an unfinished playlist name while playback advances in the background.
+  if($('dialog').open&&!$('full-play')&&!$('playlist-name'))$('dialog').close();
   let blob=null,streamUrl=null;
   if(track.local&&track.serverTicket)streamUrl=location.origin+'/studio-file/'+track.serverTicket;
   else if(track.local)blob=localTracks.get(track.id)?.blob;
