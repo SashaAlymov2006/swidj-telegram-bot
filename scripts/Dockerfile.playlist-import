@@ -1,0 +1,3 @@
+FROM swidj:welcome-guide
+COPY --chmod=0444 playlist_import.py bot.py miniapp_server.py library_ui.py guide_inventory.py /app/
+COPY --chmod=0444 miniapp/app.js miniapp/app.css /app/miniapp/

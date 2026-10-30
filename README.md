@@ -16,8 +16,8 @@ SwiDJ brings music discovery, personal audio tools and public video retrieval in
 | Video | Public YouTube videos, TikTok videos and photo slideshows with audio; Instagram videos/Reels |
 | Audio studio | Trim, convert, speed up, slowed/reverb, adjustable bass with preview, reverse, loops and phone ringtone exports |
 | Mini App DJ room | Two decks, waveform and estimated beat grid, independent pitch/tempo, bar loops, filter/bass/Echo Out transitions, named projects and MP3 set recording |
-| Visual Studio | Optional isolated music-video editor: image/video backgrounds, logo shapes, audio-reactive spectrum, eight presets and 720p/1080p MP4 at 30/60 fps; [setup](music_video/README.md) |
 | Personal library | Favourites, playlists and saving users' own uploaded audio |
+| Playlist import | Preview and confirm public playlists/albums, or paste an artist–title list; shared bot/Mini App collections with recording choices on demand |
 | Experience | Russian/English UI, remembered language, compact result navigation, retries and cancellation |
 | Audio recovery | Exact cached audio / Telegram reuse, independent SoundCloud reserve, then optional Jamendo; shared public media stays separate from personal uploads |
 | Operations | Owner controls, persistent state, bounded per-user media cache, Telegram file reuse and source/runtime backup utilities |

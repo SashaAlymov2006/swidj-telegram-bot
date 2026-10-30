@@ -30,6 +30,7 @@ COPY --chmod=0444 artist_catalog.py artist_ui.py ./
 COPY --chmod=0444 jamendo_source.py ./
 COPY --chmod=0444 tiktok_photos.py ./
 COPY --chmod=0444 studio_presets.py studio_presets_bot.py dj_studio.py recording_match.py soundcloud_source.py ./
+COPY --chmod=0444 playlist_import.py feature_guide.py guide_inventory.py expanded_catalog.py release_catalog.py search_recovery.py ./
 COPY --chmod=0555 miniapp/ ./miniapp/
 USER bot
 CMD ["python", "bot.py"]

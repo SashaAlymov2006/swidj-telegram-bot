@@ -133,8 +133,9 @@ let demoState;
 try { demoState = JSON.parse(localStorage.getItem('swidj-demo-library') || 'null'); } catch {}
 const api = async (path, payload) => {
   const multipart=payload instanceof FormData;
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),multipart?1200000:path.startsWith('dj/analysis')?600000:path.startsWith('charts')?90000:30000);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),multipart?1200000:path.startsWith('playlists/import')?120000:path.startsWith('dj/analysis')?600000:path.startsWith('charts')?90000:30000);
   let response;try {response = await fetch('/api/' + path, {method:payload ? 'POST':'GET', headers:{'X-Telegram-Init-Data':initData,...(payload&&!multipart ? {'Content-Type':'application/json'}:{})},body:payload ? multipart?payload:JSON.stringify(payload):undefined, credentials:'omit',signal:controller.signal});}catch(error){if(error.name==='AbortError')throw new Error('requestTimeout');throw error;}finally{clearTimeout(timer);}
+  if (!response.ok && path==='playlists/import') {const info=await response.json().catch(()=>({}));const error=new Error('error');if(typeof info.message==='string')error.publicMessage=info.message;throw error;}
   if (!response.ok) throw new Error(({401:'expired',403:'unavailable',409:'capacity',410:'missingFile',429:'rateLimit',503:'unavailable'})[response.status] || 'error');
   return response;
 };
@@ -318,7 +319,7 @@ function libraryScreen() {
       ? `<div class="track-list">${tracks.map(row).join('')}</div>`
       : empty(selected?'emptyPlaylist':'emptyLibrary',selected?'emptyPlaylistNote':'emptyLibraryNote');
   }
-  return heading('libraryTitle','libraryNote') + `<div class="chips">${chips}</div>` + body + note();
+  return heading('libraryTitle','libraryNote') + `<div class="chips">${chips}</div><button type="button" class="text-btn" id="import-playlist">${icon('upload')}${e(t('importPlaylist'))}</button>` + body + note();
 }
 
 const bassOptions = [[-6,'bassLess'],[0,'bassOff'],[3,'bassGentle'],[6,'bassMedium'],[9,'bassStrong']];
@@ -460,6 +461,29 @@ async function mutate(payload) {
     try {localStorage.setItem('swidj-demo-library',JSON.stringify(state));}catch{}
   }
   render();
+}
+Object.assign(copy.ru,{importPlaylist:'Импорт плейлиста',importPlaylistHint:'Ссылка на публичный плейлист или альбом',importText:'Или список: исполнитель — название, по одному треку в строке',importPreview:'Посмотреть треки',importConfirm:'Добавить плейлист',importFailed:'Не удалось прочитать плейлист. Проверь ссылку или вставь список песен.'});
+Object.assign(copy.en,{importPlaylist:'Import playlist',importPlaylistHint:'Public playlist or album link',importText:'Or a list: artist — title, one track per line',importPreview:'Preview tracks',importConfirm:'Add playlist',importFailed:'Could not read the playlist. Check the link or paste a track list.'});
+let playlistImportBusy=false;
+function importPlaylistDialog(){
+  dialog(t('importPlaylist'),`<input id="playlist-import-url" type="url" maxlength="2048" placeholder="${e(t('importPlaylistHint'))}" aria-label="${e(t('importPlaylistHint'))}"><textarea id="playlist-import-text" rows="4" maxlength="50000" placeholder="${e(t('importText'))}" aria-label="${e(t('importText'))}"></textarea><p id="playlist-import-status" role="status"></p>`,`<button type="button" class="btn secondary" id="playlist-import-cancel">${e(t('cancel'))}</button><button type="button" class="btn" id="playlist-import-preview">${e(t('importPreview'))}</button>`);
+  $('dialog-form').onsubmit=event=>event.preventDefault();
+}
+async function importPlaylistPreview(){
+  if(demo)return toast('needsTelegram');if(playlistImportBusy)return;
+  const url=$('playlist-import-url')?.value.trim(),text=$('playlist-import-text')?.value.trim();if(!url&&!text)return;
+  playlistImportBusy=true;const status=$('playlist-import-status');status.textContent=t('loading');
+  try{
+    const result=await(await api('playlists/import',url?{url}:{text})).json();
+    if(!status.isConnected)return;
+    $('dialog-body').innerHTML=`<h3>${e(result.name)} · ${result.count}${result.partial?' / '+result.total:''}</h3><div class="playlist-import-preview">${result.tracks.map(track=>`<p>${e(track.artist)} — ${e(track.title)}</p>`).join('')}</div><p id="playlist-import-status" role="status"></p>`;
+    $('dialog-actions').innerHTML=`<button type="button" class="btn secondary" id="playlist-import-cancel">${e(t('cancel'))}</button><button type="button" class="btn" id="playlist-import-confirm" data-token="${e(result.token)}">${e(t('importConfirm'))}</button>`;
+  }catch(error){if(status.isConnected)status.textContent=error.publicMessage||t('importFailed');}finally{playlistImportBusy=false;}
+}
+async function importPlaylistConfirm(token){
+  if(playlistImportBusy)return;playlistImportBusy=true;
+  try{const result=await(await api('playlists/import',{confirm:token})).json();state=result.library;$('dialog').close();route='library';filter='all';playlist=result.playlist;persistSession();render();}
+  catch(error){const status=$('playlist-import-status');if(status)status.textContent=error.publicMessage||t('importFailed');}finally{playlistImportBusy=false;}
 }
 async function favorite(track) {
   if(track.local)return saveLocalTrack(track);
@@ -612,7 +636,7 @@ async function playTrack(track,autoplay=true,intent='play') {
   if(autoplay)await engine.unlock();
   if(!demo&&!track.local){const ready=await prepareTrack(track,intent);if(!ready)return false;}
   // Keep an unfinished playlist name while playback advances in the background.
-  if($('dialog').open&&!$('full-play')&&!$('playlist-name'))$('dialog').close();
+  if($('dialog').open&&!$('full-play')&&!$('playlist-name')&&!$('playlist-import-status'))$('dialog').close();
   let blob=null,streamUrl=null;
   if(track.local&&track.serverTicket)streamUrl=location.origin+'/studio-file/'+track.serverTicket;
   else if(track.local)blob=localTracks.get(track.id)?.blob;
@@ -1076,6 +1100,10 @@ document.addEventListener('click',async event=>{
     if(button.dataset.filter){filter=button.dataset.filter;playlist=null;return render();}
     if(button.dataset.playlist){playlist=button.dataset.playlist;return render();}
     if(button.id==='back-playlists'){playlist=null;filter='playlists';return render();}
+    if(button.id==='import-playlist')return importPlaylistDialog();
+    if(button.id==='playlist-import-preview')return await importPlaylistPreview();
+    if(button.id==='playlist-import-confirm')return await importPlaylistConfirm(button.dataset.token);
+    if(button.id==='playlist-import-cancel'){$('dialog').close();return;}
     if(button.id==='new-playlist')return newPlaylist();
     if(button.id==='save-local-file'&&current?.local)return await saveLocalTrack(current);
     if(button.id==='cancel-prepare'&&preparation){preparation.cancel=true;showPreparation();return;}

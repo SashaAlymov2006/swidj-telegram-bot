@@ -2474,6 +2474,20 @@ def build_application(*, request=None, updates_request=None):
 
 
     from catalog_links import extract_links
+    from playlist_import import bot_import, bot_confirm, classify as playlist_platform
+    async def import_command(update, context):
+        clear_navigation_entry(context)
+        return await bot_import(update, context, state_store, user_favorites)
+    async def import_confirm(update, context):
+        return await bot_confirm(update, context, state_store, user_favorites)
+    class PlaylistLinkFilter(filters.MessageFilter):
+        def filter(self, message):
+            from catalog_links import link_candidates
+            return any(playlist_platform(url) for url in link_candidates(message.text or ''))
+    app.add_handler(MessageHandler(PlaylistLinkFilter() & (~filters.COMMAND), serialize_user(import_command)))
+    app.add_handler(CommandHandler('import', serialize_user(import_command)))
+    app.add_handler(CallbackQueryHandler(serialize_user(import_command), pattern=r'^pimport:open$'))
+    app.add_handler(CallbackQueryHandler(serialize_user(import_confirm), pattern=r'^pimport:[a-f0-9]{12}$'))
     class MusicLinkFilter(filters.MessageFilter):
         def filter(self, message):
             return bool(extract_links(message.text or ""))

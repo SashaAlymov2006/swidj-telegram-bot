@@ -11,6 +11,10 @@ PAGE_SIZE = 5
 MAX_TRACKS = 60
 
 
+def track_limit(folder):
+    return 500 if folder.get('import_signature') else MAX_TRACKS
+
+
 async def screen(update, text, rows):
     markup = Markup(rows)
     query = getattr(update, "callback_query", None)
@@ -81,6 +85,8 @@ async def show_folders(update, context, store):
     folders = await collections(context, update.effective_user.id, store)
     rows = [[Button(f"🎧 {value['name']} · {len(value['songs'])}", callback_data="lib:col:" + key)]
             for key, value in folders.items()]
+    from playlist_import import text as import_text
+    rows.append([Button(import_text(context.user_data.get('language','ru'), 'title'), callback_data='pimport:open')])
     rows += [[Button("＋ Новый плейлист", callback_data="lib:new", style="success")],
              [Button("← Моя музыка", callback_data="lib:home")]]
     await screen(update, "🎧 <b>Мои плейлисты</b>" + ("\nСоздай первый — например, «Для работы»." if not folders else ""), rows)
@@ -179,7 +185,7 @@ async def create_collection(update, context, store, name, favorites=None):
         folders[key] = {"name": name, "songs": []}
     pending = context.user_data.get("new_collection_song")
     if pending and not any(item["id"] == pending["id"] for item in folders[key]["songs"]):
-        if len(folders[key]["songs"]) >= MAX_TRACKS:
+        if len(folders[key]["songs"]) >= track_limit(folders[key]):
             return await screen(update, "Плейлист заполнен. Выбери другой.", [[Button("← Плейлисты", callback_data="lib:folders")]])
         folders[key]["songs"].append(dict(pending))
     source = context.user_data.get("new_playlist_move_from")
@@ -300,7 +306,7 @@ async def handle_library(update, context, favorites, persist_favorites, store, r
         remember_library(context, uid, favorites, folders)
         if any(item["id"] == song["id"] for item in folder["songs"]):
             folder["songs"] = [item for item in folder["songs"] if item["id"] != song["id"]]
-        elif len(folder["songs"]) < MAX_TRACKS:
+        elif len(folder["songs"]) < track_limit(folder):
             folder["songs"].append(dict(song))
         else:
             return await screen(update, "В плейлисте уже 60 треков.", [[Button("← Плейлист", callback_data="lib:col:" + key)]])
@@ -326,7 +332,7 @@ async def handle_library(update, context, favorites, persist_favorites, store, r
         if not song:
             return
         if not any(item["id"] == song["id"] for item in folders[target]["songs"]):
-            if len(folders[target]["songs"]) >= MAX_TRACKS:
+            if len(folders[target]["songs"]) >= track_limit(folders[target]):
                 return await screen(update, "Плейлист заполнен.", [[Button("← Назад", callback_data="lib:col:" + source)]])
             folders[target]["songs"].append(dict(song))
         folders[source]["songs"] = [item for item in folders[source]["songs"] if item["id"] != song["id"]]
@@ -344,7 +350,7 @@ async def handle_library(update, context, favorites, persist_favorites, store, r
             return await show_playlist(update, context, folders, key)
         if action == "save":
             exists = any(item["id"] == song["id"] for item in folder["songs"])
-            if not exists and len(folder["songs"]) >= MAX_TRACKS:
+            if not exists and len(folder["songs"]) >= track_limit(folder):
                 return await screen(update, "Плейлист заполнен.", [[Button("← Плейлисты", callback_data="lib:folders")]])
             remember_library(context, uid, favorites, folders)
             if not exists:

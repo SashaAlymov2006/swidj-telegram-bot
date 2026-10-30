@@ -17,6 +17,7 @@ WELCOME={
        '🎬 Music-video creation\n'
        '📄 Lyrics with timed highlighting')
 }
+
 TOPICS={
  'search':('🔎 Поиск и распознавание','🔎 Search & recognition',
    '• По названию песни и исполнителю\n• По словам песни и голосовому сообщению\n• Опечатки, другая раскладка, приблизительное звучание иностранных слов\n• Распознавание музыкальной записи\n• Поиск по напетой мелодии (beta)\n• Чарты по странам\n• Страницы исполнителей\n• Альбомы, синглы, EP и ремиксы\n• Варианты записи из разных источников\n• Обложки и сведения о треке\n• Переход к оригинальному источнику',
@@ -43,3 +44,6 @@ TOPICS={
    '• Русский / English, сохранение языка\n• История поиска\n• Сохранение запроса, раздела и прокрутки Mini App\n• Возврат из студии к прежнему поиску\n• Повторение устаревшего поиска одной кнопкой\n• Выбор другой версии записи\n• Общие коллекции и язык в боте и приложении\n• Очередь задач, ожидание, повтор и отмена\n• Повторная выдача сохранённых файлов\n• Меню, помощь и панель владельца для администратора',
    '• Russian / English with saved language\n• Search history\n• Saved query, section and Mini App scroll position\n• Return from the studio to your previous search\n• Repeat an expired search with one button\n• Choose another recording version\n• Shared collections and language across bot and app\n• Task queue, waiting, retry and cancellation\n• Reuse previously saved files\n• Menu, help and an owner-only admin panel')
 }
+
+_library_topic = TOPICS['library']
+TOPICS['library'] = (*_library_topic[:2], _library_topic[2]+'\n\u2022 \u0418\u043c\u043f\u043e\u0440\u0442 \u043f\u043b\u0435\u0439\u043b\u0438\u0441\u0442\u043e\u0432 \u0438 \u0430\u043b\u044c\u0431\u043e\u043c\u043e\u0432 \u043f\u043e \u0441\u0441\u044b\u043b\u043a\u0435 \u0438\u043b\u0438 \u0441\u043f\u0438\u0441\u043a\u0443', _library_topic[3]+'\n\u2022 Import playlists and albums from a link or track list')

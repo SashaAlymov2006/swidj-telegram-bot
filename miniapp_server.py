@@ -122,6 +122,9 @@ class BotLibrary:
         from miniapp_jobs import AudioJobs
         self.audio_jobs = AudioJobs(downloader, cache_root)
         self.download_tickets = {}
+        self.playlist_previews = {}
+        self.playlist_slots = asyncio.Semaphore(2)
+        self.playlist_times = {}
 
     def data(self, uid):
         data = self.application.user_data[uid]
@@ -400,8 +403,35 @@ class BotLibrary:
         self.download_tickets[token] = {'uid':uid, 'song':dict(song), 'expires':now+(10800 if stream else 120), 'filename':name, 'stream':stream}
         return {'url':public_url().rstrip('/')+('/stream/' if stream else '/download/')+token, 'filename':name}
 
+    async def import_playlist(self, uid, payload):
+        from playlist_import import read, read_text, add_collection
+        self.allowed(uid, 'search')
+        if payload.get('confirm'):
+            preview = self.playlist_previews.get(uid)
+            if not preview or preview['token'] != payload['confirm'] or time.monotonic()-preview['created'] > 1800:
+                raise web.HTTPGone()
+            folders, key = add_collection(await self.folders(uid), preview['collection'])
+            # Persist with the same atomic library transaction used by the bot.
+            await asyncio.to_thread(self.store.save_library, uid, self.favorites.get(uid, []), folders, await self.app_library(uid))
+            self.data(uid)['music_collections'] = folders
+            return {'playlist': key, 'library': await self.snapshot(uid)}
+        now = time.monotonic()
+        self.playlist_times = {key:value for key,value in self.playlist_times.items() if now-value < 10}
+        if uid in self.playlist_times:
+            raise web.HTTPTooManyRequests()
+        self.playlist_times[uid] = now
+        async with self.playlist_slots:
+            collection = read_text(payload['text'], payload.get('name') or 'Playlist') if payload.get('text') else await asyncio.to_thread(read, str(payload.get('url', ''))[:2048])
+        self.playlist_previews = {key:value for key,value in self.playlist_previews.items() if time.monotonic()-value['created'] < 1800}
+        if len(self.playlist_previews) >= 200 and uid not in self.playlist_previews:
+            raise web.HTTPTooManyRequests()
+        token = secrets.token_hex(12)
+        self.playlist_previews[uid] = {'token':token, 'created':time.monotonic(), 'collection':collection}
+        return {'token':token, 'name':collection['name'], 'count':collection['count'], 'total':collection['total'], 'partial':collection['partial'],
+                'tracks':[public_song(song) for song in collection['songs']]}
+
     async def change(self, uid, payload):
-        from library_ui import clean_name, MAX_TRACKS
+        from library_ui import clean_name, MAX_TRACKS, track_limit
         folders = deepcopy(await self.folders(uid))
         favorites = deepcopy(self.favorites.get(uid, []))
         app_tracks = deepcopy(await self.app_library(uid))
@@ -460,7 +490,7 @@ class BotLibrary:
                 folder = folders.get(str(payload.get('playlist')))
                 if folder is None:
                     raise web.HTTPNotFound()
-                if len(folder['songs']) >= MAX_TRACKS:
+                if len(folder['songs']) >= track_limit(folder):
                     raise web.HTTPConflict()
                 if not any(s['id'] == song['id'] for s in folder['songs']):
                     folder['songs'].append(dict(song))
@@ -690,6 +720,16 @@ def create_app(*, token='', bridge=None):
         if not isinstance(payload, dict):
             raise web.HTTPBadRequest()
         return web.json_response(await bridge.prepare(request['user']['id'], str(payload.get('track', ''))))
+    async def playlist_import(request):
+        from playlist_import import text
+        request._client_max_size = 256 * 1024
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise web.HTTPBadRequest()
+        try:
+            return web.json_response(await bridge.import_playlist(request['user']['id'], payload))
+        except ValueError as exc:
+            return web.json_response({'error':400, 'message':text(bridge.data(request['user']['id']).get('language','ru'), str(exc) if str(exc) in ('playlist_too_large','playlist_capacity') else 'error')}, status=400)
     async def source_versions(request):
         payload = await request.json()
         if not isinstance(payload, dict):
@@ -740,6 +780,7 @@ def create_app(*, token='', bridge=None):
                     web.post('/api/library', mutate), web.get('/api/search', search),
                     web.get('/api/audio/{track:-?\\d{1,20}}', audio), web.post('/api/send', send),
                     web.post('/api/prepare', prepare),
+                    web.post('/api/playlists/import', playlist_import),
                     web.post('/api/versions', source_versions),
                     web.post('/api/download', download_ticket),
                     web.post('/api/stream', download_ticket),
