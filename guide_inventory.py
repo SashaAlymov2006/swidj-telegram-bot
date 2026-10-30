@@ -46,4 +46,6 @@ TOPICS={
 }
 
 _library_topic = TOPICS['library']
-TOPICS['library'] = (*_library_topic[:2], _library_topic[2]+'\n\u2022 \u0418\u043c\u043f\u043e\u0440\u0442 \u043f\u043b\u0435\u0439\u043b\u0438\u0441\u0442\u043e\u0432 \u0438 \u0430\u043b\u044c\u0431\u043e\u043c\u043e\u0432 \u043f\u043e \u0441\u0441\u044b\u043b\u043a\u0435 \u0438\u043b\u0438 \u0441\u043f\u0438\u0441\u043a\u0443', _library_topic[3]+'\n\u2022 Import playlists and albums from a link or track list')
+TOPICS['library'] = (*_library_topic[:2],
+    _library_topic[2]+'\n\nИмпорт: пришли ссылку боту или открой «Моя музыка → Импорт плейлиста» в Mini App.\nПроверь список → «Добавить плейлист». Открой песню и выбери запись.\nБез ссылки: /import и список «Исполнитель — Название», по одной песне в строке.',
+    _library_topic[3]+'\n\nImport: send a link to the bot or open My music → Import playlist in the Mini App.\nReview the list → Add playlist. Open a song and choose a recording.\nWithout a link: /import followed by Artist — Title, one song per line.')
